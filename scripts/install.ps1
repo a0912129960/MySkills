@@ -153,9 +153,14 @@ function Read-State {
     param([string]$Path)
 
     $records = @{}
+    $dependencyRecords = @{}
     $backups = @()
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return [PSCustomObject]@{ Records = $records; Backups = $backups }
+        return [PSCustomObject]@{
+            Records = $records
+            DependencyRecords = $dependencyRecords
+            Backups = $backups
+        }
     }
 
     try {
@@ -166,6 +171,11 @@ function Read-State {
         foreach ($record in @($document.installations)) {
             $records["$($record.platform)|$($record.skill)"] = $record
         }
+        if ($document.PSObject.Properties.Name -contains "dependencies") {
+            foreach ($record in @($document.dependencies)) {
+                $dependencyRecords[[string]$record.id] = $record
+            }
+        }
         $backups = @($document.backups)
     }
     catch {
@@ -174,15 +184,21 @@ function Read-State {
             "will be treated as unowned. Details: $($_.Exception.Message)"
         )
         $records = @{}
+        $dependencyRecords = @{}
         $backups = @()
     }
-    return [PSCustomObject]@{ Records = $records; Backups = $backups }
+    return [PSCustomObject]@{
+        Records = $records
+        DependencyRecords = $dependencyRecords
+        Backups = $backups
+    }
 }
 
 function Write-State {
     param(
         [string]$Path,
         [hashtable]$Records,
+        [hashtable]$DependencyRecords,
         [object[]]$Backups
     )
 
@@ -194,6 +210,9 @@ function Write-State {
             schema_version = 1
             installations = @(
                 $Records.Values | Sort-Object -Property platform, skill
+            )
+            dependencies = @(
+                $DependencyRecords.Values | Sort-Object -Property id
             )
             backups = @($Backups)
         }
@@ -378,13 +397,13 @@ function Confirm-DependencyInstall {
         return $true
     }
     $answer = Read-Host (
-        "Install allowlisted dependency {0} {1}? [Y/N]" -f
+        "Install allowlisted dependency {0} {1}? [Y/N/A/Q]" -f
         $Dependency.id, $Dependency.install_version
     )
-    return $answer -match "^(?i:y|yes)$"
+    return $answer
 }
 
-function Install-AllowlistedDependency {
+function Get-AvailableDependencyRelease {
     param(
         [Parameter(Mandatory = $true)]
         [object]$Dependency,
@@ -392,7 +411,169 @@ function Install-AllowlistedDependency {
         [hashtable]$ProbeResults
     )
 
+    $result = [ordered]@{
+        status = "NOT_APPLICABLE"
+        version = $null
+        source = $null
+        details = $null
+    }
+    if ($Dependency.kind -ne "installable") {
+        return [PSCustomObject]$result
+    }
+
+    try {
+        if ($Dependency.install.manager -eq "node") {
+            $npm = Get-Command "npm" -CommandType Application -ErrorAction Stop |
+                Select-Object -First 1
+            $output = (& $npm.Source view $Dependency.install.package version --json 2>&1 |
+                Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                throw $output
+            }
+            $parsed = $output | ConvertFrom-Json
+            if ($parsed -is [array]) {
+                $parsed = $parsed[-1]
+            }
+            $result.status = "AVAILABLE"
+            $result.version = ([version]([string]$parsed)).ToString()
+            $result.source = "npm"
+            return [PSCustomObject]$result
+        }
+
+        if ($Dependency.install.manager -eq "pip") {
+            $python = $ProbeResults["python"].command
+            if ([string]::IsNullOrWhiteSpace($python)) {
+                throw "Compatible Python is unavailable."
+            }
+            $arguments = @(
+                "-m", "pip", "index", "versions", $Dependency.install.package,
+                "--disable-pip-version-check"
+            )
+            if ([IO.Path]::GetFileNameWithoutExtension($python) -eq "py") {
+                $arguments = @("-3") + $arguments
+            }
+            $output = (& $python @arguments 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                throw $output
+            }
+            $match = [regex]::Match(
+                $output,
+                "(?im)^\s*LATEST:\s*(\d+(?:\.\d+){1,3})\s*$"
+            )
+            if (-not $match.Success) {
+                throw "Package source output did not report LATEST."
+            }
+            $result.status = "AVAILABLE"
+            $result.version = ([version]$match.Groups[1].Value).ToString()
+            $result.source = "configured-pip-index"
+            return [PSCustomObject]$result
+        }
+    }
+    catch {
+        $result.status = "UNAVAILABLE"
+        $result.details = $_.Exception.Message
+        return [PSCustomObject]$result
+    }
+
+    $result.status = "UNAVAILABLE"
+    $result.details = "No package-source query is defined."
+    return [PSCustomObject]$result
+}
+
+function Get-DependencyPackageOwnership {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Dependency,
+        [Parameter(Mandatory = $true)]
+        [object]$ProbeResult
+    )
+
+    if ($ProbeResult.status -eq "MISSING") {
+        return [PSCustomObject]@{
+            ownership = "absent"
+            manager = $null
+            path = $null
+        }
+    }
     if ($Dependency.id -eq "pyyaml") {
+        $managedRoot = Join-Path (
+            [Environment]::GetFolderPath("LocalApplicationData")
+        ) "MySkills\venvs\skill-evaluator"
+        $command = [IO.Path]::GetFullPath([string]$ProbeResult.command)
+        $prefix = [IO.Path]::GetFullPath($managedRoot).TrimEnd("\") + "\"
+        if ($command.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+            return [PSCustomObject]@{
+                ownership = "installed_by_myskills"
+                manager = "private-venv"
+                path = $managedRoot
+            }
+        }
+    }
+    if ($Dependency.install.manager -eq "node") {
+        try {
+            $npm = Get-Command "npm" -CommandType Application -ErrorAction Stop |
+                Select-Object -First 1
+            $root = (& $npm.Source root --global 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($root)) {
+                throw "npm global root is unavailable."
+            }
+            $packagePath = Join-Path $root (
+                ([string]$Dependency.install.package).Replace("/", "\")
+            )
+            $packageJson = Join-Path $packagePath "package.json"
+            if (Test-Path -LiteralPath $packageJson -PathType Leaf) {
+                $metadata = Get-Content -Raw -LiteralPath $packageJson |
+                    ConvertFrom-Json
+                if ([string]$metadata.version -eq [string]$ProbeResult.version) {
+                    return [PSCustomObject]@{
+                        ownership = "preexisting"
+                        manager = "npm"
+                        path = $packagePath
+                    }
+                }
+            }
+        }
+        catch {
+            # Unknown package origins are intentionally preserved.
+        }
+    }
+    return [PSCustomObject]@{
+        ownership = "preexisting"
+        manager = "unknown"
+        path = [string]$ProbeResult.command
+    }
+}
+
+function Test-NewerDependencyVersion {
+    param(
+        [AllowNull()][string]$Candidate,
+        [AllowNull()][string]$Baseline
+    )
+    if (
+        [string]::IsNullOrWhiteSpace($Candidate) -or
+        [string]::IsNullOrWhiteSpace($Baseline)
+    ) {
+        return $false
+    }
+    return [version]$Candidate -gt [version]$Baseline
+}
+
+function Install-AllowlistedDependency {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Dependency,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$ProbeResults,
+        [string]$Version = $Dependency.install_version
+    )
+
+    if ($Dependency.id -eq "pyyaml") {
+        if ($Version -ne [string]$Dependency.install_version) {
+            throw (
+                "PyYAML release adoption requires a reviewed hash-lock update; " +
+                "only the source-controlled default can be installed."
+            )
+        }
         $python = $ProbeResults["python"].command
         if ([string]::IsNullOrWhiteSpace($python)) {
             throw "A compatible Python command is required before installing PyYAML."
@@ -422,7 +603,7 @@ function Install-AllowlistedDependency {
     if ($Dependency.install.manager -eq "node") {
         $specification = "{0}@{1}" -f (
             $Dependency.install.package
-        ), $Dependency.install_version
+        ), $Version
         $volta = Get-Command "volta" -CommandType Application -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if ($null -ne $volta) {
@@ -440,6 +621,151 @@ function Install-AllowlistedDependency {
     }
 
     throw "Unsupported allowlisted dependency installer: $($Dependency.id)"
+}
+
+function Uninstall-AllowlistedDependency {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Dependency
+    )
+
+    if ($Dependency.install.manager -ne "node") {
+        throw "Automatic uninstall is unsupported for $($Dependency.id)."
+    }
+    $npm = Get-Command "npm" -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1
+    & $npm.Source uninstall --global $Dependency.install.package
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to uninstall $($Dependency.install.package)."
+    }
+}
+
+function Set-DependencyDefaultVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath,
+        [Parameter(Mandatory = $true)]
+        [string]$DependencyId,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $document = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
+    $entry = @(
+        $document.dependencies | Where-Object { $_.id -eq $DependencyId }
+    )
+    if ($entry.Count -ne 1 -or $entry[0].kind -ne "installable") {
+        throw "Cannot update unknown installable dependency: $DependencyId"
+    }
+    $entry[0].install_version = $Version
+    $parent = Split-Path -Parent $ManifestPath
+    $temporary = Join-Path $parent (
+        ".dependencies-" + [Guid]::NewGuid().ToString("N") + ".json"
+    )
+    try {
+        [IO.File]::WriteAllText(
+            $temporary,
+            ($document | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+            (New-Object Text.UTF8Encoding($false))
+        )
+        Move-Item -LiteralPath $temporary -Destination $ManifestPath -Force
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporary) {
+            Remove-Item -LiteralPath $temporary -Force
+        }
+    }
+}
+
+function Invoke-DependencyReleaseAdoption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Dependency,
+        [Parameter(Mandatory = $true)]
+        [string]$ReleaseVersion,
+        [Parameter(Mandatory = $true)]
+        [object]$PreviousProbe,
+        [Parameter(Mandatory = $true)]
+        [object]$Ownership,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$ProbeResults,
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath
+    )
+
+    if ($Dependency.install.manager -ne "node") {
+        throw (
+            "$($Dependency.id) uses a source-controlled hash lock; " +
+            "release adoption requires a maintainer lock update."
+        )
+    }
+    if (
+        $PreviousProbe.status -ne "MISSING" -and
+        $Ownership.manager -ne "npm"
+    ) {
+        throw (
+            "$($Dependency.id) is not proven npm-managed; preserve the " +
+            "preexisting package and upgrade it with its owning manager."
+        )
+    }
+
+    $oldVersion = [string]$PreviousProbe.version
+    $oldManifest = [IO.File]::ReadAllBytes($ManifestPath)
+    try {
+        Install-AllowlistedDependency `
+            -Dependency $Dependency `
+            -ProbeResults $ProbeResults `
+            -Version $ReleaseVersion
+        $verified = Invoke-DependencyProbe -Dependency $Dependency
+        if (
+            $verified.status -ne "COMPATIBLE" -or
+            [string]$verified.version -ne $ReleaseVersion
+        ) {
+            throw (
+                "Release verification expected $ReleaseVersion but observed " +
+                "$($verified.status)/$($verified.version)."
+            )
+        }
+        Set-DependencyDefaultVersion `
+            -ManifestPath $ManifestPath `
+            -DependencyId $Dependency.id `
+            -Version $ReleaseVersion
+        $Dependency.install_version = $ReleaseVersion
+        $ProbeResults[$Dependency.id] = $verified
+        return $verified
+    }
+    catch {
+        $adoptionError = $_.Exception.Message
+        [IO.File]::WriteAllBytes($ManifestPath, $oldManifest)
+        try {
+            if ([string]::IsNullOrWhiteSpace($oldVersion)) {
+                Uninstall-AllowlistedDependency -Dependency $Dependency
+                $restored = Invoke-DependencyProbe -Dependency $Dependency
+                if ($restored.status -ne "MISSING") {
+                    throw "The previously absent package is still observable."
+                }
+            }
+            else {
+                Install-AllowlistedDependency `
+                    -Dependency $Dependency `
+                    -ProbeResults $ProbeResults `
+                    -Version $oldVersion
+                $restored = Invoke-DependencyProbe -Dependency $Dependency
+                if ([string]$restored.version -ne $oldVersion) {
+                    throw "Expected restored version $oldVersion."
+                }
+            }
+        }
+        catch {
+            throw (
+                "RECOVERY_REQUIRED: adoption failed ($adoptionError); " +
+                "prior dependency state could not be restored " +
+                "($($_.Exception.Message)). Repair with npm install --global " +
+                "$($Dependency.install.package)@$oldVersion."
+            )
+        }
+        throw "Release adoption failed and prior state was restored: $adoptionError"
+    }
 }
 
 function Get-PrivateToolPlan {
@@ -1068,6 +1394,7 @@ try {
     $selectedSkills = @(Resolve-ManagedSkills -Inventory $inventory -RequestedNames $Skills)
     $state = Read-State -Path $StatePath
     $records = $state.Records
+    $dependencyRecords = $state.DependencyRecords
     $backups = @($state.Backups)
 
     Write-Output "PREFLIGHT"
@@ -1091,6 +1418,8 @@ try {
     $dependencyManifest = $null
     $applicableDependencies = @()
     $dependencyResults = @{}
+    $dependencyReleases = @{}
+    $dependencyOwnership = @{}
     if (Test-Path -LiteralPath $dependencyManifestPath -PathType Leaf) {
         $dependencyManifest = Get-Content -Raw -LiteralPath $dependencyManifestPath |
             ConvertFrom-Json
@@ -1105,11 +1434,44 @@ try {
         foreach ($dependency in $applicableDependencies) {
             $result = Invoke-DependencyProbe -Dependency $dependency
             $dependencyResults[$dependency.id] = $result
+            $release = Get-AvailableDependencyRelease `
+                -Dependency $dependency `
+                -ProbeResults $dependencyResults
+            $dependencyReleases[$dependency.id] = $release
+            $ownership = $null
+            if ($dependency.kind -eq "installable") {
+                $ownership = Get-DependencyPackageOwnership `
+                    -Dependency $dependency `
+                    -ProbeResult $result
+                $dependencyOwnership[$dependency.id] = $ownership
+            }
+            $localVersion = if (
+                [string]::IsNullOrWhiteSpace([string]$result.version)
+            ) { "absent" } else { [string]$result.version }
+            $defaultVersion = if (
+                [string]::IsNullOrWhiteSpace([string]$dependency.install_version)
+            ) { "-" } else { [string]$dependency.install_version }
+            $remoteVersion = if (
+                $release.status -eq "AVAILABLE"
+            ) { [string]$release.version } else { "unknown" }
+            $ownerText = if ($null -eq $ownership) {
+                "-"
+            }
+            else {
+                "$($ownership.ownership)/$($ownership.manager)"
+            }
             Write-Output (
                 "$($dependency.id)`t$($result.status)`t" +
-                "detected=$($result.version)`tminimum=$($dependency.minimum_version)`t" +
-                "pinned=$($dependency.install_version)"
+                "D=$defaultVersion`tL=$localVersion`tR=$remoteVersion`t" +
+                "constraint=$($dependency.version_constraint)`towner=$ownerText`t" +
+                "source=$($release.source)"
             )
+            if ($release.status -eq "UNAVAILABLE") {
+                Write-Output (
+                    "UPDATE_CHECK_UNAVAILABLE`t$($dependency.id)`t" +
+                    $release.details
+                )
+            }
         }
     }
 
@@ -1236,6 +1598,7 @@ try {
     }
 
     $dependencyBlocks = @{}
+    $stateChanged = $false
     if ($null -ne $qmdMcpFailure) {
         $dependencyBlocks["qmd"] = @(
             "MCP preflight failed: $qmdMcpFailure"
@@ -1251,35 +1614,211 @@ try {
             "conflicting qmd MCP registration: $($conflicts -join ', ')"
         )
     }
+    $approveRemainingDependencies = [bool]$Yes
+    $quitDependencyActions = $false
+    $recoveryRequired = $false
+    $dependencyOperations = @{}
     foreach ($dependency in $applicableDependencies) {
         $result = $dependencyResults[$dependency.id]
         $available = $result.status -eq "COMPATIBLE"
+        $release = $dependencyReleases[$dependency.id]
+        $ownership = $dependencyOwnership[$dependency.id]
+        $releaseIsNewer = (
+            $dependency.kind -eq "installable" -and
+            $release.status -eq "AVAILABLE" -and
+            (
+                (
+                    $available -and
+                    (Test-NewerDependencyVersion `
+                        -Candidate $release.version `
+                        -Baseline $result.version)
+                ) -or
+                (
+                    -not $available -and
+                    (Test-NewerDependencyVersion `
+                        -Candidate $release.version `
+                        -Baseline $dependency.install_version)
+                )
+            )
+        )
+
+        if ($available -and $releaseIsNewer) {
+            $canAdopt = (
+                $dependency.install.manager -eq "node" -and
+                $ownership.manager -eq "npm"
+            )
+            if ($DryRun) {
+                $mode = if ($canAdopt) { "interactive-only" } else { "manual-owner" }
+                Write-Output (
+                    "WOULD_OFFER_RELEASE_ADOPTION`t$($dependency.id)`t" +
+                    "$($result.version)->$($release.version)`t$mode"
+                )
+            }
+            elseif (-not $Yes -and -not $quitDependencyActions) {
+                if ($canAdopt) {
+                    $answer = Read-Host (
+                        "Adopt {0} {1} -> {2} as the new MySkills default? [Y/N]" -f
+                        $dependency.id, $result.version, $release.version
+                    )
+                    if ($answer -match "^(?i:y|yes)$") {
+                        try {
+                            $result = Invoke-DependencyReleaseAdoption `
+                                -Dependency $dependency `
+                                -ReleaseVersion $release.version `
+                                -PreviousProbe $result `
+                                -Ownership $ownership `
+                                -ProbeResults $dependencyResults `
+                                -ManifestPath $dependencyManifestPath
+                            $available = $true
+                            if ($ownership.ownership -eq "absent") {
+                                $dependencyOperations[$dependency.id] = "adopt_release"
+                            }
+                            else {
+                                $dependencyOperations[$dependency.id] = "upgrade_and_adopt"
+                            }
+                            Write-Output (
+                                "DEPENDENCY_ADOPTED`t$($dependency.id)`t" +
+                                $release.version
+                            )
+                        }
+                        catch {
+                            Write-Output (
+                                "DEPENDENCY_ADOPTION_FAILED`t$($dependency.id)`t" +
+                                $_.Exception.Message
+                            )
+                            if ($_.Exception.Message.StartsWith("RECOVERY_REQUIRED:")) {
+                                $recoveryRequired = $true
+                            }
+                        }
+                    }
+                }
+                else {
+                    Write-Output (
+                        "DEPENDENCY_UPDATE_MANUAL`t$($dependency.id)`t" +
+                        "preserved $($ownership.ownership)/$($ownership.manager)"
+                    )
+                }
+            }
+        }
+
         if (
             -not $available -and
             $dependency.kind -eq "installable" -and
             $Action -eq "Install"
         ) {
+            $canManageExisting = (
+                $result.status -eq "MISSING" -or
+                $ownership.manager -in @("npm", "private-venv")
+            )
             if ($DryRun) {
                 Write-Output (
                     "WOULD_OFFER_DEPENDENCY`t$($dependency.id)`t" +
-                    "$($dependency.install_version)"
+                    "D=$($dependency.install_version)`t" +
+                    "R=$($release.version)`t" +
+                    "can_manage=$canManageExisting"
                 )
-                $available = $true
+                $available = $canManageExisting
             }
-            elseif (Confirm-DependencyInstall -Dependency $dependency -Approve:$Yes) {
+            elseif (-not $canManageExisting) {
+                Write-Output (
+                    "DEPENDENCY_PRESERVED`t$($dependency.id)`t" +
+                    "existing package manager is not proven"
+                )
+            }
+            elseif (-not $quitDependencyActions) {
+                $decision = "N"
+                if ($approveRemainingDependencies) {
+                    $decision = "D"
+                }
+                elseif ($releaseIsNewer) {
+                    $decision = Read-Host (
+                        "Install {0}: default D={1}, adopt R={2}, or decline? [D/R/N/A/Q]" -f
+                        $dependency.id,
+                        $dependency.install_version,
+                        $release.version
+                    )
+                }
+                else {
+                    $decision = Confirm-DependencyInstall -Dependency $dependency
+                }
+                $decision = ([string]$decision).Trim().ToUpperInvariant()
+                if ($decision -eq "A") {
+                    $approveRemainingDependencies = $true
+                    $decision = "D"
+                }
+                elseif ($decision -eq "Y" -or $decision -eq "YES") {
+                    $decision = "D"
+                }
+                elseif ($decision -eq "Q") {
+                    $quitDependencyActions = $true
+                    Write-Output "DEPENDENCY_ACTIONS_STOPPED`t$($dependency.id)"
+                }
+
+                if ($decision -eq "R") {
+                    try {
+                        $result = Invoke-DependencyReleaseAdoption `
+                            -Dependency $dependency `
+                            -ReleaseVersion $release.version `
+                            -PreviousProbe $result `
+                            -Ownership $ownership `
+                            -ProbeResults $dependencyResults `
+                            -ManifestPath $dependencyManifestPath
+                        $available = $true
+                        if ($ownership.ownership -eq "absent") {
+                            $dependencyOperations[$dependency.id] = "adopt_release"
+                        }
+                        else {
+                            $dependencyOperations[$dependency.id] = "upgrade_and_adopt"
+                        }
+                        Write-Output (
+                            "DEPENDENCY_ADOPTED`t$($dependency.id)`t" +
+                            $release.version
+                        )
+                    }
+                    catch {
+                        Write-Output (
+                            "DEPENDENCY_ADOPTION_FAILED`t$($dependency.id)`t" +
+                            $_.Exception.Message
+                        )
+                        if ($_.Exception.Message.StartsWith("RECOVERY_REQUIRED:")) {
+                            $recoveryRequired = $true
+                        }
+                    }
+                }
+                elseif ($decision -eq "D") {
                 try {
                     Install-AllowlistedDependency `
                         -Dependency $dependency `
-                        -ProbeResults $dependencyResults
+                        -ProbeResults $dependencyResults `
+                        -Version $dependency.install_version
                     $result = Invoke-DependencyProbe -Dependency $dependency
                     $dependencyResults[$dependency.id] = $result
-                    $available = $result.status -eq "COMPATIBLE"
+                    $available = (
+                        $result.status -eq "COMPATIBLE" -and
+                        [string]$result.version -eq
+                            [string]$dependency.install_version
+                    )
+                    if (-not $available -and $result.status -eq "COMPATIBLE") {
+                        $result.status = "BROKEN"
+                        $result.details = (
+                            "Default installation verification expected " +
+                            "$($dependency.install_version), observed " +
+                            "$($result.version)."
+                        )
+                    }
+                    if ($available -and $ownership.ownership -eq "absent") {
+                        $dependencyOperations[$dependency.id] = "install_default"
+                    }
+                    elseif ($available) {
+                        $dependencyOperations[$dependency.id] = "repair_default"
+                    }
                     Write-Output "DEPENDENCY_$($result.status)`t$($dependency.id)"
                 }
                 catch {
                     Write-Output (
                         "DEPENDENCY_FAILED`t$($dependency.id)`t$($_.Exception.Message)"
                     )
+                }
                 }
             }
         }
@@ -1300,6 +1839,61 @@ try {
                     $dependency.guidance
                 )
             }
+        }
+    }
+
+    if ($Action -eq "Install" -and -not $DryRun) {
+        foreach ($dependency in $applicableDependencies) {
+            $result = $dependencyResults[$dependency.id]
+            $ownership = if ($dependencyOwnership.ContainsKey($dependency.id)) {
+                $dependencyOwnership[$dependency.id]
+            }
+            else {
+                [PSCustomObject]@{
+                    ownership = "preexisting"
+                    manager = "user-provided"
+                    path = [string]$result.command
+                }
+            }
+            $operation = "detected"
+            if ($dependencyOperations.ContainsKey($dependency.id)) {
+                $operation = $dependencyOperations[$dependency.id]
+            }
+            $recordOwnership = [string]$ownership.ownership
+            if (
+                $operation -in @("install_default", "adopt_release") -and
+                $recordOwnership -eq "absent"
+            ) {
+                $recordOwnership = "installed_by_myskills"
+            }
+            $recordManager = [string]$ownership.manager
+            if ([string]::IsNullOrWhiteSpace($recordManager)) {
+                if ($dependency.install.manager -eq "node") {
+                    $volta = Get-Command "volta" -CommandType Application `
+                        -ErrorAction SilentlyContinue |
+                        Select-Object -First 1
+                    $recordManager = if ($null -ne $volta) { "volta" } else { "npm" }
+                }
+                elseif ($dependency.install.manager -eq "pip") {
+                    $recordManager = "private-venv"
+                }
+                else {
+                    $recordManager = "user-provided"
+                }
+            }
+            $dependencyRecords[$dependency.id] = [ordered]@{
+                id = [string]$dependency.id
+                version = [string]$result.version
+                path = [string]$result.command
+                ownership = $recordOwnership
+                manager = $recordManager
+                verification_status = [string]$result.status
+                last_successful_operation = $operation
+                last_verified_at = [DateTimeOffset]::UtcNow.ToString("o")
+            }
+        }
+        if ($applicableDependencies.Count -gt 0) {
+            $stateChanged = $true
         }
     }
 
@@ -1345,8 +1939,6 @@ try {
     $skipped = 0
     $blocked = 0
     $requested = 0
-    $stateChanged = $false
-
     if ($Action -eq "Install") {
         if ($wikiSkills.Count -gt 0) {
             $wikiBlocked = @(
@@ -1715,13 +2307,21 @@ try {
     }
 
     if ($stateChanged -and -not $DryRun) {
-        Write-State -Path $StatePath -Records $records -Backups $backups
+        Write-State `
+            -Path $StatePath `
+            -Records $records `
+            -DependencyRecords $dependencyRecords `
+            -Backups $backups
     }
 
     Write-Output "SUMMARY"
     Write-Output (
         "requested=$requested installed=$installed skipped=$skipped blocked=$blocked"
     )
+    if ($recoveryRequired) {
+        Write-Error "RECOVERY_REQUIRED: one or more dependencies need manual repair."
+        exit 1
+    }
     if ($blocked -gt 0) {
         Write-Error "INCOMPLETE: $blocked requested installation target(s) are blocked."
         exit 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shutil
@@ -15,6 +16,130 @@ POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 
 @unittest.skipUnless(POWERSHELL, "PowerShell is required")
 class InstallerCommandTests(unittest.TestCase):
+    def test_dependency_preflight_reports_independent_d_l_r_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_bin = Path(temp_dir) / "bin"
+            fake_bin.mkdir()
+            (fake_bin / "node.cmd").write_text(
+                "@echo off\r\necho v22.0.0\r\n",
+                encoding="ascii",
+            )
+            (fake_bin / "qmd.cmd").write_text(
+                "@echo off\r\n"
+                'if "%1"=="--version" (echo 2.5.3) else (echo qmd help)\r\n',
+                encoding="ascii",
+            )
+            (fake_bin / "npm.cmd").write_text(
+                "@echo off\r\n"
+                'if "%1"=="view" (echo \"9.9.9\"& exit /b 0)\r\n'
+                'if "%1"=="root" (echo C:\\unowned\\node_modules& exit /b 0)\r\n'
+                "exit /b 1\r\n",
+                encoding="ascii",
+            )
+            state_path = Path(temp_dir) / "state.json"
+            system_root = os.environ.get("SystemRoot", r"C:\Windows")
+            env = {
+                **os.environ,
+                "NO_COLOR": "1",
+                "PATH": os.pathsep.join(
+                    [
+                        str(fake_bin),
+                        str(Path(system_root) / "System32"),
+                        system_root,
+                    ]
+                ),
+            }
+            result = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(INSTALLER),
+                    "-Action",
+                    "Install",
+                    "-Skills",
+                    "qmd",
+                    "-DryRun",
+                    "-Yes",
+                    "-StatePath",
+                    str(state_path),
+                ],
+                cwd=ROOT,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertIn(
+                result.returncode,
+                (0, 1),
+                result.stderr + "\n" + result.stdout,
+            )
+            self.assertFalse(state_path.exists())
+            self.assertIn(
+                "qmd\tCOMPATIBLE\tD=2.5.3\tL=2.5.3\tR=9.9.9",
+                result.stdout,
+            )
+            self.assertIn(
+                "WOULD_OFFER_RELEASE_ADOPTION\tqmd\t2.5.3->9.9.9\tmanual-owner",
+                result.stdout,
+            )
+
+            install_result = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(INSTALLER),
+                    "-Action",
+                    "Install",
+                    "-Skills",
+                    "qmd",
+                    "-Yes",
+                    "-StatePath",
+                    str(state_path),
+                ],
+                cwd=ROOT,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertIn(
+                install_result.returncode,
+                (0, 1),
+                install_result.stderr + "\n" + install_result.stdout,
+            )
+            self.assertNotIn("DEPENDENCY_ADOPTED", install_result.stdout)
+            manifest = json.loads(
+                (ROOT / "manifests" / "dependencies.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            qmd_manifest = next(
+                item for item in manifest["dependencies"] if item["id"] == "qmd"
+            )
+            self.assertEqual(qmd_manifest["install_version"], "2.5.3")
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            dependencies = {item["id"]: item for item in state["dependencies"]}
+            self.assertEqual(dependencies["qmd"]["version"], "2.5.3")
+            self.assertEqual(dependencies["qmd"]["ownership"], "preexisting")
+            self.assertEqual(
+                dependencies["qmd"]["verification_status"],
+                "COMPATIBLE",
+            )
+
     def test_install_dry_run_observes_all_targets_before_dependency_offer(
         self,
     ) -> None:
