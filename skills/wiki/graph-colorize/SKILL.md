@@ -15,7 +15,8 @@ Inventory the needed tags/categories before applying a mode. Invoke
 
 The script must back up `.obsidian\graph.json`, replace only `colorGroups`, preserve unrelated
 settings, apply stable palette ordering and visibility precedence, and verify the written JSON.
-If graph settings do not exist, report the missing prerequisite. Restore reuses a named backup;
-it never guesses among multiple backups.
+If `.obsidian` exists but `graph.json` does not, initialize the retained source default before
+colorizing it. If `.obsidian` does not exist, report the missing prerequisite. Restore reuses a
+named backup; it never guesses among multiple backups.
 
 Report the mode, backup path, number of groups, verification result, and exact undo command.

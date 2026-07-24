@@ -222,19 +222,17 @@ class ManagedWikiSuiteTests(unittest.TestCase):
             obsidian = vault / ".obsidian"
             obsidian.mkdir()
             graph = obsidian / "graph.json"
-            graph.write_text(
-                json.dumps(
-                    {
-                        "collapse-filter": True,
-                        "showTags": False,
-                        "colorGroups": [{"query": "old", "color": {"a": 1}}],
-                    }
-                ),
-                encoding="utf-8",
+            original_graph = (
+                "{\n"
+                '  "collapse-filter" : true,\n'
+                '  "colorGroups": [{"query":"old","color":{"a":1}}],\n'
+                '  "showTags" : false\n'
+                "}\n"
             )
+            graph.write_text(original_graph, encoding="utf-8")
             (vault / "concepts").mkdir()
             (vault / "concepts" / "sample.md").write_text(
-                "---\ntags:\n  - architecture\n---\n# Sample\n",
+                "---\ntags:\n  - architecture\n  - visibility/internal\n---\n# Sample\n",
                 encoding="utf-8",
             )
             result = subprocess.run(
@@ -255,13 +253,209 @@ class ManagedWikiSuiteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             updated = json.loads(graph.read_text(encoding="utf-8-sig"))
-            backups = list(obsidian.glob("graph.json.myskills.*.bak"))
+            updated_text = graph.read_text(encoding="utf-8-sig")
+            backups = list(obsidian.glob("graph.json.backup-*"))
+            backup_text = backups[0].read_text(encoding="utf-8")
+            payload = json.loads(result.stdout)
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(updated["collapse-filter"])
         self.assertFalse(updated["showTags"])
-        self.assertEqual("path:concepts", updated["colorGroups"][0]["query"])
+        self.assertIn('  "collapse-filter" : true,\n', updated_text)
+        self.assertIn('  "showTags" : false\n', updated_text)
+        self.assertEqual('path:"concepts"', updated["colorGroups"][0]["query"])
+        self.assertEqual(5142951, updated["colorGroups"][0]["color"]["rgb"])
         self.assertEqual(1, len(backups))
+        self.assertEqual(original_graph, backup_text)
+        self.assertEqual("verified", payload["backup_status"])
+        self.assertRegex(payload["backup_sha256"], r"^[0-9a-f]{64}$")
+
+    @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
+    def test_graph_colorize_preserves_source_modes_fallback_and_activity_log(self):
+        script = WIKI_ROOT / "graph-colorize" / "scripts" / "set-graph-colors.ps1"
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            obsidian = vault / ".obsidian"
+            obsidian.mkdir()
+            (vault / "log.md").write_text("# Activity\n", encoding="utf-8")
+            concepts = vault / "concepts"
+            concepts.mkdir()
+            (concepts / "one.md").write_text(
+                (
+                    "---\n"
+                    "aliases:\n"
+                    "  - not-a-tag\n"
+                    "tags:\n"
+                    "  - architecture\n"
+                    "  - visibility/pii\n"
+                    "---\n"
+                ),
+                encoding="utf-8",
+            )
+            (concepts / "two.md").write_text(
+                "---\ntags: [architecture, testing, visibility/internal]\n---\n",
+                encoding="utf-8",
+            )
+
+            tag_run = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-Vault",
+                    str(vault),
+                    "-Mode",
+                    "ByTag",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            tag_graph = json.loads((obsidian / "graph.json").read_text(encoding="utf-8"))
+            visibility_run = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-Vault",
+                    str(vault),
+                    "-Mode",
+                    "ByVisibility",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            visibility_graph = json.loads(
+                (obsidian / "graph.json").read_text(encoding="utf-8")
+            )
+            backups = list(obsidian.glob("graph.json.backup-*"))
+            log_text = (vault / "log.md").read_text(encoding="utf-8")
+
+        self.assertEqual(0, tag_run.returncode, tag_run.stderr)
+        self.assertEqual(0, visibility_run.returncode, visibility_run.stderr)
+        self.assertEqual("tag:#architecture", tag_graph["colorGroups"][0]["query"])
+        self.assertNotIn(
+            "visibility/",
+            " ".join(group["query"] for group in tag_graph["colorGroups"]),
+        )
+        self.assertNotIn(
+            "not-a-tag",
+            " ".join(group["query"] for group in tag_graph["colorGroups"]),
+        )
+        self.assertEqual(
+            [
+                "tag:#visibility/pii",
+                "tag:#visibility/internal",
+                "tag:#visibility/public",
+            ],
+            [group["query"] for group in visibility_graph["colorGroups"]],
+        )
+        self.assertEqual(1, len(backups))
+        self.assertIn("GRAPH_COLORIZE mode=ByTag", log_text)
+        self.assertIn("GRAPH_COLORIZE mode=ByVisibility", log_text)
+
+        skill_text = (
+            WIKI_ROOT / "graph-colorize" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "If `.obsidian` exists but `graph.json` does not, initialize",
+            skill_text,
+        )
+        self.assertIn(
+            "If `.obsidian` does not exist, report the missing prerequisite",
+            skill_text,
+        )
+
+    @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
+    def test_graph_colorize_clear_and_restore_are_verified_and_vault_scoped(self):
+        script = WIKI_ROOT / "graph-colorize" / "scripts" / "set-graph-colors.ps1"
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp) / "vault"
+            obsidian = vault / ".obsidian"
+            obsidian.mkdir(parents=True)
+            graph = obsidian / "graph.json"
+            original = '{"colorGroups":[{"query":"old","color":{"a":1,"rgb":1}}]}'
+            graph.write_text(original, encoding="utf-8")
+            (vault / "log.md").write_text("# Activity\n", encoding="utf-8")
+
+            prefix_escape = vault / ".obsidian-escape"
+            prefix_escape.mkdir()
+            escaped_backup = prefix_escape / "graph.json.backup-escape"
+            escaped_backup.write_text('{"colorGroups":[]}', encoding="utf-8")
+            escaped_restore = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-Vault",
+                    str(vault),
+                    "-Mode",
+                    "Restore",
+                    "-RestoreBackup",
+                    str(escaped_backup),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            graph.write_text(original, encoding="utf-8")
+            clear_run = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-Vault",
+                    str(vault),
+                    "-Mode",
+                    "Clear",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            clear_payload = json.loads(clear_run.stdout)
+            restore_run = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-Vault",
+                    str(vault),
+                    "-Mode",
+                    "Restore",
+                    "-RestoreBackup",
+                    clear_payload["backup_path"],
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            restored = graph.read_text(encoding="utf-8")
+            log_text = (vault / "log.md").read_text(encoding="utf-8")
+
+        self.assertNotEqual(0, escaped_restore.returncode)
+        self.assertEqual(0, clear_run.returncode, clear_run.stderr)
+        self.assertEqual(0, restore_run.returncode, restore_run.stderr)
+        self.assertEqual(original, restored)
+        self.assertIn("GRAPH_COLORIZE mode=Clear", log_text)
+        self.assertIn("GRAPH_COLORIZE mode=Restore", log_text)
 
     @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
     def test_rebuild_archive_is_verified_and_excludes_obsidian_settings(self):
