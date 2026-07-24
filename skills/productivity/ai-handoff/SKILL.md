@@ -15,7 +15,8 @@ Transfer intent, evidence, and authority without silently expanding the task.
   delivery. Prefer a matching session in the target project; reuse it only when
   blank or demonstrably for the same goal. If none exists, a request to hand the
   work to that project authorizes creation of a new session for the named agent
-  or configured project default.
+  or configured project default. If neither is available, ask the human rather
+  than guessing an agent.
 
 Do not write to the clipboard. A file is an exceptional fallback only when
 required source material cannot be represented safely in the text envelope.

@@ -83,6 +83,17 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
             with self.subTest(smell=smell):
                 self.assertIn(smell, baseline)
 
+    def test_diagnosis_only_request_does_not_authorize_a_fix(self) -> None:
+        workflow = read(ENGINEERING / "diagnosing-bugs" / "SKILL.md")
+        self.assertIn(
+            "Diagnosis does not authorize a repair",
+            workflow,
+        )
+        self.assertIn(
+            "Apply the fix only when the human requested implementation",
+            workflow,
+        )
+
     def test_to_spec_uses_the_local_lightweight_artifact(self) -> None:
         workflow = read(ENGINEERING / "to-spec" / "SKILL.md")
         self.assertIn(".scratch/<feature-slug>/spec.md", workflow)
@@ -104,6 +115,13 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("<current-project-root>/HANDOFF.md", workflow)
         self.assertIn("never contact, create, or select another AI session", workflow)
         self.assertIn("inspect it first", workflow)
+
+    def test_live_handoff_never_guesses_the_destination_agent(self) -> None:
+        workflow = read(PRODUCTIVITY / "ai-handoff" / "SKILL.md")
+        self.assertIn(
+            "ask the human rather than guessing an agent",
+            " ".join(workflow.split()),
+        )
 
     def test_spec_tasks_re_read_project_rules_and_conditionally_load_design(
         self,
