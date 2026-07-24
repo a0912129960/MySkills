@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/a0912129960/MySkills/blob/main/inventory/skills.schema.json",
+  "title": "MySkills candidate inventory",
+  "description": "Machine-readable authority for Candidate Skill decisions and Managed Skill installation policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schema_version", "origins", "summary", "skills"],
+  "properties": {
+    "$schema": {
+      "const": "./skills.schema.json"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "origins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/origin"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/skill"
+      }
+    }
+  },
+  "$defs": {
+    "nullableSkillName": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableString": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "repository_url", "revision"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "kind": {
+          "enum": ["repository", "local-installation"]
+        },
+        "repository_url": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "revision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "repository"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "repository_url": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repository_url": {
+                "type": "null"
+              },
+              "revision": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "counts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states", "categories"],
+      "properties": {
+        "states": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pending", "managed", "deferred", "excluded"],
+          "properties": {
+            "pending": {
+              "$ref": "#/$defs/counts"
+            },
+            "managed": {
+              "$ref": "#/$defs/counts"
+            },
+            "deferred": {
+              "$ref": "#/$defs/counts"
+            },
+            "excluded": {
+              "$ref": "#/$defs/counts"
+            }
+          }
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engineering", "productivity", "personal", "wiki", "obsidian", "qmd"],
+          "properties": {
+            "engineering": {
+              "$ref": "#/$defs/counts"
+            },
+            "productivity": {
+              "$ref": "#/$defs/counts"
+            },
+            "personal": {
+              "$ref": "#/$defs/counts"
+            },
+            "wiki": {
+              "$ref": "#/$defs/counts"
+            },
+            "obsidian": {
+              "$ref": "#/$defs/counts"
+            },
+            "qmd": {
+              "$ref": "#/$defs/counts"
+            }
+          }
+        }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_name",
+        "managed_name",
+        "origin",
+        "source_path",
+        "category",
+        "state",
+        "owner",
+        "invocation",
+        "install_targets"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "managed_name": {
+          "$ref": "#/$defs/nullableSkillName"
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\\\]+$"
+        },
+        "category": {
+          "enum": ["engineering", "productivity", "personal", "wiki", "obsidian", "qmd"]
+        },
+        "state": {
+          "enum": ["pending", "managed", "deferred", "excluded"]
+        },
+        "owner": {
+          "oneOf": [
+            {
+              "const": "MySkills"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invocation": {
+          "oneOf": [
+            {
+              "enum": ["explicit", "implicit"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "install_targets": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["codex", "claude-code", "antigravity-cli"]
+          }
+        },
+        "imported_on": {
+          "description": "Snapshot import date. Omitted or null until an accepted Managed Skill is imported.",
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "managed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "managed_name": {
+                "type": "string"
+              },
+              "owner": {
+                "const": "MySkills"
+              },
+              "invocation": {
+                "enum": ["explicit", "implicit"]
+              },
+              "install_targets": {
+                "minItems": 3,
+                "maxItems": 3,
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "codex"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "claude-code"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "antigravity-cli"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "managed_name": {
+                "type": "null"
+              },
+              "owner": {
+                "type": "null"
+              },
+              "invocation": {
+                "type": "null"
+              },
+              "install_targets": {
+                "maxItems": 0
+              },
+              "imported_on": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
