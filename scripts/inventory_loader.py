@@ -41,7 +41,7 @@ _SKILL_KEYS = {
     "invocation",
     "install_targets",
 }
-_SKILL_OPTIONAL_KEYS = {"imported_on"}
+_SKILL_OPTIONAL_KEYS = {"imported_on", "source_digest"}
 
 
 class InventoryValidationError(ValueError):
@@ -216,6 +216,16 @@ def _validate_skill(
             errors.append(f"{location}.imported_on must be an ISO 8601 date or null")
         if state != "managed":
             errors.append(f"{location}.imported_on is allowed only for managed skills")
+
+    source_digest = skill.get("source_digest")
+    if source_digest is not None:
+        if (
+            not isinstance(source_digest, str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", source_digest)
+        ):
+            errors.append(f"{location}.source_digest must be a sha256 digest or null")
+        if state != "managed":
+            errors.append(f"{location}.source_digest is allowed only for managed skills")
 
     install_targets = skill.get("install_targets")
     if not isinstance(install_targets, list) or any(

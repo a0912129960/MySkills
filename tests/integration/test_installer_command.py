@@ -250,6 +250,11 @@ class InstallerCommandTests(unittest.TestCase):
         self.assertNotIn('"Junction"', content)
         self.assertNotIn("ItemType Junction", content)
         self.assertIn('"Install", "Status", "Verify", "Uninstall"', content)
+        self.assertNotIn('$dependencyBlocks["qmd"] = @(', content)
+        self.assertIn('"MCP_STATUS`tqmd`tCLI_ONLY"', content)
+        self.assertIn("Set-PythonRequirementLock", content)
+        self.assertIn("installed_by_myskills", content)
+        self.assertIn("PreviousRecord", content)
 
 
 if __name__ == "__main__":

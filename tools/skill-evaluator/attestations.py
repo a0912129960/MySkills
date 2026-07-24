@@ -46,6 +46,8 @@ def _is_datetime(value: object) -> bool:
 def validate_attestation(
     skill_path: Path | str,
     attestation_path: Path | str,
+    *,
+    recorded_source_digest: str | None = None,
 ) -> list[str]:
     """Return release-blocking errors for one current Skill/attestation pair."""
 
@@ -72,6 +74,7 @@ def validate_attestation(
         "evaluator_version",
         "evaluated_at",
         "targets",
+        "evidence",
         "human_review",
         "unavailable_capabilities",
         "status",
@@ -102,6 +105,15 @@ def validate_attestation(
         errors.append(f"{attestation}: source_digest must be null or sha256")
     if not _is_datetime(data.get("evaluated_at")):
         errors.append(f"{attestation}: evaluated_at must be ISO 8601")
+    if data.get("evaluation_level") == "snapshot-smoke":
+        if (
+            source_digest != expected_digest
+            or recorded_source_digest != expected_digest
+        ):
+            errors.append(
+                f"{attestation}: snapshot-smoke requires matching recorded "
+                "source, attested source, and current digests"
+            )
 
     targets = data.get("targets")
     if not isinstance(targets, dict) or set(targets) != set(TARGETS):
@@ -109,6 +121,8 @@ def validate_attestation(
     else:
         for target in TARGETS:
             errors.extend(_validate_target(attestation, target, targets[target]))
+
+    errors.extend(_validate_evidence(attestation, data.get("evidence")))
 
     review = data.get("human_review")
     if not isinstance(review, dict):
@@ -134,6 +148,133 @@ def validate_attestation(
     return errors
 
 
+def _validate_evidence(path: Path, value: object) -> list[str]:
+    prefix = f"{path}: evidence"
+    required = {
+        "raw_run_root",
+        "structural",
+        "baseline",
+        "assertions",
+        "target_identities",
+        "efficiency",
+        "static_review",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return [f"{prefix} fields are invalid"]
+    errors: list[str] = []
+    raw_root = value.get("raw_run_root")
+    if not isinstance(raw_root, str) or not raw_root.startswith(
+        ".scratch/skill-evals/"
+    ):
+        errors.append(f"{prefix}.raw_run_root must name the ignored run workspace")
+
+    structural = value.get("structural")
+    if (
+        not isinstance(structural, dict)
+        or set(structural) != {"status", "summary"}
+        or structural.get("status") != "pass"
+        or not isinstance(structural.get("summary"), str)
+        or not structural["summary"].strip()
+    ):
+        errors.append(f"{prefix}.structural must record a passing summary")
+
+    baseline = value.get("baseline")
+    if not isinstance(baseline, dict) or set(baseline) != {
+        "kind",
+        "identity",
+        "summary",
+    }:
+        errors.append(f"{prefix}.baseline fields are invalid")
+    else:
+        if baseline.get("kind") not in {"no-skill", "previous-version"}:
+            errors.append(f"{prefix}.baseline.kind is invalid")
+        for field in ("identity", "summary"):
+            if (
+                not isinstance(baseline.get(field), str)
+                or not baseline[field].strip()
+            ):
+                errors.append(f"{prefix}.baseline.{field} is required")
+
+    assertions = value.get("assertions")
+    if not isinstance(assertions, dict) or set(assertions) != {
+        "passed",
+        "total",
+        "summary",
+    }:
+        errors.append(f"{prefix}.assertions fields are invalid")
+    else:
+        passed, total = assertions.get("passed"), assertions.get("total")
+        if (
+            not isinstance(passed, int)
+            or not isinstance(total, int)
+            or total < 1
+            or passed != total
+        ):
+            errors.append(f"{prefix}.assertions must be a non-empty full pass")
+        if (
+            not isinstance(assertions.get("summary"), str)
+            or not assertions["summary"].strip()
+        ):
+            errors.append(f"{prefix}.assertions.summary is required")
+
+    identities = value.get("target_identities")
+    if not isinstance(identities, dict) or set(identities) != set(TARGETS):
+        errors.append(f"{prefix}.target_identities must cover claude and codex")
+    else:
+        for target in TARGETS:
+            if not isinstance(identities[target], str) or not identities[target].strip():
+                errors.append(f"{prefix}.target_identities.{target} is required")
+
+    efficiency = value.get("efficiency")
+    if not isinstance(efficiency, dict) or set(efficiency) != set(TARGETS):
+        errors.append(f"{prefix}.efficiency must cover claude and codex")
+    else:
+        for target in TARGETS:
+            item = efficiency[target]
+            if not isinstance(item, dict) or set(item) != {
+                "duration_ms",
+                "total_tokens",
+            }:
+                errors.append(f"{prefix}.efficiency.{target} fields are invalid")
+                continue
+            if (
+                not isinstance(item["duration_ms"], int)
+                or item["duration_ms"] < 0
+            ):
+                errors.append(
+                    f"{prefix}.efficiency.{target}.duration_ms is invalid"
+                )
+            tokens = item["total_tokens"]
+            if tokens is not None and (
+                not isinstance(tokens, int) or tokens < 0
+            ):
+                errors.append(
+                    f"{prefix}.efficiency.{target}.total_tokens is invalid"
+                )
+
+    static_review = value.get("static_review")
+    if not isinstance(static_review, dict) or set(static_review) != {
+        "status",
+        "path",
+        "summary",
+    }:
+        errors.append(f"{prefix}.static_review fields are invalid")
+    else:
+        if static_review.get("status") != "pass":
+            errors.append(f"{prefix}.static_review must pass")
+        if (
+            not isinstance(static_review.get("path"), str)
+            or not static_review["path"].startswith(".scratch/skill-evals/")
+        ):
+            errors.append(f"{prefix}.static_review.path is invalid")
+        if (
+            not isinstance(static_review.get("summary"), str)
+            or not static_review["summary"].strip()
+        ):
+            errors.append(f"{prefix}.static_review.summary is required")
+    return errors
+
+
 def validate_repository(repo_root: Path | str) -> list[str]:
     """Require one current passing attestation for every managed Skill."""
 
@@ -153,7 +294,13 @@ def validate_repository(repo_root: Path | str) -> list[str]:
         if not attestation.is_file():
             errors.append(f"{name}: missing passing current-digest attestation")
             continue
-        errors.extend(validate_attestation(skill, attestation))
+        errors.extend(
+            validate_attestation(
+                skill,
+                attestation,
+                recorded_source_digest=item.get("source_digest"),
+            )
+        )
 
     actual_names = {
         item.stem

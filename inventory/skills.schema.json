@@ -245,6 +245,18 @@
               "type": "null"
             }
           ]
+        },
+        "source_digest": {
+          "description": "Optional recorded digest of an unchanged imported source snapshot.",
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "allOf": [

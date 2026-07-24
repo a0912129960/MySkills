@@ -72,6 +72,38 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "evaluator_version": attestations.EVALUATOR_VERSION,
                 "evaluated_at": "2026-07-24T00:00:00+00:00",
                 "targets": {"claude": target, "codex": target},
+                "evidence": {
+                    "raw_run_root": ".scratch/skill-evals/fixture-skill/run",
+                    "structural": {
+                        "status": "pass",
+                        "summary": "Structure passed.",
+                    },
+                    "baseline": {
+                        "kind": "no-skill",
+                        "identity": "fixture-no-skill",
+                        "summary": "Fixture baseline compared.",
+                    },
+                    "assertions": {
+                        "passed": 2,
+                        "total": 2,
+                        "summary": "Fixture assertions passed.",
+                    },
+                    "target_identities": {
+                        "claude": "claude fixture",
+                        "codex": "codex fixture",
+                    },
+                    "efficiency": {
+                        "claude": {"duration_ms": 1, "total_tokens": 1},
+                        "codex": {"duration_ms": 1, "total_tokens": None},
+                    },
+                    "static_review": {
+                        "status": "pass",
+                        "path": (
+                            ".scratch/skill-evals/fixture-skill/run/review.html"
+                        ),
+                        "summary": "Fixture static review passed.",
+                    },
+                },
                 "human_review": {
                     "status": "pass",
                     "reviewer": "fixture reviewer",
@@ -89,6 +121,34 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(
                 attestations.validate_attestation(skill, attestation),
                 [],
+            )
+            data["evaluation_level"] = "snapshot-smoke"
+            data["source_digest"] = digest
+            attestation.write_text(
+                json.dumps(data, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            snapshot_errors = attestations.validate_attestation(
+                skill,
+                attestation,
+            )
+            self.assertTrue(
+                any("recorded source" in error for error in snapshot_errors),
+                snapshot_errors,
+            )
+            self.assertEqual(
+                attestations.validate_attestation(
+                    skill,
+                    attestation,
+                    recorded_source_digest=digest,
+                ),
+                [],
+            )
+            data["evaluation_level"] = "full"
+            data["source_digest"] = None
+            attestation.write_text(
+                json.dumps(data, indent=2) + "\n",
+                encoding="utf-8",
             )
             (skill / "SKILL.md").write_text(
                 "---\nname: fixture-skill\ndescription: Changed.\n---\n",

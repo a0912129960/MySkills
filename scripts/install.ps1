@@ -485,7 +485,9 @@ function Get-DependencyPackageOwnership {
         [Parameter(Mandatory = $true)]
         [object]$Dependency,
         [Parameter(Mandatory = $true)]
-        [object]$ProbeResult
+        [object]$ProbeResult,
+        [AllowNull()]
+        [object]$PreviousRecord
     )
 
     if ($ProbeResult.status -eq "MISSING") {
@@ -493,6 +495,20 @@ function Get-DependencyPackageOwnership {
             ownership = "absent"
             manager = $null
             path = $null
+        }
+    }
+    if (
+        $null -ne $PreviousRecord -and
+        $PreviousRecord.PSObject.Properties.Name -contains "ownership" -and
+        $PreviousRecord.PSObject.Properties.Name -contains "path" -and
+        $PreviousRecord.PSObject.Properties.Name -contains "manager" -and
+        $PreviousRecord.ownership -eq "installed_by_myskills" -and
+        [string]$PreviousRecord.path -eq [string]$ProbeResult.command
+    ) {
+        return [PSCustomObject]@{
+            ownership = "installed_by_myskills"
+            manager = [string]$PreviousRecord.manager
+            path = [string]$PreviousRecord.path
         }
     }
     if ($Dependency.id -eq "pyyaml") {
@@ -511,6 +527,26 @@ function Get-DependencyPackageOwnership {
     }
     if ($Dependency.install.manager -eq "node") {
         try {
+            $volta = Get-Command "volta" -CommandType Application `
+                -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($null -ne $volta) {
+                $executableName = [IO.Path]::GetFileNameWithoutExtension(
+                    [string]$ProbeResult.command
+                )
+                $voltaPath = (& $volta.Source which $executableName 2>&1 |
+                    Out-String).Trim()
+                if (
+                    $LASTEXITCODE -eq 0 -and
+                    [string]$ProbeResult.command -eq $voltaPath
+                ) {
+                    return [PSCustomObject]@{
+                        ownership = "preexisting"
+                        manager = "volta"
+                        path = $voltaPath
+                    }
+                }
+            }
             $npm = Get-Command "npm" -CommandType Application -ErrorAction Stop |
                 Select-Object -First 1
             $root = (& $npm.Source root --global 2>&1 | Out-String).Trim()
@@ -558,21 +594,63 @@ function Test-NewerDependencyVersion {
     return [version]$Candidate -gt [version]$Baseline
 }
 
+function Set-PythonRequirementLock {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Dependency,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $uri = "https://pypi.org/pypi/{0}/{1}/json" -f (
+        $Dependency.install.package
+    ), $Version
+    $metadata = Invoke-RestMethod -Uri $uri -Method Get
+    $hashes = @(
+        $metadata.urls |
+            ForEach-Object { [string]$_.digests.sha256 } |
+            Where-Object { $_ -match "^[0-9a-f]{64}$" } |
+            Sort-Object -Unique
+    )
+    if ($hashes.Count -eq 0) {
+        throw "PyPI reported no SHA-256 release artifacts for $Version."
+    }
+    $lines = @(
+        "# Hashes are from the PyPI release metadata for all published artifacts.",
+        "$($Dependency.install.package)==$Version \"
+    )
+    for ($index = 0; $index -lt $hashes.Count; $index++) {
+        $suffix = if ($index -lt $hashes.Count - 1) { " \" } else { "" }
+        $lines += "    --hash=sha256:$($hashes[$index])$suffix"
+    }
+    $requirements = Join-Path $repoRoot $Dependency.install.requirements_file
+    [IO.File]::WriteAllText(
+        $requirements,
+        ($lines -join [Environment]::NewLine) + [Environment]::NewLine,
+        (New-Object Text.UTF8Encoding($false))
+    )
+}
+
 function Install-AllowlistedDependency {
     param(
         [Parameter(Mandatory = $true)]
         [object]$Dependency,
         [Parameter(Mandatory = $true)]
         [hashtable]$ProbeResults,
-        [string]$Version = $Dependency.install_version
+        [string]$Version = $Dependency.install_version,
+        [AllowNull()]
+        [string]$Manager
     )
 
     if ($Dependency.id -eq "pyyaml") {
-        if ($Version -ne [string]$Dependency.install_version) {
-            throw (
-                "PyYAML release adoption requires a reviewed hash-lock update; " +
-                "only the source-controlled default can be installed."
-            )
+        $requirements = Join-Path $repoRoot $Dependency.install.requirements_file
+        $locked = Get-Content -Raw -LiteralPath $requirements
+        if ($locked -notmatch (
+            "(?im)^\s*{0}=={1}\s*\\?\s*$" -f
+            [regex]::Escape([string]$Dependency.install.package),
+            [regex]::Escape($Version)
+        )) {
+            throw "The hash lock does not authorize $($Dependency.id) $Version."
         }
         $python = $ProbeResults["python"].command
         if ([string]::IsNullOrWhiteSpace($python)) {
@@ -592,7 +670,6 @@ function Install-AllowlistedDependency {
                 throw "Failed to create the private skill-evaluator environment."
             }
         }
-        $requirements = Join-Path $repoRoot $Dependency.install.requirements_file
         & $venvPython -m pip install --require-hashes -r $requirements
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to install the pinned skill-evaluator requirements."
@@ -606,7 +683,13 @@ function Install-AllowlistedDependency {
         ), $Version
         $volta = Get-Command "volta" -CommandType Application -ErrorAction SilentlyContinue |
             Select-Object -First 1
-        if ($null -ne $volta) {
+        if (
+            $Manager -eq "volta" -or
+            ([string]::IsNullOrWhiteSpace($Manager) -and $null -ne $volta)
+        ) {
+            if ($null -eq $volta) {
+                throw "Volta no longer resolves for $specification."
+            }
             & $volta.Source install $specification
         }
         else {
@@ -629,8 +712,29 @@ function Uninstall-AllowlistedDependency {
         [object]$Dependency
     )
 
+    if ($Dependency.install.manager -eq "pip") {
+        $venvPython = [Environment]::ExpandEnvironmentVariables(
+            [string]$Dependency.probe.candidates[0].command
+        )
+        if (Test-Path -LiteralPath $venvPython -PathType Leaf) {
+            & $venvPython -m pip uninstall -y $Dependency.install.package
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to uninstall $($Dependency.install.package)."
+            }
+        }
+        return
+    }
     if ($Dependency.install.manager -ne "node") {
         throw "Automatic uninstall is unsupported for $($Dependency.id)."
+    }
+    $volta = Get-Command "volta" -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -ne $volta) {
+        & $volta.Source uninstall $Dependency.install.package
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to uninstall $($Dependency.install.package) with Volta."
+        }
+        return
     }
     $npm = Get-Command "npm" -CommandType Application -ErrorAction Stop |
         Select-Object -First 1
@@ -693,15 +797,10 @@ function Invoke-DependencyReleaseAdoption {
         [string]$ManifestPath
     )
 
-    if ($Dependency.install.manager -ne "node") {
-        throw (
-            "$($Dependency.id) uses a source-controlled hash lock; " +
-            "release adoption requires a maintainer lock update."
-        )
-    }
     if (
+        $Dependency.install.manager -eq "node" -and
         $PreviousProbe.status -ne "MISSING" -and
-        $Ownership.manager -ne "npm"
+        $Ownership.manager -notin @("npm", "volta")
     ) {
         throw (
             "$($Dependency.id) is not proven npm-managed; preserve the " +
@@ -711,11 +810,26 @@ function Invoke-DependencyReleaseAdoption {
 
     $oldVersion = [string]$PreviousProbe.version
     $oldManifest = [IO.File]::ReadAllBytes($ManifestPath)
+    $requirementsPath = $null
+    $oldRequirements = $null
+    if ($Dependency.install.manager -eq "pip") {
+        $requirementsPath = Join-Path (
+            Split-Path -Parent $ManifestPath
+        ) "..\$($Dependency.install.requirements_file)"
+        $requirementsPath = [IO.Path]::GetFullPath($requirementsPath)
+        $oldRequirements = [IO.File]::ReadAllBytes($requirementsPath)
+    }
     try {
+        if ($Dependency.install.manager -eq "pip") {
+            Set-PythonRequirementLock `
+                -Dependency $Dependency `
+                -Version $ReleaseVersion
+        }
         Install-AllowlistedDependency `
             -Dependency $Dependency `
             -ProbeResults $ProbeResults `
-            -Version $ReleaseVersion
+            -Version $ReleaseVersion `
+            -Manager $Ownership.manager
         $verified = Invoke-DependencyProbe -Dependency $Dependency
         if (
             $verified.status -ne "COMPATIBLE" -or
@@ -737,6 +851,9 @@ function Invoke-DependencyReleaseAdoption {
     catch {
         $adoptionError = $_.Exception.Message
         [IO.File]::WriteAllBytes($ManifestPath, $oldManifest)
+        if ($null -ne $oldRequirements) {
+            [IO.File]::WriteAllBytes($requirementsPath, $oldRequirements)
+        }
         try {
             if ([string]::IsNullOrWhiteSpace($oldVersion)) {
                 Uninstall-AllowlistedDependency -Dependency $Dependency
@@ -749,7 +866,8 @@ function Invoke-DependencyReleaseAdoption {
                 Install-AllowlistedDependency `
                     -Dependency $Dependency `
                     -ProbeResults $ProbeResults `
-                    -Version $oldVersion
+                    -Version $oldVersion `
+                    -Manager $Ownership.manager
                 $restored = Invoke-DependencyProbe -Dependency $Dependency
                 if ([string]$restored.version -ne $oldVersion) {
                     throw "Expected restored version $oldVersion."
@@ -1440,9 +1558,14 @@ try {
             $dependencyReleases[$dependency.id] = $release
             $ownership = $null
             if ($dependency.kind -eq "installable") {
+                $previousDependency = $null
+                if ($dependencyRecords.ContainsKey($dependency.id)) {
+                    $previousDependency = $dependencyRecords[$dependency.id]
+                }
                 $ownership = Get-DependencyPackageOwnership `
                     -Dependency $dependency `
-                    -ProbeResult $result
+                    -ProbeResult $result `
+                    -PreviousRecord $previousDependency
                 $dependencyOwnership[$dependency.id] = $ownership
             }
             $localVersion = if (
@@ -1599,10 +1722,9 @@ try {
 
     $dependencyBlocks = @{}
     $stateChanged = $false
+    $qmdMcpBlockReason = $null
     if ($null -ne $qmdMcpFailure) {
-        $dependencyBlocks["qmd"] = @(
-            "MCP preflight failed: $qmdMcpFailure"
-        )
+        $qmdMcpBlockReason = "MCP preflight failed: $qmdMcpFailure"
     }
     elseif (@($qmdMcpPlans | Where-Object { $_.Status -eq "CONFLICT" }).Count -gt 0) {
         $conflicts = @(
@@ -1610,7 +1732,7 @@ try {
                 Where-Object { $_.Status -eq "CONFLICT" } |
                 ForEach-Object { $_.Platform.Id }
         )
-        $dependencyBlocks["qmd"] = @(
+        $qmdMcpBlockReason = (
             "conflicting qmd MCP registration: $($conflicts -join ', ')"
         )
     }
@@ -1644,8 +1766,14 @@ try {
 
         if ($available -and $releaseIsNewer) {
             $canAdopt = (
-                $dependency.install.manager -eq "node" -and
-                $ownership.manager -eq "npm"
+                (
+                    $dependency.install.manager -eq "node" -and
+                    $ownership.manager -in @("npm", "volta")
+                ) -or
+                (
+                    $dependency.install.manager -eq "pip" -and
+                    $ownership.manager -eq "private-venv"
+                )
             )
             if ($DryRun) {
                 $mode = if ($canAdopt) { "interactive-only" } else { "manual-owner" }
@@ -2272,11 +2400,10 @@ try {
     }
 
     if ($RegisterQmdMcp -and $qmdSelected -and $Action -eq "Install") {
-        if ($dependencyBlocks.ContainsKey("qmd")) {
-            Write-Output (
-                "MCP_BLOCKED`tqmd`t" +
-                ($dependencyBlocks["qmd"] -join "; ")
-            )
+        if ($null -ne $qmdMcpBlockReason) {
+            Write-Output "MCP_BLOCKED`tqmd`t$qmdMcpBlockReason"
+            Write-Output "MCP_STATUS`tqmd`tCLI_ONLY"
+            $blocked++
         }
         elseif ($DryRun) {
             foreach (
