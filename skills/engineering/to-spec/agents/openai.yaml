@@ -1,0 +1,6 @@
+interface:
+  display_name: "To Spec"
+  short_description: "Synthesize a lightweight local specification"
+  default_prompt: "Use $to-spec to capture our already-discussed small change in a local spec."
+policy:
+  allow_implicit_invocation: false

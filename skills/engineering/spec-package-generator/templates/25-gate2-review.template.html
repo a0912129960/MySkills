@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{FEATURE_NAME}} - Gate 2 Review</title>
+  <style>
+    :root {
+      --bg: #eef4f1;
+      --panel: #fbfffd;
+      --text: #14231e;
+      --muted: #596963;
+      --line: #c9d8d0;
+      --accent: #0f766e;
+      --accent-soft: #d5eee9;
+      --risk: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Verdana, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(115deg, rgba(15, 118, 110, 0.16), transparent 36rem),
+        repeating-linear-gradient(90deg, rgba(20, 35, 30, 0.04) 0 1px, transparent 1px 18px),
+        var(--bg);
+      line-height: 1.5;
+    }
+    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 32px 0 18px; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3.5rem); }
+    h2 { margin: 0 0 12px; font-size: 1.2rem; }
+    a { color: var(--accent); }
+    .notice, section {
+      margin: 16px 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(251, 255, 253, 0.9);
+      box-shadow: 0 10px 30px rgba(8, 50, 43, 0.08);
+    }
+    .notice { border-left: 6px solid var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .tag {
+      display: inline-block;
+      margin: 4px 6px 4px 0;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .risk { color: var(--risk); font-weight: 700; }
+    .diagram { min-height: 200px; display: grid; place-items: center; background: #eef8f5; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="tag">Gate 2: Solution Review</p>
+    <h1>{{FEATURE_NAME}}</h1>
+    <p>{{GATE2_REVIEW_SUMMARY}}</p>
+  </header>
+  <main>
+    <div class="notice">
+      <strong>Derived review surface.</strong>
+      This HTML summarizes <a href="20-gate2-project-impact.md">20-gate2-project-impact.md</a>,
+      <a href="21-gate2-technical-design.md">21-gate2-technical-design.md</a>,
+      <a href="22-gate2-constitution-compliance.md">22-gate2-constitution-compliance.md</a>,
+      <a href="24-gate2-test-strategy.md">24-gate2-test-strategy.md</a>, and
+      <a href="proposed-context-update.md">proposed-context-update.md</a>. This is the only required human review surface for final Gate 2 confirmation; the Markdown files remain authoritative.
+    </div>
+    <section>
+      <h2>Human Confirmation Points</h2>
+      {{GATE2_HUMAN_CONFIRMATION_POINTS}}
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Project Impact</h2>
+        {{PROJECT_IMPACT_SUMMARY}}
+      </section>
+      <section>
+        <h2>Technical Design</h2>
+        {{TECHNICAL_DESIGN_SUMMARY}}
+      </section>
+    </div>
+    <div class="grid">
+      <section>
+        <h2>Constitution Compliance</h2>
+        {{CONSTITUTION_COMPLIANCE_SUMMARY}}
+      </section>
+      <section>
+        <h2>Test Strategy</h2>
+        {{TEST_STRATEGY_SUMMARY}}
+      </section>
+    </div>
+    <section>
+      <h2>Architecture And API Flow</h2>
+      <div class="diagram">{{GATE2_DIAGRAMS}}</div>
+      <p>{{GATE2_DIAGRAM_LINKS}}</p>
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Proposed Context Updates</h2>
+        {{PROPOSED_CONTEXT_UPDATE_SUMMARY}}
+      </section>
+      <section>
+        <h2>Risks And Unverified Items</h2>
+        <div class="risk">{{GATE2_RISK_SUMMARY}}</div>
+      </section>
+    </div>
+    <section>
+      <h2>Gate 2 Confirmation</h2>
+      {{GATE2_CONFIRMATION_CHECKLIST}}
+    </section>
+  </main>
+</body>
+</html>

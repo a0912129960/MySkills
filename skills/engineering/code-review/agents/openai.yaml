@@ -1,0 +1,6 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review Standards and Spec separately"
+  default_prompt: "Use $code-review to review this fixed change set against project standards and its specification."
+policy:
+  allow_implicit_invocation: true

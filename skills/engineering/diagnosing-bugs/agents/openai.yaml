@@ -1,0 +1,6 @@
+interface:
+  display_name: "Diagnosing Bugs"
+  short_description: "Establish a red-capable diagnosis loop"
+  default_prompt: "Use $diagnosing-bugs to reproduce, isolate, and validate the cause of this failure."
+policy:
+  allow_implicit_invocation: true

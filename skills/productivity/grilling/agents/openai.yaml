@@ -1,0 +1,6 @@
+interface:
+  display_name: "Grilling"
+  short_description: "Stress-test a plan one decision at a time"
+  default_prompt: "Use $grilling to interview me one decision at a time until we share a complete understanding."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Session Checkpoint"
+  short_description: "Save a resumable non-delivered checkpoint"
+  default_prompt: "Use $session-checkpoint to save this work for a later session without contacting another agent."
+policy:
+  allow_implicit_invocation: false

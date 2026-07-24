@@ -1,0 +1,6 @@
+interface:
+  display_name: "Grill With Docs"
+  short_description: "Sharpen a plan while maintaining project docs"
+  default_prompt: "Use $grill-with-docs to question this plan one decision at a time and maintain its domain documentation."
+policy:
+  allow_implicit_invocation: false

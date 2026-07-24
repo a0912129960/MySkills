@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{FEATURE_NAME}} - Final Dashboard</title>
+  <style>
+    :root {
+      --bg: #101820;
+      --panel: #f8f4ea;
+      --panel-2: #fffaf0;
+      --text: #172026;
+      --muted: #58636b;
+      --line: #d8cdb9;
+      --accent: #d04f2f;
+      --accent-dark: #a63d25;
+      --pass: #1f7a4d;
+      --warn: #9b5c00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 85% -10%, rgba(208, 79, 47, 0.35), transparent 26rem),
+        linear-gradient(140deg, var(--bg), #24333d 60%, #30433d);
+      line-height: 1.5;
+    }
+    header, main { width: min(1240px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 34px 0 18px; color: #fffaf0; }
+    h1 { margin: 0 0 10px; font-size: clamp(2.2rem, 5vw, 4.5rem); line-height: 0.95; }
+    h2 { margin: 0 0 14px; }
+    h3 { margin: 0 0 8px; }
+    .meta, .source-links { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block: 0.75rem; }
+    .meta span, .source-links a {
+      border: 1px solid rgba(255, 250, 240, 0.35);
+      border-radius: 999px;
+      padding: 0.35rem 0.7rem;
+      color: #fffaf0;
+      text-decoration: none;
+    }
+    section { margin-block: 1.25rem; }
+    .panel, .task-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.2rem;
+      background: var(--panel);
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.16);
+    }
+    .task-card { background: var(--panel-2); }
+    .task-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.9fr); }
+    .task-details { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+    .label { color: var(--muted); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+    textarea {
+      box-sizing: border-box;
+      min-height: 18rem;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.8rem;
+      font: 0.9rem/1.45 Consolas, "Courier New", monospace;
+      color: var(--text);
+      background: #fffdf8;
+    }
+    button {
+      margin-top: 0.65rem;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.65rem 1rem;
+      color: #fff;
+      background: var(--accent);
+      cursor: pointer;
+      font-weight: 800;
+    }
+    button:hover { background: var(--accent-dark); }
+    .ready { color: var(--pass); font-weight: 800; }
+    .warn { color: var(--warn); font-weight: 800; }
+    .summary-grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    }
+    .summary-grid output {
+      display: block;
+      font-size: 1.6rem;
+      font-weight: 800;
+    }
+    .status-row {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      margin: 0.75rem 0 1rem;
+    }
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.45rem 0.55rem;
+      color: var(--text);
+      background: #fffdf8;
+    }
+    .export-box { margin-top: 0.75rem; min-height: 8rem; }
+    @media (max-width: 860px) { .task-layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="ready">Ready-to-implement dashboard</p>
+    <h1>{{FEATURE_NAME}}</h1>
+    <div class="meta">
+      <span>Generated: {{GENERATED_TIME}}</span>
+      <span>Status: {{SPEC_STATUS}}</span>
+      <span>Items: {{ITEM_COUNT}}</span>
+      <span>Readiness: {{READINESS_STATUS}}</span>
+    </div>
+    <nav class="source-links" aria-label="Authoritative source artifacts">
+      <a href="30-approved-feature-baseline.md">Baseline</a>
+      <a href="31-final-task-index.md">Task Index</a>
+      <a href="34-final-traceability-matrix.md">Traceability</a>
+      <a href="35-final-analysis-report.md">Analysis</a>
+      <a href="35a-final-readiness-result.md">Readiness</a>
+    </nav>
+  </header>
+  <main>
+    <section id="readiness" class="panel">
+      <h2>Readiness From 35a</h2>
+      <p>{{READINESS_SUMMARY}}</p>
+      <p class="warn">{{READINESS_BLOCKERS}}</p>
+    </section>
+    <section id="task-order" class="panel">
+      <h2>Implementation Order</h2>
+      <ol>
+        {{TASK_ORDER_ITEMS}}
+      </ol>
+    </section>
+    <section id="task-status-summary" class="panel">
+      <h2>Task Status Summary</h2>
+      <div class="summary-grid">
+        <div><span class="label">Accepted</span><output data-status-count="accepted">0</output></div>
+        <div><span class="label">Blocked</span><output data-status-count="blocked">0</output></div>
+        <div><span class="label">Ready</span><output data-status-count="ready-for-review">0</output></div>
+        <div><span class="label">In Progress</span><output data-status-count="in-progress">0</output></div>
+        <div><span class="label">Not Started</span><output data-status-count="not-started">0</output></div>
+        <div><span class="label">Deferred</span><output data-status-count="deferred">0</output></div>
+        <div><span class="label">Remaining</span><output data-status-count="remaining">0</output></div>
+      </div>
+      <button type="button" id="export-status">Export Status</button>
+      <textarea id="status-export" class="export-box" readonly aria-label="Task index status export"></textarea>
+    </section>
+    <section id="tasks">
+      <h2>Task Execution</h2>
+      <template id="task-card-template">
+        <article class="task-card">
+          <h3>{{TASK_ID}} - {{TASK_TITLE}}</h3>
+          <div class="status-row">
+            <section>
+              <p class="label">Review Status</p>
+              <select aria-label="Review status for {{TASK_ID}}" data-task-id="{{TASK_ID}}" data-task-title="{{TASK_TITLE}}">
+                <option>not-started</option>
+                <option>in-progress</option>
+                <option>ready-for-review</option>
+                <option>accepted</option>
+                <option>blocked</option>
+                <option>deferred</option>
+              </select>
+            </section>
+            <section>
+              <p class="label">BDD Coverage</p>
+              {{BDD_COVERAGE}}
+            </section>
+            <section>
+              <p class="label">Validation</p>
+              {{TDD_READINESS}}
+            </section>
+          </div>
+          <div class="task-layout">
+            <div>
+              <p class="label">Scope</p>
+              <div>{{TASK_SCOPE}}</div>
+              <div class="task-details">
+                <section>
+                  <p class="label">Required Input Files</p>
+                  {{REQUIRED_INPUT_FILES}}
+                </section>
+                <section>
+                  <p class="label">Allowed To Modify</p>
+                  {{ALLOWED_TO_MODIFY}}
+                </section>
+                <section>
+                  <p class="label">Read-Only References</p>
+                  {{READ_ONLY_REFERENCES}}
+                </section>
+                <section>
+                  <p class="label">Acceptance Criteria</p>
+                  {{ACCEPTANCE_CRITERIA}}
+                </section>
+                <section>
+                  <p class="label">Suggested Test Cases</p>
+                  {{SUGGESTED_TEST_CASES}}
+                </section>
+                <section>
+                  <p class="label">Required Test IDs</p>
+                  {{REQUIRED_TEST_IDS}}
+                </section>
+                <section>
+                  <p class="label">Evidence Required</p>
+                  {{EVIDENCE_REQUIRED}}
+                </section>
+                <section>
+                  <p class="label">User-Observable Result</p>
+                  {{USER_OBSERVABLE_RESULT}}
+                </section>
+                <section>
+                  <p class="label">How To See It Working</p>
+                  {{HOW_TO_SEE_IT_WORKING}}
+                </section>
+                <section>
+                  <p class="label">Manual Fallback</p>
+                  {{MANUAL_FALLBACK_STATUS}}
+                </section>
+              </div>
+            </div>
+            <section>
+              <p class="label">Derived Prompt</p>
+              <textarea id="prompt-{{TASK_ID}}" readonly>{{TASK_PROMPT}}</textarea>
+              <button type="button" data-copy-target="prompt-{{TASK_ID}}">Copy Prompt</button>
+            </section>
+          </div>
+        </article>
+      </template>
+      {{TASK_CARDS}}
+    </section>
+    <section id="traceability" class="panel">
+      <h2>Traceability</h2>
+      <p>{{TRACEABILITY_SUMMARY}}</p>
+    </section>
+    <section id="risks" class="panel">
+      <h2>Residual Risks</h2>
+      <p>{{RESIDUAL_RISKS}}</p>
+    </section>
+  </main>
+  <script>
+    const featureName = '{{FEATURE_NAME}}';
+    const storageKey = `spec-package-generator:${featureName}:task-status`;
+
+    function loadStatuses() {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function saveStatuses(statuses) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(statuses));
+      } catch {
+        // Local dashboard state is optional; Markdown evidence remains authoritative.
+      }
+    }
+
+    function updateStatusSummary() {
+      const counts = {
+        accepted: 0,
+        blocked: 0,
+        'ready-for-review': 0,
+        'in-progress': 0,
+        'not-started': 0,
+        deferred: 0
+      };
+      const selects = [...document.querySelectorAll('select[data-task-id]')];
+      selects.forEach((select) => {
+        counts[select.value] = (counts[select.value] || 0) + 1;
+      });
+      counts.remaining = selects.length - counts.accepted - counts.deferred;
+      Object.entries(counts).forEach(([status, count]) => {
+        const output = document.querySelector(`[data-status-count="${status}"]`);
+        if (output) {
+          output.value = String(count);
+          output.textContent = String(count);
+        }
+      });
+    }
+
+    function exportStatusText() {
+      const lines = [
+        `# Task Review Status Update`,
+        ``,
+        `Feature: ${featureName}`,
+        `Exported: ${new Date().toISOString()}`,
+        ``,
+        `Copy these rows back into 31-final-task-index.md or use them as implementation-evidence.md status input.`,
+        ``,
+        `| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Next Eligible? |`,
+        `|---|---|---|---|---|---|---|---|`
+      ];
+      document.querySelectorAll('select[data-task-id]').forEach((select) => {
+        lines.push(`| ${select.dataset.taskId} | ${select.value} |  |  |  |  |  |  |`);
+      });
+      return lines.join('\n');
+    }
+
+    const savedStatuses = loadStatuses();
+    document.querySelectorAll('select[data-task-id]').forEach((select) => {
+      if (savedStatuses[select.dataset.taskId]) {
+        select.value = savedStatuses[select.dataset.taskId];
+      }
+      select.addEventListener('change', () => {
+        const statuses = loadStatuses();
+        statuses[select.dataset.taskId] = select.value;
+        saveStatuses(statuses);
+        updateStatusSummary();
+      });
+    });
+    updateStatusSummary();
+
+    document.getElementById('export-status')?.addEventListener('click', () => {
+      const output = document.getElementById('status-export');
+      if (output) output.value = exportStatusText();
+    });
+
+    document.querySelectorAll('[data-copy-target]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const prompt = document.getElementById(button.dataset.copyTarget);
+        if (!prompt) return;
+        prompt.focus();
+        prompt.select();
+        const copied = navigator.clipboard && navigator.clipboard.writeText
+          ? navigator.clipboard.writeText(prompt.value)
+          : Promise.reject();
+        copied.catch(() => document.execCommand('copy'));
+      });
+    });
+  </script>
+</body>
+</html>

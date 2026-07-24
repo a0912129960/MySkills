@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{FEATURE_NAME}} - Gate 1 Review</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --panel: #fffdf7;
+      --text: #24211c;
+      --muted: #686057;
+      --line: #ddd3c4;
+      --accent: #8a4f18;
+      --accent-soft: #f0dfc8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #f3d7ae 0, transparent 28rem),
+        linear-gradient(135deg, var(--bg), #ebe6dc);
+      line-height: 1.55;
+    }
+    header, main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 32px 0 18px; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; }
+    h2 { margin: 0 0 12px; font-size: 1.25rem; }
+    a { color: var(--accent); }
+    .notice, section {
+      margin: 16px 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 253, 247, 0.88);
+      box-shadow: 0 12px 36px rgba(76, 55, 30, 0.08);
+    }
+    .notice { border-left: 6px solid var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .pill {
+      display: inline-block;
+      margin: 4px 6px 4px 0;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .diagram { min-height: 180px; display: grid; place-items: center; background: #faf3e8; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="pill">Gate 1: Business Confirmation</p>
+    <h1>{{FEATURE_NAME}}</h1>
+    <p>{{GATE1_REVIEW_SUMMARY}}</p>
+  </header>
+  <main>
+    <div class="notice">
+      <strong>Derived review surface.</strong>
+      This HTML summarizes <a href="10-gate1-prd.md">10-gate1-prd.md</a>,
+      <a href="11-gate1-ears.md">11-gate1-ears.md</a>, and
+      <a href="12-gate1-bdd.feature">12-gate1-bdd.feature</a>. This is the only required human review surface for final Gate 1 confirmation; the Markdown and feature files remain authoritative.
+    </div>
+    <section>
+      <h2>Human Confirmation Points</h2>
+      {{HUMAN_CONFIRMATION_POINTS}}
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Material Assumptions</h2>
+        {{MATERIAL_ASSUMPTIONS_CONFIRM_OVERRIDE}}
+      </section>
+      <section>
+        <h2>BDD Coverage And Exceptions</h2>
+        {{BDD_COVERAGE_CONFIRMATION}}
+      </section>
+    </div>
+    <section>
+      <h2>PRD Summary</h2>
+      {{PRD_SUMMARY}}
+    </section>
+    <div class="grid">
+      <section>
+        <h2>EARS Requirements</h2>
+        {{EARS_REQUIREMENTS}}
+      </section>
+      <section>
+        <h2>BDD Scenarios</h2>
+        {{BDD_SCENARIOS}}
+      </section>
+    </div>
+    <section>
+      <h2>User Flow</h2>
+      <div class="diagram">{{USER_FLOW_DIAGRAM}}</div>
+      <p><a href="diagrams/user-flow.mmd">Mermaid source</a> {{USER_FLOW_SVG_LINK}}</p>
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Decisions</h2>
+        {{DECISION_LOG_SUMMARY}}
+      </section>
+      <section>
+        <h2>Open Questions</h2>
+        {{OPEN_QUESTIONS_SUMMARY}}
+      </section>
+    </div>
+    <section>
+      <h2>Gate 1 Confirmation</h2>
+      {{GATE1_CONFIRMATION_CHECKLIST}}
+    </section>
+  </main>
+</body>
+</html>

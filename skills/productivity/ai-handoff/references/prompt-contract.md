@@ -1,69 +1,36 @@
-# Prompt contract
+# Handoff prompt contract
 
-Use this structure for prompts handed to another AI:
+Keep the default handoff as concise structured text. Reference authoritative
+artifacts instead of copying conversation history or source files.
 
-```text
-ROLE
-You are the receiving agent working in <target>.
-
-OBJECTIVE
-<one concrete outcome>
-
-AUTHORITATIVE CONTEXT
-- Read <path or URL>.
-- Current observed state: <facts only>.
-
-CONSTRAINTS
-- <authority and non-goals>
-- Do not modify files unless explicitly authorized.
-
-DELIVERABLES
-- <verifiable outputs>
-
-VERIFICATION
-- Inspect the current state before relying on this handoff.
-- Cite files and line numbers when making repository claims.
-
-RESPONSE
-Answer in Traditional Chinese (zh-TW).
-```
-
-## Rules
-
-- Write one objective, not a backlog of unrelated requests.
-- Separate observed facts from assumptions.
-- Preserve the user's authority boundaries.
-- Name the evidence that proves completion.
-- Prefer paths and identifiers over pasted transcripts.
-- Never include secrets.
-- For ASCII transport, keep every character in the prompt within ASCII. A referenced
-  UTF-8 context file may contain any language.
-
-## Prompt-only example
+## Required information
 
 ```text
-ROLE
-You are the receiving agent working in C:\project\example.
-
-OBJECTIVE
-Audit the skill installation flow and recommend changes. Do not edit files.
-
-AUTHORITATIVE CONTEXT
-- Read C:\temp\skill-policy-context.md.
-- Inspect the repository before accepting claims in that document.
-
-CONSTRAINTS
-- Analysis only.
-- Do not change files or external state.
-
-DELIVERABLES
-- A prioritized recommendation.
-- File and line evidence.
-- Tests needed for each proposed change.
-
-VERIFICATION
-- Distinguish proven behavior from inference.
-
-RESPONSE
-Answer in Traditional Chinese (zh-TW).
+OBJECTIVE: <one concrete outcome>
+TARGET: <project, session, or agent>
+AUDIENCE: agent|human
+FINAL_AUDIENCE: human              # only for multi-hop human delivery
+AUTHORITATIVE_CONTEXT:
+- <path, URL, commit, or observed fact>
+DELIVERABLE: <verifiable output>
 ```
+
+Also include constraints, authority boundaries, completed and remaining work,
+non-goals, validation commands, and risks when they materially affect execution.
+Separate observed facts from assumptions. Redact credentials, tokens, unrelated
+personal data, and unnecessary transcript content.
+
+## Language and transport
+
+- Direct terminal transport text is ASCII-only.
+- Aim for at most 6,000 characters; 10,000 is the hard ceiling. The builder
+  requires `-AllowExtendedBudget` when further reduction would remove required
+  handoff information.
+- An agent-facing handoff does not constrain the receiver's working language.
+- Add `Answer in Traditional Chinese (zh-TW).` only when `AUDIENCE` or
+  `FINAL_AUDIENCE` is `human`.
+- Put required non-ASCII or unsummarizable source material in an exceptional
+  UTF-8 context file and reference its absolute path.
+
+Validate the envelope with `scripts/build-handoff.ps1` before delivery. Live
+delivery also requires destination inspection and read-back verification.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Grill Me"
+  short_description: "Sharpen a plan without repository writes"
+  default_prompt: "Use $grill-me to question this plan relentlessly without writing codebase documentation."
+policy:
+  allow_implicit_invocation: false
