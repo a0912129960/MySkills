@@ -1,0 +1,14 @@
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["."]
+
+[project]
+name = "obsidian-wiki-myskills"
+version = "0.1.0"
+description = "Repository-owned deterministic CLI for the MySkills Wiki suite"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+obsidian-wiki = "obsidian_wiki.cli:main"

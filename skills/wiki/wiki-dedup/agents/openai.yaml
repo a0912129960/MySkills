@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Dedup"
+  short_description: "Audit and merge duplicate Wiki pages"
+  default_prompt: "Use $wiki-dedup to audit or merge duplicate Wiki pages."
+policy:
+  allow_implicit_invocation: false

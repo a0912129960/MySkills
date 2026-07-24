@@ -1,0 +1,6 @@
+interface:
+  display_name: "Project Rules Init"
+  short_description: "Bootstrap local project rules"
+  default_prompt: "Use $project-rules-init to bootstrap local project rules."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Update"
+  short_description: "Sync project knowledge into the Wiki"
+  default_prompt: "Use $wiki-update to sync project knowledge into the Wiki."
+policy:
+  allow_implicit_invocation: false

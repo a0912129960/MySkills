@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Synthesize"
+  short_description: "Create cross-cutting Wiki syntheses"
+  default_prompt: "Use $wiki-synthesize to create cross-cutting Wiki synthesis."
+policy:
+  allow_implicit_invocation: false

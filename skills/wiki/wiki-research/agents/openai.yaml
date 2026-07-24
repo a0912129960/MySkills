@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Research"
+  short_description: "Research and file sourced Wiki pages"
+  default_prompt: "Use $wiki-research to research and file findings in the Wiki."
+policy:
+  allow_implicit_invocation: false

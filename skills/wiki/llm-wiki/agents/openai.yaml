@@ -1,0 +1,6 @@
+interface:
+  display_name: "LLM Wiki"
+  short_description: "Route and explain the Wiki contract"
+  default_prompt: "Use $llm-wiki to explain or route the Wiki contract."
+policy:
+  allow_implicit_invocation: false

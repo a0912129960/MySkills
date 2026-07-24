@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki History Ingest"
+  short_description: "Ingest supported agent history"
+  default_prompt: "Use $wiki-history-ingest to ingest supported agent history."
+policy:
+  allow_implicit_invocation: false

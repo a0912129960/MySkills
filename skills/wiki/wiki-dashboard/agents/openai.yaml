@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Dashboard"
+  short_description: "Create dynamic Obsidian dashboards"
+  default_prompt: "Use $wiki-dashboard to create a persistent Wiki dashboard."
+policy:
+  allow_implicit_invocation: false

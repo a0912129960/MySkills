@@ -1,0 +1,6 @@
+interface:
+  display_name: "Cross Linker"
+  short_description: "Add evidence-backed Wiki cross-links"
+  default_prompt: "Use $cross-linker to connect the configured Wiki."
+policy:
+  allow_implicit_invocation: false

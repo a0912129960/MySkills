@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tag Taxonomy"
+  short_description: "Audit and normalize Wiki tags"
+  default_prompt: "Use $tag-taxonomy to maintain the Wiki tag vocabulary."
+policy:
+  allow_implicit_invocation: false

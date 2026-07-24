@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Lint"
+  short_description: "Audit and repair Wiki health"
+  default_prompt: "Use $wiki-lint to audit or repair Wiki health."
+policy:
+  allow_implicit_invocation: false

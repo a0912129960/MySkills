@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Rebuild"
+  short_description: "Archive, rebuild, or restore the Wiki"
+  default_prompt: "Use $wiki-rebuild to archive, rebuild, or restore the Wiki."
+policy:
+  allow_implicit_invocation: false

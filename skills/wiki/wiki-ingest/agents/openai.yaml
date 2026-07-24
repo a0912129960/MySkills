@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Ingest"
+  short_description: "Distill sources into the Wiki"
+  default_prompt: "Use $wiki-ingest to distill these sources into the Wiki."
+policy:
+  allow_implicit_invocation: false

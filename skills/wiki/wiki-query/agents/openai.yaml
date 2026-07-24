@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Query"
+  short_description: "Answer from the user's Wiki"
+  default_prompt: "Use $wiki-query to answer this question from the user's Wiki."
+policy:
+  allow_implicit_invocation: true

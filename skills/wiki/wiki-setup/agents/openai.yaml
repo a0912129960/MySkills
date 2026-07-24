@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Setup"
+  short_description: "Create, connect, or repair the Wiki"
+  default_prompt: "Use $wiki-setup to create, connect, or repair the Wiki."
+policy:
+  allow_implicit_invocation: false

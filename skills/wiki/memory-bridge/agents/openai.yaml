@@ -1,0 +1,6 @@
+interface:
+  display_name: "Memory Bridge"
+  short_description: "Compare Wiki source provenance"
+  default_prompt: "Use $memory-bridge to compare Wiki source provenance."
+policy:
+  allow_implicit_invocation: false

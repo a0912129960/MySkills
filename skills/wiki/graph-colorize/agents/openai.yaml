@@ -1,0 +1,6 @@
+interface:
+  display_name: "Graph Colorize"
+  short_description: "Color or restore Obsidian graph groups"
+  default_prompt: "Use $graph-colorize to update Wiki graph colors."
+policy:
+  allow_implicit_invocation: false

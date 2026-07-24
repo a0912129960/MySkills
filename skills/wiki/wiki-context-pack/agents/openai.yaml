@@ -1,0 +1,6 @@
+interface:
+  display_name: "Wiki Context Pack"
+  short_description: "Build bounded Wiki context"
+  default_prompt: "Use $wiki-context-pack to build bounded Wiki context."
+policy:
+  allow_implicit_invocation: false
