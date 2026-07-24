@@ -240,6 +240,10 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "fixtures": list(plan.get("fixtures") or ()),
             "git_fixture": dict(plan.get("git_fixture") or {}),
             "runtime_tools": list(plan.get("runtime_tools") or ()),
+            "external_tools": list(plan.get("external_tools") or ()),
+            "external_tool_evidence": dict(
+                record.get("external_tool_evidence") or {}
+            ),
             "companion_skills": list(plan.get("companion_skills") or ()),
             "target_identity": record.get("target_identity"),
             "target_identity_returncode": record.get(
@@ -304,7 +308,7 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
         }
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "skill_name": skill_name,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "configurations": summary,

@@ -16,6 +16,7 @@ from typing import Any, Iterable
 TARGETS = ("claude", "codex")
 CONFIGURATIONS = ("with_skill", "baseline")
 RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
+EXTERNAL_TOOLS = ("qmd",)
 KEBAB_CASE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 FIXTURE_PATH = re.compile(
     r"[A-Za-z0-9._ -]+(?:/[A-Za-z0-9._ -]+)*\Z"
@@ -54,8 +55,8 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         return ["evaluation cases root fields are invalid"]
     if document.get("$schema") != "./cases.schema.json":
         errors.append("evaluation cases $schema is invalid")
-    if document.get("schema_version") != 1:
-        errors.append("evaluation cases schema_version must be 1")
+    if document.get("schema_version") != 2:
+        errors.append("evaluation cases schema_version must be 2")
     skills = document.get("skills")
     if not isinstance(skills, list):
         return errors + ["evaluation cases skills must be an array"]
@@ -115,6 +116,7 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
                 name,
                 entry.get("trigger_cases"),
                 managed[name]["invocation"],
+                fixture_sets,
             )
         )
     missing = sorted(set(managed) - seen)
@@ -183,6 +185,7 @@ def build_plan(
         for case in entry["required_cases"]:
             expanded_fixtures = _expanded_fixtures(case, fixture_sets)
             runtime_tools = case.get("runtime_tools", [])
+            external_tools = case.get("external_tools", [])
             for configuration in CONFIGURATIONS:
                 for target in TARGETS:
                     plan.append(
@@ -219,11 +222,14 @@ def build_plan(
                                 tool: runtime_digest(tool)
                                 for tool in runtime_tools
                             },
+                            external_tools=external_tools,
                             mode="required",
                             explicit=configuration == "with_skill",
                         )
                     )
         for case in entry["trigger_cases"]:
+            expanded_fixtures = _expanded_fixtures(case, fixture_sets)
+            external_tools = case.get("external_tools", [])
             for configuration in CONFIGURATIONS:
                 for target in TARGETS:
                     plan.append(
@@ -238,10 +244,11 @@ def build_plan(
                             skill_digest=skill_digest(name),
                             companion_skill_paths={},
                             companion_skill_digests={},
-                            fixture_set_names=[],
-                            fixtures=[],
+                            fixture_set_names=case.get("fixture_sets", []),
+                            fixtures=expanded_fixtures,
                             runtime_tool_sources={},
                             runtime_tool_digests={},
+                            external_tools=external_tools,
                             mode="trigger",
                             explicit=False,
                         )
@@ -252,7 +259,7 @@ def build_plan(
 def summarize_plan(plan: list[dict[str, Any]]) -> dict[str, Any]:
     skills = sorted({item["skill_name"] for item in plan})
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "skill_count": len(skills),
         "model_run_count": len(plan),
         "targets": list(TARGETS),
@@ -315,6 +322,141 @@ def prepare_review_templates(
     return index
 
 
+def _dependency_minimum_versions(
+    repo: Path,
+    names: Iterable[str],
+) -> dict[str, str]:
+    requested = set(names)
+    if not requested:
+        return {}
+    manifest_path = repo / "manifests" / "dependencies.json"
+    document = json.loads(
+        manifest_path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_keys,
+    )
+    dependencies = (
+        document.get("dependencies")
+        if isinstance(document, dict)
+        else None
+    )
+    if not isinstance(dependencies, list):
+        raise ValueError(f"{manifest_path}: dependencies must be an array")
+    minimums: dict[str, str] = {}
+    for dependency in dependencies:
+        if not isinstance(dependency, dict):
+            continue
+        name = dependency.get("id")
+        if name not in requested:
+            continue
+        minimum = dependency.get("minimum_version")
+        if (
+            name in minimums
+            or not isinstance(minimum, str)
+            or not minimum
+        ):
+            raise ValueError(
+                f"{manifest_path}: dependency {name!r} has invalid minimum"
+            )
+        minimums[name] = minimum
+    if set(minimums) != requested:
+        missing = ", ".join(sorted(requested - set(minimums)))
+        raise ValueError(
+            f"{manifest_path}: external dependencies are missing: {missing}"
+        )
+    return minimums
+
+
+def _parsed_version(value: object) -> tuple[int, ...] | None:
+    if not isinstance(value, str):
+        return None
+    match = re.search(r"(?<!\d)(\d+(?:\.\d+){1,3})(?!\d)", value)
+    if match is None:
+        return None
+    parts = tuple(int(part) for part in match.group(1).split("."))
+    return parts + (0,) * (4 - len(parts))
+
+
+def _audit_external_tool_evidence(
+    result_path: Path,
+    item: dict[str, Any],
+    record: dict[str, Any],
+    minimum_versions: dict[str, str],
+    errors: list[str],
+) -> None:
+    declared = set(item["external_tools"])
+    evidence = record.get("external_tool_evidence", {})
+    if not isinstance(evidence, dict) or set(evidence) != declared:
+        errors.append(
+            f"{result_path}: external tool evidence keys do not match the plan"
+        )
+        return
+    required_fields = {
+        "minimum_version",
+        "identity",
+        "setup",
+        "workspace_index",
+        "fixture_root",
+    }
+    for name in sorted(declared):
+        details = evidence.get(name)
+        if not isinstance(details, dict) or set(details) != required_fields:
+            errors.append(
+                f"{result_path}: {name} external tool evidence is malformed"
+            )
+            continue
+        minimum = minimum_versions[name]
+        if details.get("minimum_version") != minimum:
+            errors.append(
+                f"{result_path}: {name} minimum version does not match "
+                "the dependency manifest"
+            )
+        identity = details.get("identity")
+        if (
+            not isinstance(identity, dict)
+            or identity.get("returncode") != 0
+            or identity.get("timed_out") is not False
+            or not _nonempty(identity.get("stdout"))
+        ):
+            errors.append(
+                f"{result_path}: {name} external tool identity check "
+                "did not pass"
+            )
+        else:
+            actual_version = _parsed_version(identity["stdout"])
+            required_version = _parsed_version(minimum)
+            if (
+                actual_version is None
+                or required_version is None
+                or actual_version < required_version
+            ):
+                errors.append(
+                    f"{result_path}: {name} external tool version is invalid "
+                    "or below the dependency minimum"
+                )
+        setup = details.get("setup")
+        if (
+            not isinstance(setup, list)
+            or len(setup) < 2
+            or any(
+                not isinstance(step, dict)
+                or step.get("returncode") != 0
+                or step.get("timed_out") is not False
+                for step in setup
+            )
+        ):
+            errors.append(
+                f"{result_path}: {name} external tool setup did not pass"
+            )
+        if (
+            details.get("workspace_index") != ".qmd"
+            or details.get("fixture_root") != "fixture/qmd-notes"
+        ):
+            errors.append(
+                f"{result_path}: {name} external tool workspace evidence "
+                "is invalid"
+            )
+
+
 def audit_reviewed_skill(
     repo_root: Path | str,
     workspace: Path | str,
@@ -337,6 +479,14 @@ def audit_reviewed_skill(
         )
 
     expected = build_plan(repo, document, [skill_name])
+    minimum_versions = _dependency_minimum_versions(
+        repo,
+        {
+            name
+            for item in expected
+            for name in item["external_tools"]
+        },
+    )
     skill_root = root / skill_name
     errors: list[str] = []
     identities: dict[str, set[str]] = {target: set() for target in TARGETS}
@@ -382,6 +532,13 @@ def audit_reviewed_skill(
         if not isinstance(record, dict) or record.get("plan") != item:
             errors.append(f"{result_path}: batch plan does not match the manifest")
             continue
+        _audit_external_tool_evidence(
+            result_path,
+            item,
+            record,
+            minimum_versions,
+            errors,
+        )
         identity = record.get("target_identity")
         if (
             record.get("target_identity_returncode") != 0
@@ -549,6 +706,7 @@ def _plan_item(
     fixtures: list[dict[str, str]],
     runtime_tool_sources: dict[str, Path],
     runtime_tool_digests: dict[str, str],
+    external_tools: list[str],
     mode: str,
     explicit: bool,
 ) -> dict[str, Any]:
@@ -578,6 +736,7 @@ def _plan_item(
             for name, path in runtime_tool_sources.items()
         },
         "runtime_tool_digests": dict(runtime_tool_digests),
+        "external_tools": list(external_tools),
         "companion_skills": list(companion_skill_paths),
         "companion_skill_paths": [
             str(path) for path in companion_skill_paths.values()
@@ -614,6 +773,7 @@ def _validate_required_cases(
             "companion_skills",
             "git_fixture",
             "runtime_tools",
+            "external_tools",
         }
         if (
             not isinstance(case, dict)
@@ -696,6 +856,14 @@ def _validate_required_cases(
             or not all(tool in RUNTIME_TOOLS for tool in runtime_tools)
         ):
             errors.append(f"{name}/{case_id}: runtime_tools are invalid")
+        external_tools = case.get("external_tools", [])
+        if (
+            not isinstance(external_tools, list)
+            or not all(isinstance(tool, str) for tool in external_tools)
+            or len(external_tools) != len(set(external_tools))
+            or not all(tool in EXTERNAL_TOOLS for tool in external_tools)
+        ):
+            errors.append(f"{name}/{case_id}: external_tools are invalid")
         companions = case.get("companion_skills", [])
         if (
             not isinstance(companions, list)
@@ -806,6 +974,7 @@ def _validate_trigger_cases(
     name: str,
     value: object,
     invocation: str,
+    fixture_sets: dict[str, list[dict[str, str]]],
 ) -> list[str]:
     if not isinstance(value, list) or not value:
         return [f"{name}: trigger_cases must be non-empty"]
@@ -813,11 +982,13 @@ def _validate_trigger_cases(
     errors: list[str] = []
     seen: set[str] = set()
     for case in value:
-        if not isinstance(case, dict) or set(case) != {
-            "id",
-            "prompt",
-            "expected_invocation",
-        }:
+        required_fields = {"id", "prompt", "expected_invocation"}
+        optional_fields = {"fixtures", "fixture_sets", "external_tools"}
+        if (
+            not isinstance(case, dict)
+            or not required_fields.issubset(case)
+            or not set(case).issubset(required_fields | optional_fields)
+        ):
             errors.append(f"{name}: trigger case fields are invalid")
             continue
         case_id = case.get("id")
@@ -834,6 +1005,36 @@ def _validate_trigger_cases(
             errors.append(
                 f"{name}/{case_id}: expected_invocation must be {expected}"
             )
+        fixtures = case.get("fixtures", [])
+        if not isinstance(fixtures, list) or not all(
+            _valid_fixture(item) for item in fixtures
+        ):
+            errors.append(f"{name}/{case_id}: fixtures are invalid")
+        selected_fixture_sets = case.get("fixture_sets", [])
+        if (
+            not isinstance(selected_fixture_sets, list)
+            or not all(
+                isinstance(item, str) for item in selected_fixture_sets
+            )
+            or len(selected_fixture_sets) != len(set(selected_fixture_sets))
+            or not all(item in fixture_sets for item in selected_fixture_sets)
+        ):
+            errors.append(f"{name}/{case_id}: fixture_sets are invalid")
+        elif isinstance(fixtures, list):
+            paths = [
+                fixture.get("path")
+                for fixture in _expanded_fixtures(case, fixture_sets)
+            ]
+            if len(paths) != len(set(paths)):
+                errors.append(f"{name}/{case_id}: duplicate fixture path")
+        external_tools = case.get("external_tools", [])
+        if (
+            not isinstance(external_tools, list)
+            or not all(isinstance(tool, str) for tool in external_tools)
+            or len(external_tools) != len(set(external_tools))
+            or not all(tool in EXTERNAL_TOOLS for tool in external_tools)
+        ):
+            errors.append(f"{name}/{case_id}: external_tools are invalid")
     return errors
 
 

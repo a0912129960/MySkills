@@ -164,6 +164,7 @@ def _render_run(case: dict[str, Any]) -> str:
     process_class = "pass" if process_state == "PROCESS PASS" else "fail"
     result_path = _relative_href(case.get("result_path"))
     grading_path = _relative_href(case.get("grading_path"))
+    external_tool_evidence = case.get("external_tool_evidence") or {}
     return f"""
 <article class="run-card">
   <h4>{title}</h4>
@@ -195,6 +196,10 @@ def _render_run(case: dict[str, Any]) -> str:
   {_render_declared_assertions(case)}
   <h5>Current assertion grading</h5>
   {_render_expectations(case)}
+  <details>
+    <summary>External runtime identity and setup</summary>
+    <pre>{_json_text(external_tool_evidence)}</pre>
+  </details>
   <details>
     <summary>Structured model/tool trace</summary>
     {_render_events(list(model.get('events') or ()))}
@@ -254,6 +259,7 @@ def _render_case_group(case_name: str, cases: list[dict[str, Any]]) -> str:
     <dt>Baseline kind</dt><dd>{_escape(baseline.get('kind'))}</dd>
     <dt>Baseline identity</dt><dd>{_escape(baseline.get('identity'))}</dd>
     <dt>Runtime tools</dt><dd>{_escape(', '.join(exemplar.get('runtime_tools') or ()) or 'none')}</dd>
+    <dt>External tools</dt><dd>{_escape(', '.join(exemplar.get('external_tools') or ()) or 'none')}</dd>
     <dt>Companion Skills</dt><dd>{_escape(', '.join(exemplar.get('companion_skills') or ()) or 'none')}</dd>
   </dl>
   <h3>Declared/base prompt</h3>

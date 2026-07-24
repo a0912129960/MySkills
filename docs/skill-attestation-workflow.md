@@ -34,11 +34,16 @@ current directory digest of every Managed Skill. Raw model output stays under
    Each run stages them in its isolated workspace; fixture content may use
    `{{WORKSPACE}}`, which is substituted only while staging. Git fixtures use a
    local identity, fixed commit timestamps, disabled signing, and an empty hook
-   directory. Runtime tools are copied from the repository into an isolated
-   `LOCALAPPDATA` using only Git-tracked source files, use workspace-local
-   configuration, and receive only declaration-scoped launcher permission in
-   read-only Claude cases. The launcher also rejects mutating subcommands and
-   paths outside the evaluation workspace for those cases.
+   directory. Repository-owned runtime tools are copied into an isolated
+   `LOCALAPPDATA` using only Git-tracked source files. Declared external tools
+   use the verified host dependency with workspace-local state; QMD receives a
+   local fixture index and a read-only command wrapper. The runner clears host
+   index/config overrides before setup, pins QMD state below the workspace, and
+   rejects command-line index overrides. It verifies the executable version
+   against `manifests/dependencies.json` and records the identity and setup
+   results in each raw run. Both kinds receive only declaration-scoped launcher
+   permission in read-only Claude cases. The launchers reject mutating
+   subcommands and paths outside the evaluation workspace.
 
    A complete 42-Skill run currently contains 336 target/configuration calls:
    Claude and Codex, with-Skill and no-Skill baseline, for one required and one
@@ -78,11 +83,11 @@ current directory digest of every Managed Skill. Raw model output stays under
 
    The report shows the declared prompt, exact logical launch command, ordinary
    and Git-backed fixtures, canonical Skill and baseline identities, target
-   identity and process status, normalized final response, structured
-   model/tool trace, raw streams, and current grading. It places With-Skill and
-   Baseline runs side by side for each target. A process pass is not a behavior
-   pass; the human records a specific reason for every assertion in the linked
-   `grading.json`.
+   identity and process status, external-runtime identity/setup evidence,
+   normalized final response, structured model/tool trace, raw streams, and
+   current grading. It places With-Skill and Baseline runs side by side for each
+   target. A process pass is not a behavior pass; the human records a specific
+   reason for every assertion in the linked `grading.json`.
 
 4. After completing every grading template, audit the reviewed evidence and
    create a pending draft:

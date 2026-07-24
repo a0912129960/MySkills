@@ -411,19 +411,26 @@ def main(argv: list[str] | None = None) -> int:
                 baseline=item["configuration"] == "baseline",
                 safety=item["safety"],
                 runtime_tools=item["runtime_tools"],
+                external_tools=item["external_tools"],
             )
+            external_tool_evidence = {}
             with runners.isolated_target_environment(
                 item["target"],
                 allow_ephemeral_auth_copy=True,
             ) as env:
-                if item["runtime_tools"]:
-                    env = runners.prepare_runtime_environment(
+                if item["runtime_tools"] or item["external_tools"]:
+                    preparation = runners.prepare_runtime_environment(
                         execution_root,
                         item["runtime_tool_sources"],
                         item["runtime_tool_digests"],
                         repo_root=args.repo_root,
                         safety=item["safety"],
                         base_env=env,
+                        external_tools=item["external_tools"],
+                    )
+                    env = preparation.environment
+                    external_tool_evidence = (
+                        preparation.external_tool_evidence
                     )
                 identity = runners.run_command(
                     [item["target"], "--version"],
@@ -441,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
                 "plan": item,
                 "target_identity": identity["stdout"].strip(),
                 "target_identity_returncode": identity["returncode"],
+                "external_tool_evidence": external_tool_evidence,
                 "result": result,
             }
             result_path = run_root / "result.json"

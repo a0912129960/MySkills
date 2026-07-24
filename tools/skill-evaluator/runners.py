@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import hashlib
+import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import struct
 import subprocess
@@ -15,11 +17,21 @@ import sys
 import tempfile
 import threading
 import time
-from typing import Iterable
+from typing import Any, Iterable, NamedTuple
 
 
 TARGETS = ("claude", "codex")
 RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
+EXTERNAL_TOOLS = ("qmd",)
+
+
+class RuntimePreparation(NamedTuple):
+    """Isolated runtime environment plus auditable external-tool setup."""
+
+    environment: dict[str, str]
+    external_tool_evidence: dict[str, dict[str, Any]]
+
+
 RUNTIME_GUARD = r'''from __future__ import annotations
 
 import os
@@ -153,14 +165,18 @@ def prepare_runtime_environment(
     repo_root: Path | str,
     safety: str,
     base_env: dict[str, str] | None = None,
-) -> dict[str, str]:
-    """Stage allowlisted repo tools without inheriting user tool settings."""
+    external_tools: Iterable[str] = (),
+) -> RuntimePreparation:
+    """Stage declared tools with isolated configuration and guarded launchers."""
 
+    declared_external_tools = tuple(external_tools)
     if (
         not isinstance(runtime_tool_sources, dict)
         or not isinstance(runtime_tool_digests, dict)
         or set(runtime_tool_sources) != set(runtime_tool_digests)
         or any(name not in RUNTIME_TOOLS for name in runtime_tool_sources)
+        or len(declared_external_tools) != len(set(declared_external_tools))
+        or any(name not in EXTERNAL_TOOLS for name in declared_external_tools)
         or safety not in {"read-only", "temporary-workspace"}
     ):
         raise ValueError("runtime tool plan is invalid")
@@ -208,9 +224,229 @@ def prepare_runtime_environment(
     env = dict(base_env) if base_env is not None else evaluator_environment()
     original_path = env.get("PATH", "")
     env["LOCALAPPDATA"] = str(local_app_data.resolve())
+    external_tool_evidence: dict[str, dict[str, Any]] = {}
+    for name in declared_external_tools:
+        qmd_root = runtime_root / name
+        _isolate_external_runtime_environment(name, qmd_root, root, env)
+        command = _resolve_launch_command([name], env)
+        if command == [name]:
+            raise ValueError(f"external runtime tool is unavailable: {name}")
+        evidence = _prepare_external_runtime(
+            name,
+            command,
+            root,
+            repository,
+            env,
+        )
+        external_tool_evidence[name] = evidence
+        _write_external_runtime_launcher(
+            name,
+            command,
+            bin_root,
+            safety,
+            workspace=root,
+            runtime_root=qmd_root,
+        )
     env["OBSIDIAN_WIKI_CONFIG_HOME"] = str(config_root.resolve())
     env["PATH"] = str(bin_root.resolve()) + os.pathsep + original_path
-    return env
+    return RuntimePreparation(env, external_tool_evidence)
+
+
+def _isolate_external_runtime_environment(
+    name: str,
+    runtime_root: Path,
+    workspace: Path,
+    env: dict[str, str],
+) -> None:
+    if name != "qmd":
+        raise ValueError(f"unsupported external runtime tool: {name}")
+    for key in tuple(env):
+        if (
+            key == "INDEX_PATH"
+            or key.startswith("QMD_")
+            or key in {"XDG_CONFIG_HOME", "XDG_CACHE_HOME"}
+        ):
+            env.pop(key)
+    paths = {
+        "QMD_CONFIG_DIR": runtime_root / "config",
+        "QMD_SKILLS_DIR": runtime_root / "skills",
+        "XDG_CONFIG_HOME": runtime_root / "xdg-config",
+        "XDG_CACHE_HOME": runtime_root / "cache",
+    }
+    for key, path in paths.items():
+        path.mkdir(parents=True, exist_ok=True)
+        env[key] = str(path.resolve())
+    env["PWD"] = str(workspace.resolve())
+
+
+def _external_tool_dependency(
+    repository: Path,
+    name: str,
+) -> dict[str, Any]:
+    manifest_path = repository / "manifests" / "dependencies.json"
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    dependencies = document.get("dependencies")
+    if not isinstance(dependencies, list):
+        raise ValueError(f"{manifest_path}: dependencies must be an array")
+    matches = [
+        item
+        for item in dependencies
+        if isinstance(item, dict) and item.get("id") == name
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"{manifest_path}: dependency {name!r} must occur exactly once"
+        )
+    minimum = matches[0].get("minimum_version")
+    if not isinstance(minimum, str) or not minimum:
+        raise ValueError(
+            f"{manifest_path}: dependency {name!r} needs minimum_version"
+        )
+    return matches[0]
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    match = re.search(r"(?<!\d)(\d+(?:\.\d+){1,3})(?!\d)", value)
+    if match is None:
+        raise ValueError(f"cannot parse external runtime version: {value!r}")
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def _prepare_external_runtime(
+    name: str,
+    command: list[str],
+    workspace: Path,
+    repository: Path,
+    env: dict[str, str],
+) -> dict[str, Any]:
+    if name != "qmd":
+        raise ValueError(f"unsupported external runtime tool: {name}")
+    dependency = _external_tool_dependency(repository, name)
+    minimum_version = str(dependency["minimum_version"])
+    identity = run_command(
+        [*command, "--version"],
+        cwd=workspace,
+        env=env,
+        timeout_seconds=30,
+    )
+    if identity["returncode"] != 0 or identity["timed_out"]:
+        detail = identity["stderr"].strip() or identity["stdout"].strip()
+        raise ValueError(f"cannot identify qmd external runtime: {detail}")
+    actual_version = _version_tuple(str(identity["stdout"]))
+    if actual_version < _version_tuple(minimum_version):
+        raise ValueError(
+            "qmd external runtime is below the required version: "
+            f"{identity['stdout'].strip()} < {minimum_version}"
+        )
+    notes = workspace / "fixture" / "qmd-notes"
+    if not notes.is_dir():
+        raise ValueError(
+            "qmd external runtime requires fixture/qmd-notes"
+        )
+    setup: list[dict[str, object]] = []
+    for arguments in (
+        ["init"],
+        [
+            "collection",
+            "add",
+            "fixture/qmd-notes",
+            "--name",
+            "evaluation",
+        ],
+    ):
+        result = run_command(
+            [*command, *arguments],
+            cwd=workspace,
+            env=env,
+            timeout_seconds=30,
+        )
+        setup.append(result)
+        if result["returncode"] != 0:
+            detail = result["stderr"].strip() or result["stdout"].strip()
+            raise ValueError(
+                f"cannot prepare isolated qmd runtime: {detail}"
+            )
+    return {
+        "minimum_version": minimum_version,
+        "identity": identity,
+        "setup": setup,
+        "workspace_index": ".qmd",
+        "fixture_root": "fixture/qmd-notes",
+    }
+
+
+def _powershell_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _write_external_runtime_launcher(
+    name: str,
+    command: list[str],
+    bin_root: Path,
+    safety: str,
+    *,
+    workspace: Path,
+    runtime_root: Path,
+) -> None:
+    if name != "qmd":
+        raise ValueError(f"unsupported external runtime tool: {name}")
+    command_parts = " ".join(_powershell_literal(part) for part in command)
+    policy = "read-only" if safety == "read-only" else "isolated-workspace"
+    qmd_config = _powershell_literal(str((runtime_root / "config").resolve()))
+    qmd_skills = _powershell_literal(str((runtime_root / "skills").resolve()))
+    xdg_config = _powershell_literal(
+        str((runtime_root / "xdg-config").resolve())
+    )
+    xdg_cache = _powershell_literal(str((runtime_root / "cache").resolve()))
+    workspace_literal = _powershell_literal(str(workspace.resolve()))
+    script = f"""Remove-Item Env:INDEX_PATH -ErrorAction SilentlyContinue
+$env:QMD_CONFIG_DIR = {qmd_config}
+$env:QMD_SKILLS_DIR = {qmd_skills}
+$env:XDG_CONFIG_HOME = {xdg_config}
+$env:XDG_CACHE_HOME = {xdg_cache}
+$env:PWD = {workspace_literal}
+foreach ($argumentValue in $args) {{
+  $argumentText = [string]$argumentValue
+  if (
+    $argumentText -eq "--index" -or
+    $argumentText -like "--index=*" -or
+    $argumentText -match "[?&]index="
+  ) {{
+    [Console]::Error.WriteLine(
+      "qmd: index override blocked by evaluation policy"
+    )
+    exit 2
+  }}
+}}
+$commandName = if ($args.Count) {{ [string]$args[0] }} else {{ "" }}
+$simple = @(
+  "--help", "-h", "--version", "-V", "search", "query", "vsearch",
+  "get", "multi-get", "ls", "status", "skills"
+)
+$nestedAllowed = (
+  ($commandName -eq "collection" -and $args.Count -gt 1 -and
+    @("list", "show") -contains [string]$args[1]) -or
+  ($commandName -eq "context" -and $args.Count -gt 1 -and
+    [string]$args[1] -eq "list") -or
+  ($commandName -eq "skill" -and $args.Count -gt 1 -and
+    [string]$args[1] -eq "show")
+)
+if ($simple -notcontains $commandName -and -not $nestedAllowed) {{
+  [Console]::Error.WriteLine(
+    "qmd: command blocked by {policy} evaluation policy: $commandName"
+  )
+  exit 2
+}}
+& {command_parts} @args
+exit $LASTEXITCODE
+"""
+    (bin_root / "qmd.ps1").write_text(script, encoding="utf-8")
+    (bin_root / "qmd.cmd").write_text(
+        "@echo off\n"
+        "powershell.exe -NoLogo -NoProfile -NonInteractive "
+        '-File "%~dp0qmd.ps1" %*\n',
+        encoding="utf-8",
+    )
 
 
 def _write_runtime_launcher(
@@ -502,6 +738,7 @@ def build_command(
     baseline: bool = False,
     safety: str = "read-only",
     runtime_tools: Iterable[str] = (),
+    external_tools: Iterable[str] = (),
 ) -> list[str]:
     """Build the allowlisted target command without executing it."""
 
@@ -509,11 +746,15 @@ def build_command(
         raise ValueError(f"unsupported evaluator target: {target}")
 
     declared_runtime_tools = tuple(runtime_tools)
+    declared_external_tools = tuple(external_tools)
     if (
         len(declared_runtime_tools) != len(set(declared_runtime_tools))
         or any(name not in RUNTIME_TOOLS for name in declared_runtime_tools)
+        or len(declared_external_tools) != len(set(declared_external_tools))
+        or any(name not in EXTERNAL_TOOLS for name in declared_external_tools)
     ):
         raise ValueError("runtime tools are invalid")
+    allowed_commands = declared_runtime_tools + declared_external_tools
 
     skill = Path(skill_path).resolve()
     evaluation_prompt = prompt
@@ -536,10 +777,10 @@ def build_command(
         if safety == "read-only":
             tools = ["Read", "Glob", "Grep"]
             allowed_tools = list(tools)
-            if declared_runtime_tools:
+            if allowed_commands:
                 tools.append("Bash")
             allowed_tools.extend(
-                f"Bash({name} *)" for name in declared_runtime_tools
+                f"Bash({name} *)" for name in allowed_commands
             )
             command.extend(["--tools", ",".join(tools)])
             command.extend(["--allowedTools", ",".join(allowed_tools)])
@@ -712,6 +953,8 @@ def isolated_target_environment(
     with tempfile.TemporaryDirectory(prefix=f"myskills-{target}-auth-") as temp_dir:
         isolated = Path(temp_dir)
         env = source_env.copy()
+        env["USERPROFILE"] = str(isolated)
+        env["HOME"] = str(isolated)
         if target == "codex":
             env["CODEX_HOME"] = str(isolated)
             if not env.get("OPENAI_API_KEY"):

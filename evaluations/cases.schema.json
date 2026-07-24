@@ -7,7 +7,7 @@
   "required": ["$schema", "schema_version", "skills"],
   "properties": {
     "$schema": {"const": "./cases.schema.json"},
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "fixture_sets": {
       "type": "object",
       "propertyNames": {
@@ -66,6 +66,13 @@
           "items": {
             "enum": ["obsidian-wiki", "skill-evaluator"]
           }
+        },
+        "external_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["qmd"]
+          }
         }
       }
     },
@@ -104,7 +111,26 @@
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "prompt": {"type": "string", "minLength": 20},
-        "expected_invocation": {"enum": ["implicit", "manual-only"]}
+        "expected_invocation": {"enum": ["implicit", "manual-only"]},
+        "fixture_sets": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fixture"}
+        },
+        "external_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["qmd"]
+          }
+        }
       }
     },
     "skill": {

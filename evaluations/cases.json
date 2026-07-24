@@ -1,6 +1,6 @@
 {
   "$schema": "./cases.schema.json",
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_sets": {
     "wiki-base": [
       {"path": ".obsidian-wiki/config", "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"},
@@ -44,6 +44,9 @@
     "cli-outputs": [
       {"path": "fixture/obsidian-cli-output.txt", "content": "$ obsidian search query=\"retry policy\" format=json\n[{\"path\":\"concepts/retry-policy.md\",\"score\":0.98}]\n$ obsidian property:read path=\"concepts/retry-policy.md\" format=json\n{\"status\":\"active\",\"confidence\":\"high\"}\n$ obsidian dev:errors\n[]\n"},
       {"path": "fixture/qmd-output.txt", "content": "$ qmd search \"retry policy\"\n#abc123  concepts/retry-policy.md:12  Retry transient failures three times...\n$ qmd get #abc123\nconcepts/retry-policy.md:12-14\nThe importer retries transient network failures three times with exponential backoff.\nPermanent validation failures are not retried.\n"}
+    ],
+    "qmd-index": [
+      {"path": "fixture/qmd-notes/retry-policy.md", "content": "# Retry policy\n\nThe importer retries transient network failures three times with exponential backoff.\nPermanent validation failures are not retried.\n"}
     ],
     "skill-fixture": [
       {"path": "fixture/skill/SKILL.md", "content": "---\nname: release-notes\ndescription: Format supplied changes as concise release notes. Use only when explicitly requested.\ndisable-model-invocation: true\n---\n\n# Release Notes\n\nGroup changes by user impact and cite source commits.\n"},
@@ -343,7 +346,7 @@
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
       "required_cases": [{"id": "retrieve-before-answer", "prompt": "Using fixture/qmd-output.txt as the supplied QMD search and get output, explain the appropriate exact or semantic query choice and answer with the QMD path and line evidence from the full retrieved document.", "assertions": ["chooses an appropriate QMD search mode", "uses the full retrieved evidence rather than only the search snippet", "cites the QMD path or docid with lines"], "safety": "read-only", "fixture_sets": ["cli-outputs"]}],
-      "trigger_cases": [{"id": "implicit-trigger", "prompt": "Search my indexed Markdown notes for the retry-policy decision and cite the source passage.", "expected_invocation": "implicit"}]
+      "trigger_cases": [{"id": "implicit-trigger", "prompt": "Search my indexed Markdown notes for the retry-policy decision and cite the source passage.", "expected_invocation": "implicit", "fixture_sets": ["qmd-index"], "external_tools": ["qmd"]}]
     }
   ]
 }

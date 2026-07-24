@@ -37,11 +37,18 @@ Use one directory per case and configuration:
 Each `result.json` records `duration_ms` and records `total_tokens` as `null`
 when the runner does not expose it.
 
-Required cases may declare deterministic UTF-8 `fixtures` and Managed
-`companion_skills`. The runner writes fixtures only below the isolated
-workspace, rejects Agent configuration paths and traversal, and stages only the
-declared companions. The no-Skill baseline receives the same fixtures and
-companions but not the Skill under evaluation.
+Required and trigger cases may declare deterministic UTF-8 `fixtures`; required
+cases may also declare Managed `companion_skills`. The runner writes fixtures
+only below the isolated workspace, rejects Agent configuration paths and
+traversal, and stages only the declared companions. The no-Skill baseline
+receives the same fixtures, runtime capabilities, and companions but not the
+Skill under evaluation. Declared QMD access uses the verified host executable
+against a workspace-local fixture index through a read-only command wrapper.
+Before QMD setup, the runner clears host index/config overrides and pins all
+QMD/XDG state below the workspace; the wrapper repeats that isolation and
+rejects command-line index overrides. The runner validates the executable
+against the centrally declared minimum version and records identity plus setup
+results in raw evidence. QMD never reads the user's index.
 
 Every run plan records the current primary `skill_digest` and the deterministic
 `companion_skill_digests`. Draft audit rebuilds the current plan and rejects raw

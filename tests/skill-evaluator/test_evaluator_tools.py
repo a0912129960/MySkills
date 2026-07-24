@@ -64,6 +64,38 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 },
             )
 
+        qmd_trigger_runs = [
+            item
+            for item in plan
+            if item["skill_name"] == "qmd"
+            and item["mode"] == "trigger"
+        ]
+        self.assertTrue(
+            all(item["external_tools"] == ["qmd"] for item in qmd_trigger_runs)
+        )
+        self.assertEqual(len(qmd_trigger_runs), 4)
+        self.assertTrue(
+            all(
+                item["fixture_sets"] == ["qmd-index"]
+                and item["fixtures"] == qmd_trigger_runs[0]["fixtures"]
+                for item in qmd_trigger_runs
+            )
+        )
+
+        invalid_external = copy.deepcopy(document)
+        invalid_qmd = next(
+            item
+            for item in invalid_external["skills"]
+            if item["skill_name"] == "qmd"
+        )
+        invalid_qmd["trigger_cases"][0]["external_tools"] = ["shell"]
+        self.assertTrue(
+            any(
+                "external_tools are invalid" in error
+                for error in cases.validate_cases(ROOT, invalid_external)
+            )
+        )
+
         invalid = copy.deepcopy(document)
         invalid["skills"][0]["trigger_cases"][0]["expected_invocation"] = "implicit"
         errors = cases.validate_cases(ROOT, invalid)
@@ -436,6 +468,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "obsidian-wiki",
             "skill-evaluator",
         ]
+        qmd["required_cases"][0]["external_tools"] = ["qmd"]
 
         self.assertEqual(cases.validate_cases(ROOT, extended), [])
         plan = cases.build_plan(ROOT, extended, ["qmd"])
@@ -445,6 +478,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             first["runtime_tools"],
             ["obsidian-wiki", "skill-evaluator"],
         )
+        self.assertEqual(first["external_tools"], ["qmd"])
         self.assertEqual(
             set(first["runtime_tool_sources"]),
             {"obsidian-wiki", "skill-evaluator"},
@@ -755,6 +789,51 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         scratch.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=scratch) as temp_dir:
             workspace = Path(temp_dir)
+
+            def external_tool_evidence(item):
+                if item["external_tools"] != ["qmd"]:
+                    return {}
+                return {
+                    "qmd": {
+                        "minimum_version": "2.5.3",
+                        "identity": {
+                            "command": ["qmd", "--version"],
+                            "returncode": 0,
+                            "timed_out": False,
+                            "duration_ms": 1,
+                            "stdout": "qmd 2.5.3\n",
+                            "stderr": "",
+                        },
+                        "setup": [
+                            {
+                                "command": ["qmd", "init"],
+                                "returncode": 0,
+                                "timed_out": False,
+                                "duration_ms": 1,
+                                "stdout": "",
+                                "stderr": "",
+                            },
+                            {
+                                "command": [
+                                    "qmd",
+                                    "collection",
+                                    "add",
+                                    "fixture/qmd-notes",
+                                    "--name",
+                                    "evaluation",
+                                ],
+                                "returncode": 0,
+                                "timed_out": False,
+                                "duration_ms": 1,
+                                "stdout": "",
+                                "stderr": "",
+                            },
+                        ],
+                        "workspace_index": ".qmd",
+                        "fixture_root": "fixture/qmd-notes",
+                    }
+                }
+
             for item in plan:
                 run = (
                     workspace
@@ -770,6 +849,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             "plan": item,
                             "target_identity": f"{item['target']} fixture",
                             "target_identity_returncode": 0,
+                            "external_tool_evidence": (
+                                external_tool_evidence(item)
+                            ),
                             "result": {
                                 "returncode": 0,
                                 "timed_out": False,
@@ -829,6 +911,80 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 {"passed": 1, "total": 1},
             )
             self.assertTrue((workspace / "qmd" / "review.html").is_file())
+
+            external_item = next(
+                item for item in plan if item["external_tools"] == ["qmd"]
+            )
+            external_result_path = (
+                workspace
+                / external_item["skill_name"]
+                / external_item["case_id"]
+                / external_item["configuration"]
+                / external_item["target"]
+                / "result.json"
+            )
+            external_record = json.loads(
+                external_result_path.read_text(encoding="utf-8")
+            )
+            valid_external_evidence = external_record[
+                "external_tool_evidence"
+            ]
+            external_record.pop("external_tool_evidence")
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "external tool evidence keys do not match the plan",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+
+            malformed_evidence = copy.deepcopy(valid_external_evidence)
+            malformed_evidence["qmd"]["identity"]["timed_out"] = True
+            external_record["external_tool_evidence"] = malformed_evidence
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "external tool identity check did not pass",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+
+            stale_evidence = copy.deepcopy(valid_external_evidence)
+            stale_evidence["qmd"]["minimum_version"] = "2.5.2"
+            external_record["external_tool_evidence"] = stale_evidence
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "minimum version does not match the dependency manifest",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+            external_record["external_tool_evidence"] = valid_external_evidence
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
 
             grading_path = next(workspace.rglob("grading.json"))
             grading = json.loads(grading_path.read_text(encoding="utf-8"))
@@ -894,6 +1050,8 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 {
                     "CODEX_HOME": str(codex_home),
                     "CLAUDE_CONFIG_DIR": str(claude_home),
+                    "USERPROFILE": str(root / "real-user"),
+                    "HOME": str(root / "real-home"),
                     "OPENAI_API_KEY": "",
                     "ANTHROPIC_API_KEY": "",
                     "GIT_CONFIG_GLOBAL": str(root / "untrusted-gitconfig"),
@@ -909,6 +1067,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     self.assertTrue((isolated_codex / "auth.json").is_file())
                     self.assertFalse((isolated_codex / "config.toml").exists())
                     self.assertFalse((isolated_codex / "skills").exists())
+                    self.assertEqual(
+                        codex_env["USERPROFILE"],
+                        str(isolated_codex),
+                    )
+                    self.assertEqual(codex_env["HOME"], str(isolated_codex))
                     self.assertEqual(codex_env["GIT_CONFIG_GLOBAL"], os.devnull)
                     self.assertEqual(codex_env["GIT_CONFIG_NOSYSTEM"], "1")
                     self.assertNotIn("GIT_DIR", codex_env)
@@ -926,6 +1089,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         (isolated_claude / "settings.json").exists()
                     )
                     self.assertFalse((isolated_claude / "skills").exists())
+                    self.assertEqual(
+                        claude_env["USERPROFILE"],
+                        str(isolated_claude),
+                    )
+                    self.assertEqual(claude_env["HOME"], str(isolated_claude))
                 self.assertFalse(isolated_claude.exists())
 
     def test_attestation_digest_matches_installer_and_rejects_stale_content(
@@ -1160,6 +1328,21 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertIn("--output-format", claude)
         self.assertEqual(codex[0:3], ["codex", "exec", "--ephemeral"])
         self.assertIn("--json", codex)
+        claude_trigger = runners.build_command(
+            "claude",
+            "Natural trigger prompt.",
+            Path("C:/tmp/skill"),
+            explicit=False,
+        )
+        claude_baseline = runners.build_command(
+            "claude",
+            "Natural trigger prompt.",
+            Path("C:/tmp/skill"),
+            explicit=False,
+            baseline=True,
+        )
+        self.assertNotIn("--disable-slash-commands", claude_trigger)
+        self.assertIn("--disable-slash-commands", claude_baseline)
         trigger = runners.build_command(
             "codex",
             "Natural trigger prompt.",
@@ -1233,6 +1416,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "Read,Glob,Grep,Bash(obsidian-wiki *)",
         )
         self.assertNotIn(",Bash,", f",{allowed_tools},")
+        qmd_command = runners.build_command(
+            "claude",
+            "Search the fixture index.",
+            Path("C:/tmp/qmd"),
+            external_tools=["qmd"],
+        )
+        self.assertEqual(
+            qmd_command[qmd_command.index("--allowedTools") + 1],
+            "Read,Glob,Grep,Bash(qmd *)",
+        )
         with self.assertRaisesRegex(ValueError, "runtime tools are invalid"):
             runners.build_command(
                 "claude",
@@ -1495,7 +1688,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             base_env = os.environ.copy()
             original_path = base_env.get("PATH", "")
             base_env["LOCALAPPDATA"] = str(user_local)
-            env = runners.prepare_runtime_environment(
+            preparation = runners.prepare_runtime_environment(
                 workspace,
                 sources,
                 digests,
@@ -1503,6 +1696,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 safety="read-only",
                 base_env=base_env,
             )
+            env = preparation.environment
             with self.assertRaisesRegex(
                 ValueError,
                 "outside the repository allowlist",
@@ -1545,6 +1739,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     / "__main__.py"
                 ).is_file()
             )
+
             self.assertTrue(
                 (
                     tool_root
@@ -1812,6 +2007,120 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 blocked_commands.stderr,
             )
 
+    @unittest.skipUnless(os.name == "nt", "Windows launcher contract")
+    def test_runner_prepares_isolated_qmd_and_blocks_mutation(self) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_external_qmd",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            log_path = root / "qmd.log"
+            (fake_bin / "qmd.cmd").write_text(
+                '@powershell -NoProfile -File "%~dp0qmd.ps1" %*\n',
+                encoding="utf-8",
+            )
+            (fake_bin / "qmd.ps1").write_text(
+                "Add-Content -LiteralPath $env:MYSKILLS_QMD_TEST_LOG "
+                "-Value ($args -join '|')\n"
+                "if ($args[0] -eq '--version') {\n"
+                "  Write-Output 'qmd 2.5.3'\n"
+                "  exit 0\n"
+                "}\n"
+                "Write-Output ('fixture-qmd ' + ($args -join ' '))\n"
+                "Write-Output ('INDEX_PATH=' + $env:INDEX_PATH)\n"
+                "Write-Output ('QMD_CONFIG_DIR=' + $env:QMD_CONFIG_DIR)\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            workspace = runners.prepare_evaluation_workspace(
+                [],
+                "codex",
+                root / "run",
+                fixtures=[
+                    {
+                        "path": "fixture/qmd-notes/retry-policy.md",
+                        "content": "# Retry policy\n\nFixture evidence.\n",
+                    }
+                ],
+            )
+            base_env = os.environ.copy()
+            base_env["PATH"] = (
+                str(fake_bin) + os.pathsep + base_env.get("PATH", "")
+            )
+            base_env["MYSKILLS_QMD_TEST_LOG"] = str(log_path)
+            base_env["INDEX_PATH"] = str(root / "user-index.sqlite")
+            base_env["QMD_CONFIG_DIR"] = str(root / "user-qmd-config")
+            base_env["QMD_SKILLS_DIR"] = str(root / "user-qmd-skills")
+            base_env["XDG_CONFIG_HOME"] = str(root / "user-xdg-config")
+            base_env["XDG_CACHE_HOME"] = str(root / "user-xdg-cache")
+
+            preparation = runners.prepare_runtime_environment(
+                workspace,
+                {},
+                {},
+                repo_root=ROOT,
+                safety="read-only",
+                base_env=base_env,
+                external_tools=["qmd"],
+            )
+            env = preparation.environment
+
+            setup_log = log_path.read_text(encoding="utf-8")
+            identity = preparation.external_tool_evidence["qmd"]["identity"]
+            self.assertEqual(identity["returncode"], 0)
+            self.assertEqual(identity["stdout"].strip(), "qmd 2.5.3")
+            self.assertEqual(
+                preparation.external_tool_evidence["qmd"]["minimum_version"],
+                "2.5.3",
+            )
+            self.assertIn("init", setup_log)
+            self.assertIn(
+                "collection|add|fixture/qmd-notes|--name|evaluation",
+                setup_log.replace("\\", "/"),
+            )
+            safe = runners.run_command(
+                ["qmd", "search", "retry policy"],
+                cwd=workspace,
+                env=env,
+                timeout_seconds=30,
+            )
+            blocked = runners.run_command(
+                ["qmd", "update"],
+                cwd=workspace,
+                env=env,
+                timeout_seconds=30,
+            )
+            redirected = runners.run_command(
+                ["qmd", "search", "retry policy", "--index", "other"],
+                cwd=workspace,
+                env=env,
+                timeout_seconds=30,
+            )
+            self.assertEqual(safe["returncode"], 0, safe["stderr"])
+            self.assertIn("fixture-qmd search retry policy", safe["stdout"])
+            self.assertIn("INDEX_PATH=", safe["stdout"])
+            self.assertNotIn(
+                str(root / "user-index.sqlite"),
+                safe["stdout"],
+            )
+            self.assertIn(
+                f"QMD_CONFIG_DIR={workspace / '.runtime' / 'qmd' / 'config'}",
+                safe["stdout"],
+            )
+            self.assertEqual(blocked["returncode"], 2)
+            self.assertIn(
+                "command blocked by read-only evaluation policy",
+                blocked["stderr"],
+            )
+            self.assertEqual(redirected["returncode"], 2)
+            self.assertIn(
+                "index override blocked by evaluation policy",
+                redirected["stderr"],
+            )
+
     def test_runtime_staging_excludes_untracked_source_files(self) -> None:
         runners = load_module(
             "skill_evaluator_runners_tracked_runtime",
@@ -1983,6 +2292,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                     },
                                     "fixture_sets": ["example"],
                                     "runtime_tools": [],
+                                    "external_tools": ["qmd"],
                                     "companion_skills": [],
                                     "skill_digest": "sha256:fixture",
                                 },
@@ -1993,6 +2303,33 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                     and target == "codex"
                                     else 0
                                 ),
+                                "external_tool_evidence": {
+                                    "qmd": {
+                                        "minimum_version": "2.5.3",
+                                        "identity": {
+                                            "command": [
+                                                "C:/tools/qmd.ps1",
+                                                "--version",
+                                            ],
+                                            "returncode": 0,
+                                            "timed_out": False,
+                                            "stdout": "qmd 2.5.3\n",
+                                            "stderr": "",
+                                        },
+                                        "setup": [
+                                            {
+                                                "command": [
+                                                    "C:/tools/qmd.ps1",
+                                                    "init",
+                                                ],
+                                                "returncode": 0,
+                                                "timed_out": False,
+                                            }
+                                        ],
+                                        "workspace_index": ".qmd",
+                                        "fixture_root": "fixture/qmd-notes",
+                                    }
+                                },
                                 "result": {
                                     "command": [target, "fixture prompt"],
                                     "returncode": 0,
@@ -2080,6 +2417,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("Canonical Skill path", html)
             self.assertIn("C:/repo/skills/example", html)
             self.assertIn("isolated-no-skill", html)
+            self.assertIn("External tools</dt><dd>qmd", html)
+            self.assertIn("External runtime identity and setup", html)
+            self.assertIn("qmd 2.5.3", html)
+            self.assertIn("C:/tools/qmd.ps1", html)
             self.assertIn("Committed baseline files", html)
             self.assertIn("Working-tree changes", html)
             self.assertIn("committed", html)
