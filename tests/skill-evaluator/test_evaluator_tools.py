@@ -1169,6 +1169,45 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertIn("Natural trigger prompt.", trigger[-1])
         self.assertNotIn("$skill", trigger[-1])
 
+    @unittest.skipUnless(os.name == "nt", "Windows launcher contract")
+    def test_runner_resolves_windows_cmd_to_adjacent_powershell_shim(
+        self,
+    ) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_windows_shim",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "fixture-launcher.cmd").write_text(
+                "@echo off\r\nexit /b 99\r\n",
+                encoding="utf-8",
+            )
+            (root / "fixture-launcher.ps1").write_text(
+                "Write-Output ($args -join '|')\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["PATH"] = str(root) + os.pathsep + env.get("PATH", "")
+            prompt = '$qmd & whoami; "quoted" | Write-Output nope'
+
+            result = runners.run_command(
+                ["fixture-launcher", "alpha", "two words", prompt],
+                cwd=root,
+                env=env,
+                timeout_seconds=30,
+            )
+
+            self.assertEqual(result["returncode"], 0, result["stderr"])
+            self.assertEqual(
+                result["stdout"].strip(),
+                f"alpha|two words|{prompt}",
+            )
+            self.assertEqual(
+                result["command"],
+                ["fixture-launcher", "alpha", "two words", prompt],
+            )
+
     def test_claude_read_only_runtime_permissions_are_declaration_scoped(
         self,
     ) -> None:

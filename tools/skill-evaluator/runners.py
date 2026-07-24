@@ -589,9 +589,11 @@ def run_command(
 ) -> dict[str, object]:
     """Run a target using reader threads so pipe handling works on Windows."""
 
+    logical_command = list(command)
+    launch_command = _resolve_launch_command(logical_command, env)
     started = time.monotonic()
     process = subprocess.Popen(
-        list(command),
+        launch_command,
         cwd=cwd,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -631,13 +633,55 @@ def run_command(
 
     return_code = process.wait()
     return {
-        "command": list(command),
+        "command": logical_command,
         "returncode": return_code,
         "timed_out": timed_out,
         "duration_ms": round((time.monotonic() - started) * 1000),
         "stdout": "".join(buffers["stdout"]),
         "stderr": "".join(buffers["stderr"]),
     }
+
+
+def _resolve_launch_command(
+    command: list[str],
+    env: dict[str, str] | None,
+) -> list[str]:
+    """Resolve Windows package-manager shims without shell-interpreting prompts."""
+
+    if not command:
+        raise ValueError("command must not be empty")
+    if os.name != "nt":
+        return command
+    child_env = env if env is not None else os.environ
+    executable = shutil.which(command[0], path=child_env.get("PATH"))
+    if executable is None:
+        return command
+    resolved = Path(executable)
+    if resolved.suffix.lower() not in {".bat", ".cmd"}:
+        return [str(resolved), *command[1:]]
+    powershell_shim = resolved.with_suffix(".ps1")
+    if not powershell_shim.is_file():
+        raise FileNotFoundError(
+            "Windows batch launcher has no adjacent PowerShell shim: "
+            f"{resolved}"
+        )
+    powershell = shutil.which(
+        "powershell.exe",
+        path=child_env.get("PATH"),
+    )
+    if powershell is None:
+        raise FileNotFoundError(
+            "powershell.exe is required to launch a Windows PowerShell shim"
+        )
+    return [
+        powershell,
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(powershell_shim),
+        *command[1:],
+    ]
 
 
 def evaluator_environment() -> dict[str, str]:
