@@ -1,6 +1,55 @@
 {
   "$schema": "./cases.schema.json",
   "schema_version": 1,
+  "fixture_sets": {
+    "wiki-base": [
+      {"path": ".obsidian-wiki/config", "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"},
+      {"path": "fixture/wiki/.obsidian/graph.json", "content": "{\n  \"collapse-filter\": true,\n  \"showTags\": false,\n  \"colorGroups\": []\n}\n"},
+      {"path": "fixture/wiki/index.md", "content": "# Wiki Index\n\n- [[concepts/retry-policy]]\n- [[concepts/service-boundary]]\n"},
+      {"path": "fixture/wiki/hot.md", "content": "# Hot\n\n- [[concepts/retry-policy]]\n"},
+      {"path": "fixture/wiki/log.md", "content": "# Activity Log\n"},
+      {"path": "fixture/wiki/.manifest.json", "content": "{\n  \"sources\": {\n    \"C:/fixture/.claude/projects/retry.jsonl\": {\"content_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"last_ingested\": \"2026-07-20T00:00:00Z\", \"pages_produced\": [\"concepts/retry-policy.md\"]},\n    \"C:/fixture/.codex/sessions/boundary.jsonl\": {\"content_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"last_ingested\": \"2026-07-21T00:00:00Z\", \"pages_produced\": [\"concepts/service-boundary.md\"]}\n  }\n}\n"},
+      {"path": "fixture/wiki/tag-taxonomy.md", "content": "# Tag Taxonomy\n\nCanonical: `architecture`, `reliability`, `testing`\nAliases: `resilience` -> `reliability`\nReserved: `visibility/internal`, `visibility/public`, `visibility/pii`\n"},
+      {"path": "fixture/wiki/concepts/retry-policy.md", "content": "---\ntitle: Retry Policy\nsummary: Retry transient failures at most three times with exponential backoff.\ntags: [reliability, visibility/internal]\ncreated: 2026-07-20\nupdated: 2026-07-20\nstatus: active\nconfidence: high\nsources: [C:/fixture/.claude/projects/retry.jsonl]\nrelationships:\n  depends-on: [service-boundary]\n---\n\n# Retry Policy\n\nThe importer retries transient network failures three times with exponential backoff. Permanent validation failures are not retried.\n"},
+      {"path": "fixture/wiki/concepts/service-boundary.md", "content": "---\ntitle: Import Service Boundary\nsummary: The import service validates bookmarks before persistence.\ntags: [architecture, resilience]\ncreated: 2026-07-21\nupdated: 2026-07-21\nstatus: draft\nconfidence: medium\nsources: [C:/fixture/.codex/sessions/boundary.jsonl]\n---\n\n# Import Service Boundary\n\nThe service owns validation and persistence orchestration. Retry behavior belongs at its network adapter boundary.\n"},
+      {"path": "fixture/wiki/references/retry-design.md", "content": "---\ntitle: Retry Design Source\nsummary: Source notes for retry limits and failure classes.\ntags: [reliability]\ncreated: 2026-07-19\nupdated: 2026-07-19\nstatus: active\nconfidence: high\nsources: [fixture-source]\n---\n\n# Retry Design Source\n\nTransient errors use bounded retry; validation errors fail immediately.\n"}
+    ],
+    "engineering-project": [
+      {"path": "PROJECT_RULES.md", "content": "# Project Rules\n\n- Python 3.10+\n- Public validation functions return booleans and do not print.\n- Run `python -m unittest discover -s tests` after behavior changes.\n"},
+      {"path": "docs/architecture.md", "content": "# Architecture\n\n`src/validator.py` owns input validation. Callers depend only on its public `is_valid_name` function.\n"},
+      {"path": "src/validator.py", "content": "def is_valid_name(value: str) -> bool:\n    return bool(value)\n"},
+      {"path": "tests/test_validator.py", "content": "import unittest\nfrom src.validator import is_valid_name\n\nclass ValidatorTests(unittest.TestCase):\n    def test_nonempty_name(self):\n        self.assertTrue(is_valid_name(\"Ada\"))\n\nif __name__ == \"__main__\":\n    unittest.main()\n"}
+    ],
+    "architecture-scan": [
+      {"path": "PROJECT_RULES.md", "content": "# Project Rules\n\nPrefer narrow public interfaces and dependency inversion at I/O boundaries.\n"},
+      {"path": "src/importer.py", "content": "def import_bookmarks(parser, cache, retry, logger, text):\n    parsed = parser.parse(text)\n    if cache.has(parsed):\n        return cache.get(parsed)\n    result = retry.run(lambda: parser.persist(parsed))\n    logger.info(result)\n    cache.put(parsed, result)\n    return result\n"},
+      {"path": "src/caller.py", "content": "def run(service, raw):\n    return service.import_bookmarks(raw)\n"}
+    ],
+    "grill-docs": [
+      {"path": "CONTEXT.md", "content": "# Migration Domain\n\n**Deployment unit**: one independently releasable service.\n**Cutover**: switching production traffic to the new service.\n"},
+      {"path": "docs/architecture.md", "content": "# Migration Architecture\n\nThe current system is a monolith. The proposal separates import and query services but has not decided data ownership or rollback.\n"},
+      {"path": "docs/adr/0001-data-ownership.md", "content": "# Data ownership is unresolved\n\nStatus: proposed. A single writer is required during migration.\n"}
+    ],
+    "ingest-sources": [
+      {"path": "fixture/sources/retry.md", "content": "# Retry Decision\n\nUse three attempts with exponential backoff for transient failures. Do not retry validation errors.\n"},
+      {"path": "fixture/sources/boundary.md", "content": "# Service Boundary\n\nThe import service validates and persists bookmarks. The network adapter owns retry mechanics.\n"}
+    ],
+    "research-sources": [
+      {"path": "fixture/sources/source-a.md", "content": "# Source A\n\nA 2025 internal benchmark found bounded exponential backoff reduced transient failures. The benchmark did not study permanent errors.\n"},
+      {"path": "fixture/sources/source-b.md", "content": "# Source B\n\nAn architecture review recommends idempotency before automatic retry and identifies duplicate writes as the primary risk.\n"}
+    ],
+    "codex-history": [
+      {"path": "fixture/history/session.jsonl", "content": "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-1\",\"cwd\":\"C:/fixture/project\",\"timestamp\":\"2026-07-20T00:00:00Z\"}}\n{\"type\":\"response_item\",\"payload\":{\"role\":\"user\",\"content\":\"We decided retry belongs at the network adapter.\"}}\n{\"type\":\"response_item\",\"payload\":{\"role\":\"assistant\",\"content\":\"Decision recorded: three bounded attempts; validation failures are not retried.\"}}\n{\"type\":\"response_item\",\"payload\":{\"role\":\"user\",\"content\":\"thanks\"}}\n"}
+    ],
+    "cli-outputs": [
+      {"path": "fixture/obsidian-cli-output.txt", "content": "$ obsidian search query=\"retry policy\" format=json\n[{\"path\":\"concepts/retry-policy.md\",\"score\":0.98}]\n$ obsidian property:read path=\"concepts/retry-policy.md\" format=json\n{\"status\":\"active\",\"confidence\":\"high\"}\n$ obsidian dev:errors\n[]\n"},
+      {"path": "fixture/qmd-output.txt", "content": "$ qmd search \"retry policy\"\n#abc123  concepts/retry-policy.md:12  Retry transient failures three times...\n$ qmd get #abc123\nconcepts/retry-policy.md:12-14\nThe importer retries transient network failures three times with exponential backoff.\nPermanent validation failures are not retried.\n"}
+    ],
+    "skill-fixture": [
+      {"path": "fixture/skill/SKILL.md", "content": "---\nname: release-notes\ndescription: Format supplied changes as concise release notes. Use only when explicitly requested.\ndisable-model-invocation: true\n---\n\n# Release Notes\n\nGroup changes by user impact and cite source commits.\n"},
+      {"path": "fixture/skill/agents/openai.yaml", "content": "interface:\n  display_name: \"Release Notes\"\n  short_description: \"Format release notes\"\n  default_prompt: \"Use $release-notes to format supplied changes.\"\npolicy:\n  allow_implicit_invocation: false\n"}
+    ]
+  },
   "skills": [
     {
       "skill_name": "ai-handoff",
@@ -13,7 +62,7 @@
       "skill_name": "spec-package-generator",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "spec-package", "prompt": "Turn a requirement for an offline bookmark importer into an implementation-ready specification package in a temporary workspace; stop at specification artifacts and do not implement it.", "assertions": ["produces readiness-gated specification artifacts", "separates requirements from implementation tasks", "does not implement product code"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "spec-package", "prompt": "Begin a specification package for the requirement in fixture/requirements/bookmark-importer.md. Create only the intake and earliest Gate 1 artifacts justified by the supplied requirement, surface blocking questions, and stop at the first required human gate without claiming final readiness or implementing product code.", "assertions": ["creates only artifacts allowed before the first unresolved gate", "surfaces assumptions or blocking questions instead of inventing approval", "does not claim final readiness or implement product code"], "safety": "temporary-workspace", "fixtures": [{"path": "fixture/requirements/bookmark-importer.md", "content": "# Offline bookmark importer\n\nImport a browser-exported HTML bookmark file without network access, preserve folder hierarchy, reject unreadable input, and produce a reviewable import summary. Target technology and duplicate policy are not yet decided.\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Create an AI-ready PRD, EARS requirements, BDD scenarios, and task package for an offline bookmark importer.", "expected_invocation": "implicit"}]
     },
     {
@@ -34,14 +83,14 @@
       "skill_name": "code-review",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "two-axis-review", "prompt": "Review a fixture Git diff against its repository rules and a supplied acceptance criterion. Report Standards and Spec findings separately and do not edit files.", "assertions": ["uses a fixed Git comparison point", "separates Standards and Spec findings", "cites actionable file evidence"], "safety": "read-only"}],
+      "required_cases": [{"id": "two-axis-review", "prompt": "Review the fixture repository's working-tree diff from HEAD against PROJECT_RULES.md and SPEC.md. Report Standards and Spec findings separately with file evidence, and do not edit files.", "assertions": ["uses HEAD as the fixed Git comparison point", "separates Standards and Spec findings", "cites actionable file evidence"], "safety": "read-only", "git_fixture": {"baseline_files": [{"path": "PROJECT_RULES.md", "content": "# Project Rules\n\nValidation functions return booleans and never print user input.\n"}, {"path": "SPEC.md", "content": "# Acceptance\n\nBlank or whitespace-only display names must be rejected.\n"}, {"path": "src/validator.py", "content": "def is_valid_name(value: str) -> bool:\n    return bool(value)\n"}], "working_tree_files": [{"path": "src/validator.py", "content": "def is_valid_name(value: str) -> bool:\n    print(value)\n    return True\n"}]}}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Please review the staged changes against our repository rules and the stated acceptance criteria.", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "diagnosing-bugs",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "reproduction-loop", "prompt": "Diagnose a fixture command that intermittently returns malformed JSON. Establish a red-capable reproduction loop before proposing a cause; do not implement a fix.", "assertions": ["creates a tight reproducible loop", "distinguishes observations from hypotheses", "does not implement the repair"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "reproduction-loop", "prompt": "Diagnose `python fixture/emitter.py`, which deterministically emits malformed JSON every third invocation. Establish and demonstrate a red-capable reproduction loop before proposing a cause; do not implement a fix.", "assertions": ["creates a tight reproducible loop that observes the malformed third result", "distinguishes observations from hypotheses", "does not implement the repair"], "safety": "temporary-workspace", "fixtures": [{"path": "fixture/emitter.py", "content": "from pathlib import Path\nstate = Path(__file__).with_name('.count')\ncount = int(state.read_text() if state.exists() else '0') + 1\nstate.write_text(str(count))\nprint('{\"ok\":true}' if count % 3 else '{\"ok\":')\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Debug why this command intermittently emits malformed JSON.", "expected_invocation": "implicit"}]
     },
     {
@@ -55,35 +104,35 @@
       "skill_name": "grill-with-docs",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "document-grounded-grill", "prompt": "Interview me one decision at a time about a repository-backed migration plan, grounding objections in the supplied architecture notes and maintaining a concise glossary.", "assertions": ["asks one focused question at a time", "grounds challenges in supplied documents", "maintains decisions and glossary"], "safety": "read-only"}],
+      "required_cases": [{"id": "document-grounded-grill", "prompt": "Begin the interview about the repository-backed migration plan in CONTEXT.md and docs/architecture.md. Ask exactly one focused decision question, ground the objection in those documents, and show the current concise glossary and unresolved decision.", "assertions": ["asks exactly one focused question", "grounds the challenge in supplied documents", "maintains decisions and glossary"], "safety": "read-only", "fixture_sets": ["grill-docs"], "companion_skills": ["grilling", "domain-modeling"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Give me a quick summary of this migration plan.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "implement",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "small-change", "prompt": "In a temporary fixture project, implement a small validation rule from a supplied lightweight spec, run the relevant tests, and finish with a read-only code review.", "assertions": ["reads applicable project rules", "implements only the specified change", "runs validation and final review"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "small-change", "prompt": "In the clean fixture Git project, implement SPEC.md's blank-display-name validation through the public seam, show red/green evidence, run the project tests, and finish with a read-only review of the resulting diff. Do not stage or commit.", "assertions": ["reads PROJECT_RULES.md, architecture guidance, and SPEC.md", "implements only the specified change through the public seam", "records red/green validation and final review without Git mutation"], "safety": "temporary-workspace", "companion_skills": ["tdd", "code-review"], "git_fixture": {"baseline_files": [{"path": "PROJECT_RULES.md", "content": "# Project Rules\n\n- Python 3.10+\n- Public validation functions return booleans and do not print.\n- Run `python -m unittest discover -s tests` after behavior changes.\n"}, {"path": "docs/architecture.md", "content": "# Architecture\n\n`src/validator.py` owns input validation through `is_valid_name`.\n"}, {"path": "SPEC.md", "content": "# Reject blank display names\n\n`is_valid_name` must return false for empty or whitespace-only names and true for nonblank names.\n"}, {"path": "src/__init__.py", "content": ""}, {"path": "src/validator.py", "content": "def is_valid_name(value: str) -> bool:\n    return bool(value)\n"}, {"path": "tests/test_validator.py", "content": "import unittest\nfrom src.validator import is_valid_name\n\nclass ValidatorTests(unittest.TestCase):\n    def test_nonempty_name(self):\n        self.assertTrue(is_valid_name('Ada'))\n\nif __name__ == '__main__':\n    unittest.main()\n"}], "working_tree_files": []}}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain how this validation rule could be implemented, but do not change files.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "improve-codebase-architecture",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "architecture-scan", "prompt": "Scan a fixture codebase for deep-module opportunities, generate an offline report, and stop before modifying code or choosing a candidate for the human.", "assertions": ["produces an offline report", "ranks evidence-backed candidates", "does not refactor automatically"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "architecture-scan", "prompt": "Scan the supplied fixture codebase for deep-module opportunities, generate a self-contained offline report inside the temporary workspace, and stop after asking which candidate the human wants to discuss; do not modify source code.", "assertions": ["produces a self-contained offline report", "ranks evidence-backed candidates using codebase-design terms", "does not refactor or choose for the human"], "safety": "temporary-workspace", "fixture_sets": ["architecture-scan"], "companion_skills": ["codebase-design"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "What does deep module mean in software design?", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "prototype",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "throwaway-experiment", "prompt": "Build a disposable parser experiment in a temporary workspace to determine whether nested delimiters can be handled without a full grammar, then retain the artifacts for a human decision.", "assertions": ["states the design question", "builds a runnable throwaway experiment", "retains artifacts and reports the learned decision"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "throwaway-experiment", "prompt": "Using fixture/examples.txt, build a disposable parser experiment under .scratch/nested-delimiters to determine whether a small state machine handles the examples without a full grammar. Run it, retain the artifacts, and report the learned decision for a human.", "assertions": ["states the design question", "builds and runs a throwaway experiment against every example", "retains artifacts and reports the learned decision"], "safety": "temporary-workspace", "fixtures": [{"path": "fixture/examples.txt", "content": "plain text\n(a[b]c)\nouter(inner[leaf])tail\nbroken([)]\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Can we quickly prototype whether a small state machine handles these nested delimiters?", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "tdd",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "red-green", "prompt": "Add observable case-insensitive lookup behavior to a fixture module through its public API, demonstrating a failing test before the implementation and then a passing test.", "assertions": ["records a genuine red result", "changes behavior through the public seam", "records the green result"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "red-green", "prompt": "In the clean fixture Git project, add case-insensitive lookup behavior through `lookup` in src/catalog.py. Demonstrate the new public test failing before implementation and passing afterward; do not stage or commit.", "assertions": ["records a genuine red result for the new public behavior", "changes behavior through the public lookup seam", "records the green result without Git mutation"], "safety": "temporary-workspace", "git_fixture": {"baseline_files": [{"path": "src/__init__.py", "content": ""}, {"path": "src/catalog.py", "content": "ITEMS = {'Alpha': 1, 'Beta': 2}\n\ndef lookup(name: str):\n    return ITEMS.get(name)\n"}, {"path": "tests/test_catalog.py", "content": "import unittest\nfrom src.catalog import lookup\n\nclass CatalogTests(unittest.TestCase):\n    def test_exact_lookup(self):\n        self.assertEqual(lookup('Alpha'), 1)\n\nif __name__ == '__main__':\n    unittest.main()\n"}], "working_tree_files": []}}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Use red-green TDD to add case-insensitive lookup through the public API.", "expected_invocation": "implicit"}]
     },
     {
@@ -111,21 +160,21 @@
       "skill_name": "session-checkpoint",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "local-checkpoint", "prompt": "Create a concise checkpoint for resuming a partially completed migration later. Do not contact another session or claim delivery.", "assertions": ["captures status, evidence, decisions, risks, and next action", "is concise and resumable", "does not deliver externally"], "safety": "read-only"}],
+      "required_cases": [{"id": "local-checkpoint", "prompt": "Create HANDOFF.md inside the temporary fixture project from fixture/migration-status.md as a concise checkpoint for resuming the migration later. Do not contact another session or claim delivery.", "assertions": ["writes the local HANDOFF.md with status, evidence, decisions, risks, and next action", "is concise and resumable", "does not deliver externally"], "safety": "temporary-workspace", "fixtures": [{"path": "fixture/migration-status.md", "content": "# Migration status\n\nCompleted: inventory and loader. Decision: copy-only installation. Evidence: structural tests pass. Risk: behavioral attestations are pending. Next: run the QMD pilot evaluation.\n"}]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Give me a normal progress update for this migration.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "cross-linker",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "link-audit", "prompt": "Against a temporary Wiki fixture, identify missing meaningful cross-links and propose only evidence-backed links without changing unrelated pages.", "assertions": ["finds semantically justified missing links", "avoids indiscriminate link inflation", "bounds proposed writes to fixture pages"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "link-audit", "prompt": "Against the configured temporary Wiki fixture, add only the source workflow's evidence-backed actionable cross-links and typed relationships, skipping uncertain candidates and preserving unrelated pages.", "assertions": ["adds semantically justified missing links and relationships", "avoids indiscriminate link inflation", "bounds writes and maintenance to the fixture Wiki"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain what wikilinks are in Obsidian.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "graph-colorize",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "graph-settings", "prompt": "In a temporary Obsidian fixture, add graph color groups for two canonical tags while preserving unrelated graph settings and creating a verified backup.", "assertions": ["preserves unrelated graph configuration", "creates the requested color groups", "creates and verifies a backup"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "graph-settings", "prompt": "In the configured temporary Obsidian Wiki fixture, add graph color groups for the canonical architecture and reliability tags while preserving unrelated graph settings and creating a verified backup.", "assertions": ["preserves unrelated graph configuration", "creates the requested color groups", "creates and verifies a backup"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "What colors work well for a knowledge graph?", "expected_invocation": "manual-only"}]
     },
     {
@@ -139,161 +188,161 @@
       "skill_name": "memory-bridge",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "source-comparison", "prompt": "Using a temporary Wiki fixture with provenance metadata, compare what Claude and Codex contributed about the same architecture decision and cite the pages.", "assertions": ["filters by recorded source provenance", "compares contributions without inventing attribution", "cites fixture pages"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "source-comparison", "prompt": "Using the configured temporary Wiki fixture and its .manifest.json, compare Claude and Codex contribution coverage for the retry architecture topic and cite the matching pages.", "assertions": ["filters by recorded source provenance", "compares contributions without inventing attribution", "cites fixture pages"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Compare two general AI coding assistants.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "project-rules-init",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "rules-bootstrap", "prompt": "Initialize concise AI project rules and an architecture baseline in a temporary fixture repository, without installing tools, committing, or changing global configuration.", "assertions": ["creates concise local rules and architecture baseline", "keeps changes project-local", "does not install, commit, or change global state"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "rules-bootstrap", "prompt": "Inspect the supplied temporary fixture repository, distinguish documented rules from observed conventions, and present the complete proposed local AI rules and architecture baseline. Stop for human approval before writing; do not install tools, commit, or change global configuration.", "assertions": ["distinguishes documented rules, observed conventions, and recommendations", "presents concise project-local rules and architecture baseline", "stops for approval without writing or changing global state"], "safety": "read-only", "fixture_sets": ["engineering-project"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain why project rules can help coding agents.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "skill-evaluator",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "evaluation-report", "prompt": "Evaluate a fixture Skill for structure, isolated Claude/Codex command construction, baseline evidence, trigger policy, and offline reporting without authoring or changing the Skill.", "assertions": ["keeps evaluation report-only", "records separate Claude and Codex evidence", "requires human review before attestation"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "evaluation-report", "prompt": "Use the isolated skill-evaluator runtime to run its no-model smoke contract and structurally validate fixture/skill. Explain the separate Claude/Codex, baseline, trigger, offline-report, and human-review steps still required; do not execute nested model runs, author the Skill, or claim a passing attestation.", "assertions": ["runs report-only structural and no-model smoke checks", "keeps Claude and Codex evidence requirements separate without nested model calls", "requires complete human review before any passing attestation"], "safety": "temporary-workspace", "fixture_sets": ["skill-fixture"], "runtime_tools": ["skill-evaluator"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Create a new Skill that formats release notes.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "tag-taxonomy",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "tag-audit", "prompt": "Audit tags in a temporary Wiki fixture against a controlled vocabulary, report aliases and unknown tags, and propose bounded normalization.", "assertions": ["uses a canonical vocabulary", "distinguishes aliases from unknown tags", "does not invent broad taxonomy changes"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "tag-audit", "prompt": "Audit tags in the configured temporary Wiki fixture against tag-taxonomy.md, report aliases, reserved tags, and unknown tags, and describe bounded normalization without applying changes.", "assertions": ["uses the fixture's canonical vocabulary", "distinguishes aliases, reserved tags, and unknown tags", "remains read-only and does not invent broad taxonomy changes"], "safety": "read-only", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain what a hashtag is in general social-media usage.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-capture",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "conversation-capture", "prompt": "Capture a supplied short architecture conversation into a temporary Wiki fixture as durable knowledge with provenance, separating decisions from tentative ideas.", "assertions": ["distills rather than dumps the transcript", "records provenance and confidence", "writes only to the fixture Wiki"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "conversation-capture", "prompt": "Capture fixture/conversation.md into the configured temporary Wiki as durable knowledge with provenance, separating confirmed decisions from tentative ideas.", "assertions": ["distills rather than dumps the transcript", "records provenance and confidence", "writes only to the fixture Wiki"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "fixtures": [{"path": "fixture/conversation.md", "content": "# Architecture conversation\n\nHuman: Retry belongs at the network adapter and is limited to three attempts.\nAssistant: Confirmed. Should validation errors retry?\nHuman: No. We might add jitter later, but that is not decided.\n"}], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Summarize this conversation in the chat only.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-context-pack",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "bounded-pack", "prompt": "Build a provenance-preserving context pack under a strict token budget from a temporary Wiki fixture for a later architecture task.", "assertions": ["respects the token bound", "preserves citations and provenance", "selects task-relevant pages"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "bounded-pack", "prompt": "Build a provenance-preserving context pack of at most 900 words from the configured temporary Wiki for a later task that changes retry ownership.", "assertions": ["respects the 900-word bound", "preserves citations and provenance", "selects task-relevant pages"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Answer one question from these notes without creating a context pack.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-dashboard",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "bases-dashboard", "prompt": "Create a persistent Bases dashboard in a temporary Wiki fixture that lists active decisions by status and owner, preserving unrelated files.", "assertions": ["uses Bases by default", "scopes filters and properties correctly", "preserves unrelated Wiki files"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "bases-dashboard", "prompt": "Create a new persistent Bases dashboard in the configured temporary Wiki that lists active decision pages by status and source owner, preserving unrelated files.", "assertions": ["uses Bases by default", "scopes filters and properties correctly", "preserves unrelated Wiki files"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Show a one-time table in chat; do not create a persistent dashboard.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-dedup",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "identity-collision", "prompt": "In a temporary Wiki fixture, compare two pages that may describe the same concept, preserve unique evidence, and propose a safe merge without deleting first.", "assertions": ["distinguishes identity collision from topical overlap", "preserves unique evidence and backlinks", "requires a safe merge boundary"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "identity-collision", "prompt": "In the configured temporary Wiki, perform a focused read-only comparison of concepts/retry-policy.md and references/retry-design.md, preserve unique evidence, and propose a safe merge without changing files.", "assertions": ["distinguishes identity collision from topical overlap", "preserves unique evidence and backlinks in the proposal", "remains read-only and exposes the merge confirmation boundary"], "safety": "read-only", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain why duplicate files happen in general.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-history-ingest",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "history-fixture", "prompt": "Ingest a supplied synthetic Codex JSONL history fixture into a temporary Wiki, preserving session provenance and excluding low-value chatter.", "assertions": ["parses the named source format", "preserves session provenance", "distills durable knowledge instead of copying chatter"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "history-fixture", "prompt": "Ingest the synthetic Codex fixture/history/session.jsonl into the configured temporary Wiki, preserving session provenance and excluding low-value chatter.", "assertions": ["parses the named Codex source format", "preserves session provenance", "distills durable knowledge instead of copying chatter"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base", "codex-history"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Summarize the current chat; no history files are involved.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-ingest",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "document-ingest", "prompt": "Ingest two supplied Markdown documents into a temporary Wiki fixture, creating integrated pages with provenance and useful links while preserving source meaning.", "assertions": ["distills source material into integrated pages", "records provenance", "adds evidence-backed relationships"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "document-ingest", "prompt": "Ingest fixture/sources/retry.md and fixture/sources/boundary.md into the configured temporary Wiki, creating integrated pages with provenance and useful links while preserving source meaning.", "assertions": ["distills source material into integrated pages", "records provenance", "adds evidence-backed relationships"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base", "ingest-sources"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Summarize these documents in chat without filing them anywhere.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-lint",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "health-audit", "prompt": "Audit a temporary Wiki fixture for broken links, missing provenance, invalid lifecycle fields, and taxonomy drift; report findings before any repair.", "assertions": ["checks all declared health dimensions", "reports evidence before repair", "does not silently rewrite pages"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "health-audit", "prompt": "Run the default read-only audit on the configured temporary Wiki for broken links, missing provenance, invalid lifecycle fields, and taxonomy drift; report evidence without repairing files.", "assertions": ["checks all declared health dimensions", "reports evidence before any repair", "remains read-only and does not silently rewrite pages"], "safety": "read-only", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Proofread one paragraph for grammar only.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-query",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "cited-answer", "prompt": "Answer a question about a project decision from a temporary Wiki fixture, retrieving full pages and citing vault paths while stating evidence limits.", "assertions": ["searches the configured fixture Wiki", "retrieves full evidence before answering", "cites vault pages and states limits"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "cited-answer", "prompt": "Answer what the configured temporary Wiki says about the retry-policy decision, retrieving full pages and citing vault-relative paths while stating evidence limits.", "assertions": ["searches the configured fixture Wiki", "retrieves full evidence before answering", "cites vault pages and states limits"], "safety": "read-only", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "What do my Wiki notes say about the retry-policy decision?", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "wiki-rebuild",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "verified-archive", "prompt": "Against a temporary Wiki fixture, plan and execute a rebuild only after creating and verifying an archive; preserve Obsidian settings and expose the destructive confirmation boundary.", "assertions": ["creates and verifies a recoverable archive", "preserves Obsidian settings", "requires confirmation before destructive replacement"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "verified-archive", "prompt": "For the configured temporary Wiki, prepare Archive + Rebuild by creating and verifying the required recoverable archive, then show the exact destructive targets and stop for explicit confirmation without clearing or restoring live content.", "assertions": ["creates and verifies a recoverable archive before destructive work", "keeps Obsidian settings outside destructive targets", "stops for explicit confirmation without clearing or restoring"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain what rebuilding an index means in general.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-research",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "bounded-research", "prompt": "Using supplied offline source fixtures instead of live web access, synthesize a bounded research note into a temporary Wiki with source citations and uncertainty.", "assertions": ["uses multiple supplied sources", "records citations and uncertainty", "files findings into the fixture Wiki"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "bounded-research", "prompt": "Treat fixture/sources/source-a.md and source-b.md as the explicitly supplied research corpus, synthesize their bounded findings into the configured temporary Wiki with precise citations and uncertainty, and do not use live web access.", "assertions": ["uses both explicitly supplied sources without claiming live retrieval", "records citations and uncertainty", "files findings into the fixture Wiki"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base", "research-sources"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Answer a general factual question without writing to my Wiki.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-setup",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "fixture-setup", "prompt": "Initialize a temporary Windows-compatible Wiki fixture with the required structure and configuration, without touching any existing user vault.", "assertions": ["creates the required Wiki structure", "keeps all writes inside the fixture", "reports the selected configuration"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "fixture-setup", "prompt": "Using the isolated obsidian-wiki runtime, initialize `fixture/new-wiki` as the single Windows-compatible Wiki and config inside this evaluation workspace, without touching any existing user vault.", "assertions": ["creates the required Wiki structure", "keeps the vault and configuration inside the fixture environment", "reports the selected configuration and doctor result"], "safety": "temporary-workspace", "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Explain how Obsidian vaults work without setting one up.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-status",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "status-report", "prompt": "Report source coverage, pending ingestion, structural health, graph observations, and ranked next actions for a temporary Wiki fixture without modifying it.", "assertions": ["covers sources, pending work, health, and graph", "ranks concrete next actions", "remains read-only"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "status-report", "prompt": "Run Status/Delta mode for the configured temporary Wiki and report source coverage, pending ingestion, structural health, graph observations, and ranked next actions without modifying any file.", "assertions": ["covers sources, pending work, health, and graph", "ranks concrete next actions", "remains read-only"], "safety": "read-only", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Give me a generic project status update unrelated to my Wiki.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-synthesize",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "cross-cutting-page", "prompt": "From a temporary Wiki fixture, find one evidence-backed cross-cutting connection and draft a synthesis page that cites its source pages and notes objections.", "assertions": ["selects an evidence-backed cross-cutting connection", "cites contributing pages", "records objections and uncertainty"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "cross-cutting-page", "prompt": "From the configured temporary Wiki, find the strongest evidence-backed cross-cutting connection and create one bounded synthesis page with source backlinks, citations, uncertainty, and the strongest objection.", "assertions": ["selects an evidence-backed cross-cutting connection", "cites contributing pages and adds backlinks", "records objections and uncertainty"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base"], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Summarize one existing note without creating a synthesis page.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "wiki-update",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "project-sync", "prompt": "Sync durable architecture decisions from a temporary fixture project into a temporary Wiki, excluding transient build output and preserving project provenance.", "assertions": ["selects durable project knowledge", "excludes transient artifacts", "records project provenance in the fixture Wiki"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "project-sync", "prompt": "Sync durable architecture decisions from the supplied fixture project into the configured temporary Wiki, excluding transient build output and preserving project provenance. Do not commit or push.", "assertions": ["selects durable project knowledge", "excludes transient artifacts", "records project provenance in the fixture Wiki without Git mutation"], "safety": "temporary-workspace", "fixture_sets": ["wiki-base", "engineering-project"], "fixtures": [{"path": "build/transient.tmp", "content": "ignore me\n"}], "companion_skills": ["llm-wiki"], "runtime_tools": ["obsidian-wiki"]}],
       "trigger_cases": [{"id": "explicit-policy", "prompt": "Summarize this repository in chat without updating my Wiki.", "expected_invocation": "manual-only"}]
     },
     {
       "skill_name": "json-canvas",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "canvas-file", "prompt": "Create a valid JSON Canvas fixture with two text nodes, one file node, a group, and validated directed edges; preserve stable IDs.", "assertions": ["produces valid canvas JSON", "uses supported node and edge structures", "validates references and stable IDs"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "canvas-file", "prompt": "Create fixture/design.canvas as valid JSON Canvas with two text nodes, one file node targeting notes/source.md, a group, and validated directed edges; preserve stable IDs.", "assertions": ["produces valid canvas JSON at the requested path", "uses supported node and edge structures", "validates references and stable IDs"], "safety": "temporary-workspace", "fixtures": [{"path": "notes/source.md", "content": "# Source Note\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Create an Obsidian Canvas mind map with grouped notes and directed edges.", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "obsidian-bases",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "base-file", "prompt": "Create an Obsidian Bases fixture with a scoped table view, status filter, computed age formula, visible properties, and a summary.", "assertions": ["produces valid .base YAML", "scopes views and filters correctly", "defines formulas and summaries coherently"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "base-file", "prompt": "Create fixture/active-decisions.base with a scoped table view over notes/, an active-status filter, computed age formula, visible properties, and a summary.", "assertions": ["produces valid .base YAML at the requested path", "scopes views and filters correctly", "defines formulas and summaries coherently"], "safety": "temporary-workspace", "fixtures": [{"path": "notes/decision.md", "content": "---\nstatus: active\nowner: platform\ncreated: 2026-07-20\n---\n# Decision\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Build an Obsidian Bases card view filtered to active notes with a computed age property.", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "obsidian-cli",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "cli-plan", "prompt": "Given supplied fixture output from the official Obsidian CLI, construct the exact read-only commands needed to search notes, inspect properties, and check errors without launching unrequested writes.", "assertions": ["uses official Obsidian CLI commands", "keeps the case read-only", "accounts for desktop-backed CLI behavior"], "safety": "read-only"}],
+      "required_cases": [{"id": "cli-plan", "prompt": "Using fixture/obsidian-cli-output.txt as supplied output from the official Obsidian CLI, construct the exact read-only commands needed to search notes, inspect properties, and check errors without launching unrequested writes.", "assertions": ["uses official Obsidian CLI commands", "keeps the case read-only", "accounts for desktop-backed CLI behavior"], "safety": "read-only", "fixture_sets": ["cli-outputs"]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Use the official Obsidian CLI to search my vault and inspect the matching note properties.", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "obsidian-markdown",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "obsidian-note", "prompt": "Create an Obsidian Markdown fixture containing valid properties, wikilinks, an embed, a callout, tags, a block ID, and a comment.", "assertions": ["uses valid Obsidian-specific Markdown syntax", "keeps properties parseable", "includes every requested construct"], "safety": "temporary-workspace"}],
+      "required_cases": [{"id": "obsidian-note", "prompt": "Create fixture/feature-note.md as Obsidian Markdown containing valid properties, wikilinks, an image embed, a callout, tags, a block ID, and a comment.", "assertions": ["uses valid Obsidian-specific Markdown syntax at the requested path", "keeps properties parseable", "includes every requested construct"], "safety": "temporary-workspace", "fixtures": [{"path": "assets/diagram.png", "content": "synthetic-image-placeholder\n"}]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Format this as an Obsidian note with properties, wikilinks, callouts, embeds, and block references.", "expected_invocation": "implicit"}]
     },
     {
       "skill_name": "qmd",
       "evaluation_level": "full",
       "baseline": {"kind": "no-skill", "identity": "isolated-no-skill"},
-      "required_cases": [{"id": "retrieve-before-answer", "prompt": "Using supplied QMD fixture output, choose an exact or semantic query, retrieve the full matching document, and answer with the QMD path and line evidence.", "assertions": ["chooses an appropriate QMD search mode", "retrieves full evidence rather than relying on snippets", "cites QMD path or docid with lines"], "safety": "read-only"}],
+      "required_cases": [{"id": "retrieve-before-answer", "prompt": "Using fixture/qmd-output.txt as the supplied QMD search and get output, explain the appropriate exact or semantic query choice and answer with the QMD path and line evidence from the full retrieved document.", "assertions": ["chooses an appropriate QMD search mode", "uses the full retrieved evidence rather than only the search snippet", "cites the QMD path or docid with lines"], "safety": "read-only", "fixture_sets": ["cli-outputs"]}],
       "trigger_cases": [{"id": "implicit-trigger", "prompt": "Search my indexed Markdown notes for the retry-policy decision and cite the source passage.", "expected_invocation": "implicit"}]
     }
   ]

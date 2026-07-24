@@ -400,6 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                 item["target"],
                 execution_root,
                 fixtures=item["fixtures"],
+                git_fixture=item["git_fixture"],
             )
             command = runners.build_command(
                 item["target"],
@@ -409,11 +410,21 @@ def main(argv: list[str] | None = None) -> int:
                 explicit=item["explicit"],
                 baseline=item["configuration"] == "baseline",
                 safety=item["safety"],
+                runtime_tools=item["runtime_tools"],
             )
             with runners.isolated_target_environment(
                 item["target"],
                 allow_ephemeral_auth_copy=True,
             ) as env:
+                if item["runtime_tools"]:
+                    env = runners.prepare_runtime_environment(
+                        execution_root,
+                        item["runtime_tool_sources"],
+                        item["runtime_tool_digests"],
+                        repo_root=args.repo_root,
+                        safety=item["safety"],
+                        base_env=env,
+                    )
                 identity = runners.run_command(
                     [item["target"], "--version"],
                     cwd=execution_root,

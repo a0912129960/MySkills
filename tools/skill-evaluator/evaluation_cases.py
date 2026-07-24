@@ -5,13 +5,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import struct
+import subprocess
 from typing import Any, Iterable
 
 
 TARGETS = ("claude", "codex")
 CONFIGURATIONS = ("with_skill", "baseline")
+RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
+KEBAB_CASE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+FIXTURE_PATH = re.compile(
+    r"[A-Za-z0-9._ -]+(?:/[A-Za-z0-9._ -]+)*\Z"
+)
 
 
 def load_cases(repo_root: Path | str) -> dict[str, Any]:
@@ -30,11 +38,19 @@ def load_cases(repo_root: Path | str) -> dict[str, Any]:
 def validate_cases(repo_root: Path | str, document: object) -> list[str]:
     root = Path(repo_root).resolve()
     errors: list[str] = []
-    if not isinstance(document, dict) or set(document) != {
+    required_root_fields = {
         "$schema",
         "schema_version",
         "skills",
-    }:
+    }
+    optional_root_fields = {"fixture_sets"}
+    if (
+        not isinstance(document, dict)
+        or not required_root_fields.issubset(document)
+        or not set(document).issubset(
+            required_root_fields | optional_root_fields
+        )
+    ):
         return ["evaluation cases root fields are invalid"]
     if document.get("$schema") != "./cases.schema.json":
         errors.append("evaluation cases $schema is invalid")
@@ -43,6 +59,11 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
     skills = document.get("skills")
     if not isinstance(skills, list):
         return errors + ["evaluation cases skills must be an array"]
+    fixture_sets = document.get("fixture_sets", {})
+    fixture_set_errors = _validate_fixture_sets(fixture_sets)
+    errors.extend(fixture_set_errors)
+    if fixture_set_errors:
+        fixture_sets = {}
 
     inventory = json.loads(
         (root / "inventory" / "skills.json").read_text(encoding="utf-8")
@@ -86,6 +107,7 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
                 name,
                 entry.get("required_cases"),
                 set(managed),
+                fixture_sets,
             )
         )
         errors.extend(
@@ -133,16 +155,34 @@ def build_plan(
         if item["state"] == "managed"
     }
     digest_cache: dict[str, str] = {}
+    runtime_digest_cache: dict[str, str] = {}
 
     def skill_digest(name: str) -> str:
         if name not in digest_cache:
             digest_cache[name] = _directory_digest(paths[name])
         return digest_cache[name]
 
+    def runtime_source(name: str) -> Path:
+        source = root / "tools" / name
+        if not source.is_dir():
+            raise ValueError(f"runtime tool source is unavailable: {source}")
+        return source
+
+    def runtime_digest(name: str) -> str:
+        if name not in runtime_digest_cache:
+            runtime_digest_cache[name] = _runtime_directory_digest(
+                runtime_source(name),
+                repo_root=root,
+            )
+        return runtime_digest_cache[name]
+
     plan: list[dict[str, Any]] = []
+    fixture_sets = document.get("fixture_sets", {})
     for name in sorted(selected):
         entry = entries[name]
         for case in entry["required_cases"]:
+            expanded_fixtures = _expanded_fixtures(case, fixture_sets)
+            runtime_tools = case.get("runtime_tools", [])
             for configuration in CONFIGURATIONS:
                 for target in TARGETS:
                     plan.append(
@@ -169,6 +209,16 @@ def build_plan(
                                     [],
                                 )
                             },
+                            fixture_set_names=case.get("fixture_sets", []),
+                            fixtures=expanded_fixtures,
+                            runtime_tool_sources={
+                                tool: runtime_source(tool)
+                                for tool in runtime_tools
+                            },
+                            runtime_tool_digests={
+                                tool: runtime_digest(tool)
+                                for tool in runtime_tools
+                            },
                             mode="required",
                             explicit=configuration == "with_skill",
                         )
@@ -188,6 +238,10 @@ def build_plan(
                             skill_digest=skill_digest(name),
                             companion_skill_paths={},
                             companion_skill_digests={},
+                            fixture_set_names=[],
+                            fixtures=[],
+                            runtime_tool_sources={},
+                            runtime_tool_digests={},
                             mode="trigger",
                             explicit=False,
                         )
@@ -491,6 +545,10 @@ def _plan_item(
     skill_digest: str,
     companion_skill_paths: dict[str, Path],
     companion_skill_digests: dict[str, str],
+    fixture_set_names: list[str],
+    fixtures: list[dict[str, str]],
+    runtime_tool_sources: dict[str, Path],
+    runtime_tool_digests: dict[str, str],
     mode: str,
     explicit: bool,
 ) -> dict[str, Any]:
@@ -504,7 +562,22 @@ def _plan_item(
         "evaluation_level": evaluation_level,
         "baseline": dict(baseline),
         "skill_digest": skill_digest,
-        "fixtures": list(case.get("fixtures", [])),
+        "fixture_sets": list(fixture_set_names),
+        "fixtures": [dict(fixture) for fixture in fixtures],
+        "git_fixture": (
+            {
+                field: [dict(fixture) for fixture in case["git_fixture"][field]]
+                for field in ("baseline_files", "working_tree_files")
+            }
+            if case.get("git_fixture") is not None
+            else None
+        ),
+        "runtime_tools": list(runtime_tool_sources),
+        "runtime_tool_sources": {
+            name: str(path)
+            for name, path in runtime_tool_sources.items()
+        },
+        "runtime_tool_digests": dict(runtime_tool_digests),
         "companion_skills": list(companion_skill_paths),
         "companion_skill_paths": [
             str(path) for path in companion_skill_paths.values()
@@ -522,6 +595,7 @@ def _validate_required_cases(
     name: str,
     value: object,
     managed_names: set[str],
+    fixture_sets: dict[str, list[dict[str, str]]],
 ) -> list[str]:
     if not isinstance(value, list) or not value:
         return [f"{name}: required_cases must be non-empty"]
@@ -534,7 +608,13 @@ def _validate_required_cases(
             "assertions",
             "safety",
         }
-        optional_fields = {"fixtures", "companion_skills"}
+        optional_fields = {
+            "fixtures",
+            "fixture_sets",
+            "companion_skills",
+            "git_fixture",
+            "runtime_tools",
+        }
         if (
             not isinstance(case, dict)
             or not required_fields.issubset(case)
@@ -543,7 +623,11 @@ def _validate_required_cases(
             errors.append(f"{name}: required case fields are invalid")
             continue
         case_id = case.get("id")
-        if not _nonempty(case_id) or case_id in seen:
+        if (
+            not isinstance(case_id, str)
+            or KEBAB_CASE.fullmatch(case_id) is None
+            or case_id in seen
+        ):
             errors.append(f"{name}: required case id is invalid or duplicated")
         seen.add(case_id)
         if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
@@ -560,6 +644,58 @@ def _validate_required_cases(
             _valid_fixture(item) for item in fixtures
         ):
             errors.append(f"{name}/{case_id}: fixtures are invalid")
+        selected_fixture_sets = case.get("fixture_sets", [])
+        if (
+            not isinstance(selected_fixture_sets, list)
+            or not all(
+                isinstance(item, str) for item in selected_fixture_sets
+            )
+            or len(selected_fixture_sets) != len(set(selected_fixture_sets))
+            or not all(item in fixture_sets for item in selected_fixture_sets)
+        ):
+            errors.append(f"{name}/{case_id}: fixture_sets are invalid")
+        elif isinstance(fixtures, list):
+            expanded = _expanded_fixtures(case, fixture_sets)
+            paths = [fixture.get("path") for fixture in expanded]
+            if len(paths) != len(set(paths)):
+                errors.append(
+                    f"{name}/{case_id}: duplicate fixture path"
+                )
+        git_fixture = case.get("git_fixture")
+        if git_fixture is not None:
+            errors.extend(
+                _validate_git_fixture(name, case_id, git_fixture)
+            )
+            if isinstance(fixtures, list) and isinstance(git_fixture, dict):
+                regular_paths = {
+                    fixture.get("path")
+                    for fixture in _expanded_fixtures(case, fixture_sets)
+                    if isinstance(fixture, dict)
+                }
+                git_files = [
+                    fixture
+                    for field in ("baseline_files", "working_tree_files")
+                    if isinstance(git_fixture.get(field), list)
+                    for fixture in git_fixture[field]
+                ]
+                git_paths = {
+                    fixture.get("path")
+                    for fixture in git_files
+                    if isinstance(fixture, dict)
+                }
+                if regular_paths & git_paths:
+                    errors.append(
+                        f"{name}/{case_id}: duplicate fixture path across "
+                        "fixtures and git_fixture"
+                    )
+        runtime_tools = case.get("runtime_tools", [])
+        if (
+            not isinstance(runtime_tools, list)
+            or not all(isinstance(tool, str) for tool in runtime_tools)
+            or len(runtime_tools) != len(set(runtime_tools))
+            or not all(tool in RUNTIME_TOOLS for tool in runtime_tools)
+        ):
+            errors.append(f"{name}/{case_id}: runtime_tools are invalid")
         companions = case.get("companion_skills", [])
         if (
             not isinstance(companions, list)
@@ -583,15 +719,87 @@ def _valid_fixture(value: object) -> bool:
     if (
         not _nonempty(path)
         or not isinstance(content, str)
-        or "\\" in path
-        or path.startswith("/")
+        or FIXTURE_PATH.fullmatch(path) is None
     ):
         return False
     parts = path.split("/")
     return (
-        all(part not in {"", ".", ".."} for part in parts)
-        and parts[0] not in {".agents", ".claude", ".codex", ".gemini"}
+        all(
+            part not in {"", ".", ".."}
+            and not part.endswith((".", " "))
+            for part in parts
+        )
+        and all(
+            part.lower()
+            not in {".agents", ".claude", ".codex", ".gemini", ".git"}
+            for part in parts
+        )
     )
+
+
+def _validate_fixture_sets(value: object) -> list[str]:
+    if not isinstance(value, dict):
+        return ["evaluation fixture_sets must be an object"]
+    errors: list[str] = []
+    for name, fixtures in value.items():
+        if (
+            not isinstance(name, str)
+            or KEBAB_CASE.fullmatch(name) is None
+            or not isinstance(fixtures, list)
+            or not fixtures
+        ):
+            errors.append("evaluation fixture_sets entry is invalid")
+            continue
+        if not all(_valid_fixture(fixture) for fixture in fixtures):
+            errors.append(f"fixture_sets.{name} contains an invalid fixture")
+            continue
+        paths = [fixture["path"] for fixture in fixtures]
+        if len(paths) != len(set(paths)):
+            errors.append(
+                f"fixture_sets.{name} contains a duplicate fixture path"
+            )
+    return errors
+
+
+def _expanded_fixtures(
+    case: dict[str, Any],
+    fixture_sets: dict[str, list[dict[str, str]]],
+) -> list[dict[str, str]]:
+    expanded: list[dict[str, str]] = []
+    for name in case.get("fixture_sets", []):
+        expanded.extend(dict(fixture) for fixture in fixture_sets.get(name, []))
+    expanded.extend(dict(fixture) for fixture in case.get("fixtures", []))
+    return expanded
+
+
+def _validate_git_fixture(
+    name: str,
+    case_id: object,
+    value: object,
+) -> list[str]:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"baseline_files", "working_tree_files"}
+    ):
+        return [f"{name}/{case_id}: git_fixture fields are invalid"]
+    errors: list[str] = []
+    for field in ("baseline_files", "working_tree_files"):
+        fixtures = value.get(field)
+        if (
+            not isinstance(fixtures, list)
+            or (field == "baseline_files" and not fixtures)
+            or not all(_valid_fixture(fixture) for fixture in fixtures)
+        ):
+            errors.append(
+                f"{name}/{case_id}: git_fixture.{field} is invalid"
+            )
+            continue
+        paths = [fixture["path"] for fixture in fixtures]
+        if len(paths) != len(set(paths)):
+            errors.append(
+                f"{name}/{case_id}: git_fixture.{field} has a duplicate path"
+            )
+    return errors
 
 
 def _validate_trigger_cases(
@@ -613,7 +821,11 @@ def _validate_trigger_cases(
             errors.append(f"{name}: trigger case fields are invalid")
             continue
         case_id = case.get("id")
-        if not _nonempty(case_id) or case_id in seen:
+        if (
+            not isinstance(case_id, str)
+            or KEBAB_CASE.fullmatch(case_id) is None
+            or case_id in seen
+        ):
             errors.append(f"{name}: trigger case id is invalid or duplicated")
         seen.add(case_id)
         if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
@@ -642,6 +854,89 @@ def _directory_digest(path: Path) -> str:
         digest.update(struct.pack("<q", len(content)))
         digest.update(content)
     return f"sha256:{digest.hexdigest()}"
+
+
+def _runtime_directory_digest(
+    path: Path,
+    *,
+    repo_root: Path | None = None,
+) -> str:
+    """Digest only source-controlled files in an allowlisted runtime."""
+
+    root = path.resolve()
+    repository = (
+        repo_root.resolve()
+        if repo_root is not None
+        else root.parents[1]
+    )
+    files = _tracked_runtime_files(repository, root)
+    digest = hashlib.sha256()
+    for relative_path in files:
+        item = root / relative_path
+        relative = relative_path.as_posix().encode("utf-8")
+        content = item.read_bytes()
+        digest.update(struct.pack("<i", len(relative)))
+        digest.update(relative)
+        digest.update(struct.pack("<q", len(content)))
+        digest.update(content)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _tracked_runtime_files(repo_root: Path, source: Path) -> list[Path]:
+    repository = repo_root.resolve()
+    runtime = source.resolve()
+    try:
+        relative_source = runtime.relative_to(repository)
+    except ValueError as error:
+        raise ValueError(
+            f"runtime tool source escapes repository: {runtime}"
+        ) from error
+    env = os.environ.copy()
+    for key in tuple(env):
+        if key.upper().startswith("GIT_"):
+            env.pop(key)
+    env.update(
+        {
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
+    completed = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--",
+            relative_source.as_posix(),
+        ],
+        cwd=repository,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"cannot enumerate runtime source files: {detail}")
+    tracked: list[Path] = []
+    for raw in completed.stdout.split(b"\0"):
+        if not raw:
+            continue
+        candidate = (repository / raw.decode("utf-8")).resolve()
+        try:
+            relative = candidate.relative_to(runtime)
+        except ValueError as error:
+            raise ValueError(
+                f"tracked runtime file escapes source: {candidate}"
+            ) from error
+        if not candidate.is_file():
+            raise ValueError(f"tracked runtime file is unavailable: {candidate}")
+        tracked.append(relative)
+    if not tracked:
+        raise ValueError(f"runtime tool has no source-controlled files: {runtime}")
+    return sorted(tracked, key=lambda item: item.as_posix())
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

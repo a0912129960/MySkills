@@ -25,8 +25,20 @@ current directory digest of every Managed Skill. Raw model output stays under
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py validate-cases .
-   python tools/skill-evaluator/skill_evaluator.py run-batch . --skills qmd
+   python tools/skill-evaluator/skill_evaluator.py plan-batch . --skills qmd
    ```
+
+   Required cases may declare reusable `fixture_sets`, case-local `fixtures`,
+   a deterministic `git_fixture`, companion Skills, and allowlisted
+   `runtime_tools`. The plan expands and digests those inputs before execution.
+   Each run stages them in its isolated workspace; fixture content may use
+   `{{WORKSPACE}}`, which is substituted only while staging. Git fixtures use a
+   local identity, fixed commit timestamps, disabled signing, and an empty hook
+   directory. Runtime tools are copied from the repository into an isolated
+   `LOCALAPPDATA` using only Git-tracked source files, use workspace-local
+   configuration, and receive only declaration-scoped launcher permission in
+   read-only Claude cases. The launcher also rejects mutating subcommands and
+   paths outside the evaluation workspace for those cases.
 
    A complete 42-Skill run currently contains 336 target/configuration calls:
    Claude and Codex, with-Skill and no-Skill baseline, for one required and one
@@ -53,10 +65,19 @@ current directory digest of every Managed Skill. Raw model output stays under
      .scratch/skill-evals/batch-<run-id>
    ```
 
-4. After human review, write
-   `attestations/skills/<name>.json` using
-   `attestations/attestation.schema.json`. Do not mark an unavailable, failed,
-   unreviewed, or partially run target as passing.
+4. After completing every grading template, audit the reviewed evidence and
+   create a pending draft:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py draft-attestation . `
+     .scratch/skill-evals/batch-<run-id> <name> `
+     --output attestations/skills/<name>.json
+   ```
+
+   The draft intentionally remains non-passing until a human records the final
+   review fields required by `attestations/attestation.schema.json`. Do not mark
+   an unavailable, failed, unreviewed, stale, or partially run target as
+   passing.
 
 5. Verify the attestation and the release gate:
 
