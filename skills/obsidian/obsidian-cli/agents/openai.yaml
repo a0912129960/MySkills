@@ -1,0 +1,6 @@
+interface:
+  display_name: "Obsidian CLI"
+  short_description: "Operate a live vault with Obsidian CLI"
+  default_prompt: "Use $obsidian-cli to perform this operation through the official Obsidian command interface."
+policy:
+  allow_implicit_invocation: true

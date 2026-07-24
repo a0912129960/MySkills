@@ -1,0 +1,6 @@
+interface:
+  display_name: "Skill Evaluator"
+  short_description: "Evaluate and attest an existing Skill"
+  default_prompt: "Use $skill-evaluator to evaluate an existing Skill without authoring or packaging it."
+policy:
+  allow_implicit_invocation: false

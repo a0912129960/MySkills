@@ -1,0 +1,6 @@
+interface:
+  display_name: "JSON Canvas"
+  short_description: "Create and validate JSON Canvas files"
+  default_prompt: "Use $json-canvas to create or edit a valid JSON Canvas file."
+policy:
+  allow_implicit_invocation: true

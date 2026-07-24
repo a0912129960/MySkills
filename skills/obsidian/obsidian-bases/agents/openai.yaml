@@ -1,0 +1,6 @@
+interface:
+  display_name: "Obsidian Bases"
+  short_description: "Create valid Obsidian Base views"
+  default_prompt: "Use $obsidian-bases to create or edit a valid Obsidian .base file."
+policy:
+  allow_implicit_invocation: true

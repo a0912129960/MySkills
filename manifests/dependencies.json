@@ -1,0 +1,280 @@
+{
+  "$schema": "./dependencies.schema.json",
+  "schema_version": 1,
+  "dependencies": [
+    {
+      "id": "python",
+      "kind": "runtime-prerequisite",
+      "ecosystem": "python",
+      "description": "User-provided Python runtime for the Wiki suite and skill evaluator.",
+      "minimum_version": "3.10.0",
+      "version_constraint": ">=3.10.0",
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "category", "name": "wiki", "requirement": "required", "capability": "repository-owned Wiki tools", "fallback": null},
+        {"kind": "skill", "name": "skill-evaluator", "requirement": "required", "capability": "automated evaluation", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "py", "arguments": ["-3", "--version"]},
+          {"command": "python", "arguments": ["--version"]}
+        ],
+        "version_pattern": "Python\\s+(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["-c", "import sys; print(sys.executable); print(sys.maxsize > 2**32)"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": "winget install 9NQ7512CXL7T -e; then py install 3.12"
+    },
+    {
+      "id": "pyyaml",
+      "kind": "installable",
+      "ecosystem": "python",
+      "description": "YAML parser isolated in the private skill-evaluator environment.",
+      "minimum_version": "6.0.3",
+      "version_constraint": ">=6.0.3",
+      "install_version": "6.0.3",
+      "prerequisites": ["python"],
+      "consumers": [
+        {"kind": "skill", "name": "skill-evaluator", "requirement": "required", "capability": "YAML metadata validation", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "%LOCALAPPDATA%\\MySkills\\venvs\\skill-evaluator\\Scripts\\python.exe", "arguments": ["-c", "import yaml; print(yaml.__version__)"]}
+        ],
+        "version_pattern": "(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["-c", "import yaml; assert yaml.safe_load('ok: true')['ok'] is True"],
+        "may_launch_ui": false
+      },
+      "install": {
+        "manager": "pip",
+        "package": "PyYAML",
+        "scope": "private-venv",
+        "requirements_file": "requirements/skill-evaluator/requirements-lock.txt"
+      },
+      "guidance": null
+    },
+    {
+      "id": "node-qmd",
+      "kind": "runtime-prerequisite",
+      "ecosystem": "node",
+      "description": "User-provided Node.js runtime for QMD.",
+      "minimum_version": "22.0.0",
+      "version_constraint": ">=22.0.0",
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "skill", "name": "qmd", "requirement": "required", "capability": "QMD CLI and MCP server", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "node", "arguments": ["--version"]}
+        ],
+        "version_pattern": "v(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["-e", "process.stdout.write(process.arch)"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": "winget install Volta.Volta; then volta install node@22"
+    },
+    {
+      "id": "qmd",
+      "kind": "installable",
+      "ecosystem": "node",
+      "description": "QMD CLI and stdio MCP server supplied by one managed package.",
+      "minimum_version": "2.5.3",
+      "version_constraint": ">=2.5.3",
+      "install_version": "2.5.3",
+      "prerequisites": ["node-qmd"],
+      "consumers": [
+        {"kind": "skill", "name": "qmd", "requirement": "required", "capability": "local Markdown search", "fallback": null},
+        {"kind": "category", "name": "wiki", "requirement": "optional", "capability": "accelerated search and refresh", "fallback": "Use the vault index, frontmatter, and repository-owned Wiki CLI."}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "qmd", "arguments": ["--version"]}
+        ],
+        "version_pattern": "(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["--help"],
+        "may_launch_ui": false
+      },
+      "install": {
+        "manager": "node",
+        "package": "@tobilu/qmd",
+        "scope": "global",
+        "requirements_file": null
+      },
+      "guidance": null
+    },
+    {
+      "id": "node-mermaid",
+      "kind": "runtime-prerequisite",
+      "ecosystem": "node",
+      "description": "User-provided Node.js runtime for optional Mermaid rendering.",
+      "minimum_version": "18.19.0",
+      "version_constraint": "^18.19.0 || >=20.0.0",
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "skill", "name": "spec-package-generator", "requirement": "optional", "capability": "SVG rendering", "fallback": "Keep authoritative Mermaid .mmd source."},
+        {"kind": "skill", "name": "improve-codebase-architecture", "requirement": "optional", "capability": "SVG rendering", "fallback": "Use the offline basic HTML/CSS/SVG report."}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "node", "arguments": ["--version"]}
+        ],
+        "version_pattern": "v(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["-e", "process.stdout.write(process.arch)"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": "winget install Volta.Volta; then install a compatible Node.js release with Volta."
+    },
+    {
+      "id": "mermaid-cli",
+      "kind": "installable",
+      "ecosystem": "node",
+      "description": "Optional Mermaid CLI used to render authoritative .mmd sources.",
+      "minimum_version": "11.16.0",
+      "version_constraint": ">=11.16.0",
+      "install_version": "11.16.0",
+      "prerequisites": ["node-mermaid"],
+      "consumers": [
+        {"kind": "skill", "name": "spec-package-generator", "requirement": "optional", "capability": "SVG rendering", "fallback": "Keep authoritative Mermaid .mmd source."},
+        {"kind": "skill", "name": "improve-codebase-architecture", "requirement": "optional", "capability": "SVG rendering", "fallback": "Use the offline basic HTML/CSS/SVG report."}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "mmdc", "arguments": ["--version"]}
+        ],
+        "version_pattern": "(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["--help"],
+        "may_launch_ui": false
+      },
+      "install": {
+        "manager": "node",
+        "package": "@mermaid-js/mermaid-cli",
+        "scope": "global",
+        "requirements_file": null
+      },
+      "guidance": null
+    },
+    {
+      "id": "git",
+      "kind": "runtime-prerequisite",
+      "ecosystem": "system",
+      "description": "User-provided Git capability for fixed-point code review.",
+      "minimum_version": null,
+      "version_constraint": null,
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "skill", "name": "code-review", "requirement": "required", "capability": "Git change-set discovery", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "git", "arguments": ["--version"]}
+        ],
+        "version_pattern": "git version\\s+(?<version>\\d+\\.\\d+(?:\\.\\d+)?)",
+        "smoke_arguments": ["--version"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": "Install Git for Windows, restart the terminal, and rerun MySkills installation."
+    },
+    {
+      "id": "obsidian-cli",
+      "kind": "runtime-prerequisite",
+      "ecosystem": "system",
+      "description": "Official Obsidian CLI exposed by Obsidian Desktop.",
+      "minimum_version": null,
+      "version_constraint": null,
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "skill", "name": "obsidian-cli", "requirement": "required", "capability": "official Obsidian command interface", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "obsidian", "arguments": ["help"]}
+        ],
+        "version_pattern": null,
+        "smoke_arguments": ["help"],
+        "may_launch_ui": true
+      },
+      "install": null,
+      "guidance": "Install Obsidian Desktop 1.12.7 or later, enable Command line interface, restart the terminal, and rerun installation."
+    },
+    {
+      "id": "claude-cli",
+      "kind": "platform-cli",
+      "ecosystem": "system",
+      "description": "Claude Code installation and evaluator target.",
+      "minimum_version": null,
+      "version_constraint": null,
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "platform", "name": "claude-code", "requirement": "target", "capability": "Skill discovery and evaluation", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "claude", "arguments": ["--version"]}
+        ],
+        "version_pattern": null,
+        "smoke_arguments": ["--version"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": null
+    },
+    {
+      "id": "codex-cli",
+      "kind": "platform-cli",
+      "ecosystem": "system",
+      "description": "Codex installation and evaluator target.",
+      "minimum_version": null,
+      "version_constraint": null,
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "platform", "name": "codex", "requirement": "target", "capability": "Skill discovery and evaluation", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "codex", "arguments": ["--version"]}
+        ],
+        "version_pattern": null,
+        "smoke_arguments": ["--version"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": null
+    },
+    {
+      "id": "antigravity-cli",
+      "kind": "platform-cli",
+      "ecosystem": "system",
+      "description": "Antigravity CLI compatibility-copy target.",
+      "minimum_version": null,
+      "version_constraint": null,
+      "install_version": null,
+      "prerequisites": [],
+      "consumers": [
+        {"kind": "platform", "name": "antigravity-cli", "requirement": "target", "capability": "Skill compatibility copy", "fallback": null}
+      ],
+      "probe": {
+        "candidates": [
+          {"command": "agy", "arguments": ["--version"]},
+          {"command": "%LOCALAPPDATA%\\agy\\bin\\agy.exe", "arguments": ["--version"]}
+        ],
+        "version_pattern": null,
+        "smoke_arguments": ["--version"],
+        "may_launch_ui": false
+      },
+      "install": null,
+      "guidance": null
+    }
+  ]
+}

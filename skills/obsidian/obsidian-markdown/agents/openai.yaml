@@ -1,0 +1,6 @@
+interface:
+  display_name: "Obsidian Markdown"
+  short_description: "Edit Obsidian Flavored Markdown"
+  default_prompt: "Use $obsidian-markdown to create or edit this Obsidian note."
+policy:
+  allow_implicit_invocation: true

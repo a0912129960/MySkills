@@ -1,0 +1,6 @@
+interface:
+  display_name: "QMD"
+  short_description: "Search indexed local Markdown sources"
+  default_prompt: "Use $qmd to search and retrieve evidence from indexed local Markdown."
+policy:
+  allow_implicit_invocation: true
