@@ -9,12 +9,14 @@
       "name": "my-skills",
       "source": "./",
       "description": "Personal skills for controlled AI workflows.",
-      "category": "productivity",
+      "category": "development",
       "keywords": [
-        "handoff",
         "agents",
-        "sessions",
-        "prompts"
+        "engineering",
+        "obsidian",
+        "productivity",
+        "qmd",
+        "wiki"
       ]
     }
   ]

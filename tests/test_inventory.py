@@ -62,6 +62,14 @@ class AuthoritativeInventoryTests(unittest.TestCase):
             ),
             20,
         )
+        self.assertEqual(
+            {
+                skill.get("imported_on")
+                for skill in skills
+                if skill["state"] == "managed"
+            },
+            {"2026-07-24"},
+        )
 
     def test_inventory_references_a_valid_json_schema_document(self) -> None:
         inventory = load_inventory(INVENTORY)
