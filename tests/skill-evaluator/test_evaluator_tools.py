@@ -1866,6 +1866,14 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "skill_evaluator_aggregate", "aggregate_benchmark.py"
         )
         report = load_module("skill_evaluator_report", "generate_report.py")
+        self.assertEqual(aggregate._review_state([]), "pending")
+        malformed_claude = aggregate._claude_evidence(
+            json.dumps({"permission_denials": 1})
+        )
+        self.assertEqual(
+            malformed_claude["parse_errors"],
+            ["Claude permission_denials must be an array"],
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
@@ -1882,6 +1890,56 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         / target
                     )
                     run_dir.mkdir(parents=True)
+                    if target == "claude":
+                        stdout = json.dumps(
+                            {
+                                "type": "result",
+                                "subtype": "success",
+                                "is_error": False,
+                                "num_turns": 2,
+                                "result": "Claude final answer <unsafe>",
+                                "stop_reason": "end_turn",
+                                "total_cost_usd": 0.01,
+                                "usage": {"output_tokens": 12},
+                                "permission_denials": [],
+                                "terminal_reason": "completed",
+                            }
+                        )
+                    else:
+                        stdout = "\n".join(
+                            [
+                                json.dumps(
+                                    {
+                                        "type": "item.completed",
+                                        "item": {
+                                            "type": "command_execution",
+                                            "command": "Get-Content fixture/input.txt",
+                                            "aggregated_output": "fixture evidence",
+                                            "exit_code": 0,
+                                            "status": "completed",
+                                        },
+                                    }
+                                ),
+                                json.dumps(
+                                    {
+                                        "type": "item.completed",
+                                        "item": {
+                                            "type": "agent_message",
+                                            "text": "Codex final answer",
+                                        },
+                                    }
+                                ),
+                                json.dumps(
+                                    {
+                                        "type": "turn.completed",
+                                        "usage": {
+                                            "input_tokens": 20,
+                                            "output_tokens": 8,
+                                        },
+                                    }
+                                ),
+                            ]
+                        )
                     (run_dir / "result.json").write_text(
                         json.dumps(
                             {
@@ -1890,13 +1948,58 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                     "case_id": "case-one",
                                     "configuration": configuration,
                                     "target": target,
+                                    "mode": "required",
+                                    "prompt": "Use fixture/input.txt to answer.",
+                                    "assertions": [
+                                        "Produces the required file"
+                                    ],
+                                    "safety": "read-only",
+                                    "expected_invocation": None,
+                                    "explicit": configuration == "with_skill",
+                                    "skill_path": "C:/repo/skills/example",
+                                    "fixtures": [
+                                        {
+                                            "path": "fixture/input.txt",
+                                            "content": "fixture evidence",
+                                        }
+                                    ],
+                                    "git_fixture": {
+                                        "baseline_files": [
+                                            {
+                                                "path": "tracked.txt",
+                                                "content": "committed\n",
+                                            }
+                                        ],
+                                        "working_tree_files": [
+                                            {
+                                                "path": "tracked.txt",
+                                                "content": "changed\n",
+                                            }
+                                        ],
+                                    },
+                                    "baseline": {
+                                        "kind": "no-skill",
+                                        "identity": "isolated-no-skill",
+                                    },
+                                    "fixture_sets": ["example"],
+                                    "runtime_tools": [],
+                                    "companion_skills": [],
+                                    "skill_digest": "sha256:fixture",
                                 },
                                 "target_identity": f"{target} fixture",
-                                "target_identity_returncode": 0,
+                                "target_identity_returncode": (
+                                    1
+                                    if configuration == "baseline"
+                                    and target == "codex"
+                                    else 0
+                                ),
                                 "result": {
+                                    "command": [target, "fixture prompt"],
                                     "returncode": 0,
                                     "timed_out": False,
                                     "duration_ms": 1000,
+                                    "stdout": stdout,
+                                    "stderr": "",
                                 },
                             }
                         ),
@@ -1909,7 +2012,12 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                     {
                                         "text": "Produces the required file",
                                         "passed": passed,
-                                        "evidence": "fixture",
+                                        "evidence": (
+                                            "PENDING HUMAN REVIEW"
+                                            if configuration == "with_skill"
+                                            and target == "claude"
+                                            else "fixture"
+                                        ),
                                     }
                                 ]
                             }
@@ -1918,7 +2026,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     )
 
             benchmark = aggregate.aggregate_workspace(workspace, "example")
-            output = workspace / "review.html"
+            output = workspace / "example" / "review.html"
             report.write_static_report(benchmark, output)
 
             self.assertEqual(benchmark["configurations"]["with_skill"]["pass_rate"], 1.0)
@@ -1932,9 +2040,91 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     ("baseline", "codex"),
                 },
             )
+            claude_case = next(
+                case
+                for case in benchmark["cases"]
+                if case["configuration"] == "with_skill"
+                and case["target"] == "claude"
+            )
+            codex_case = next(
+                case
+                for case in benchmark["cases"]
+                if case["configuration"] == "with_skill"
+                and case["target"] == "codex"
+            )
+            self.assertEqual(
+                claude_case["model_evidence"]["final_response"],
+                "Claude final answer <unsafe>",
+            )
+            self.assertEqual(claude_case["review_state"], "pending")
+            self.assertEqual(
+                codex_case["model_evidence"]["final_response"],
+                "Codex final answer",
+            )
+            self.assertEqual(
+                codex_case["model_evidence"]["events"][0]["command"],
+                "Get-Content fixture/input.txt",
+            )
+            self.assertEqual(
+                claude_case["prompt"],
+                "Use fixture/input.txt to answer.",
+            )
             html = output.read_text(encoding="utf-8")
             self.assertIn("example", html)
+            self.assertIn("Use fixture/input.txt to answer.", html)
+            self.assertIn("Claude final answer &lt;unsafe&gt;", html)
+            self.assertIn("Codex final answer", html)
+            self.assertIn("Get-Content fixture/input.txt", html)
+            self.assertIn("With Skill", html)
+            self.assertIn("Baseline", html)
+            self.assertIn("Canonical Skill path", html)
+            self.assertIn("C:/repo/skills/example", html)
+            self.assertIn("isolated-no-skill", html)
+            self.assertIn("Committed baseline files", html)
+            self.assertIn("Working-tree changes", html)
+            self.assertIn("committed", html)
+            self.assertIn("changed", html)
+            self.assertIn("Declared/base prompt", html)
+            self.assertIn(
+                "Exact logical launch command (includes the actual prompt)",
+                html,
+            )
+            self.assertIn("Identity return code</dt><dd>1", html)
+            self.assertIn("PROCESS FAIL", html)
+            self.assertIn("HUMAN REVIEW: PENDING", html)
+            self.assertIn(
+                'href="./case-one/with_skill/claude/result.json"',
+                html,
+            )
+            self.assertIn(
+                'href="./case-one/with_skill/claude/grading.json"',
+                html,
+            )
+            self.assertTrue(
+                (
+                    output.parent
+                    / "case-one"
+                    / "with_skill"
+                    / "claude"
+                    / "result.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    output.parent
+                    / "case-one"
+                    / "with_skill"
+                    / "claude"
+                    / "grading.json"
+                ).is_file()
+            )
+            self.assertEqual(report._relative_href("../secret"), "#")
+            self.assertEqual(
+                report._relative_href("javascript:alert(1)"),
+                "./javascript:alert(1)",
+            )
             self.assertNotIn("https://", html)
+            self.assertNotIn("<unsafe>", html)
 
 
 if __name__ == "__main__":

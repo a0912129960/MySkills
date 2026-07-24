@@ -11,8 +11,164 @@ import statistics
 from typing import Any
 
 
+PENDING_EVIDENCE = "PENDING HUMAN REVIEW"
+
+
 def _mean(values: list[float]) -> float | None:
     return statistics.fmean(values) if values else None
+
+
+def _claude_evidence(stdout: str) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "final_response": "",
+        "events": [],
+        "metadata": {},
+        "parse_errors": [],
+    }
+    try:
+        payload = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError) as error:
+        evidence["parse_errors"].append(f"Claude stdout is not JSON: {error}")
+        return evidence
+    if not isinstance(payload, dict):
+        evidence["parse_errors"].append("Claude stdout JSON must be an object")
+        return evidence
+    if isinstance(payload.get("result"), str):
+        evidence["final_response"] = payload["result"]
+    permission_denials = payload.get("permission_denials")
+    if permission_denials is not None:
+        if isinstance(permission_denials, list):
+            for denial in permission_denials:
+                evidence["events"].append(
+                    {
+                        "type": "permission_denial",
+                        "details": denial,
+                    }
+                )
+        else:
+            evidence["parse_errors"].append(
+                "Claude permission_denials must be an array"
+            )
+    evidence["metadata"] = {
+        key: payload.get(key)
+        for key in (
+            "subtype",
+            "is_error",
+            "num_turns",
+            "stop_reason",
+            "terminal_reason",
+            "total_cost_usd",
+            "usage",
+            "modelUsage",
+        )
+        if key in payload
+    }
+    return evidence
+
+
+def _codex_evidence(stdout: str) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "final_response": "",
+        "events": [],
+        "metadata": {},
+        "parse_errors": [],
+    }
+    messages: list[str] = []
+    event_count = 0
+    for line_number, line in enumerate(stdout.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as error:
+            evidence["parse_errors"].append(
+                f"Codex stdout line {line_number} is not JSON: {error}"
+            )
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_count += 1
+        if event.get("type") == "turn.completed":
+            evidence["metadata"]["usage"] = event.get("usage")
+            continue
+        if event.get("type") != "item.completed":
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type == "agent_message":
+            text = item.get("text")
+            if isinstance(text, str):
+                messages.append(text)
+                evidence["events"].append(
+                    {"type": "agent_message", "text": text}
+                )
+        elif item_type == "command_execution":
+            evidence["events"].append(
+                {
+                    "type": "command_execution",
+                    "command": item.get("command"),
+                    "output": item.get("aggregated_output"),
+                    "exit_code": item.get("exit_code"),
+                    "status": item.get("status"),
+                }
+            )
+        elif item_type == "error":
+            evidence["events"].append(
+                {
+                    "type": "error",
+                    "message": item.get("message"),
+                }
+            )
+        else:
+            evidence["events"].append(
+                {
+                    "type": str(item_type or "unknown"),
+                    "details": item,
+                }
+            )
+    if messages:
+        evidence["final_response"] = messages[-1]
+    evidence["metadata"]["raw_event_count"] = event_count
+    return evidence
+
+
+def _model_evidence(target: str, result: dict[str, Any]) -> dict[str, Any]:
+    stdout = result.get("stdout")
+    stderr = result.get("stderr")
+    stdout_text = stdout if isinstance(stdout, str) else ""
+    if target == "claude":
+        evidence = _claude_evidence(stdout_text)
+    elif target == "codex":
+        evidence = _codex_evidence(stdout_text)
+    else:
+        evidence = {
+            "final_response": "",
+            "events": [],
+            "metadata": {},
+            "parse_errors": [f"Unsupported target: {target}"],
+        }
+    evidence["raw_stdout"] = stdout_text
+    evidence["raw_stderr"] = stderr if isinstance(stderr, str) else ""
+    return evidence
+
+
+def _review_state(expectations: list[dict[str, Any]]) -> str:
+    if not expectations:
+        return "pending"
+    if any(
+        not isinstance(item.get("evidence"), str)
+        or not item["evidence"].strip()
+        or item["evidence"].strip() == PENDING_EVIDENCE
+        for item in expectations
+    ):
+        return "pending"
+    return (
+        "pass"
+        if all(item.get("passed") is True for item in expectations)
+        else "fail"
+    )
 
 
 def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any]:
@@ -71,6 +227,38 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "case": case_name,
             "configuration": configuration,
             "target": target,
+            "mode": plan.get("mode"),
+            "prompt": plan.get("prompt"),
+            "assertions": list(plan.get("assertions") or ()),
+            "safety": plan.get("safety"),
+            "expected_invocation": plan.get("expected_invocation"),
+            "explicit": plan.get("explicit"),
+            "skill_path": plan.get("skill_path"),
+            "skill_digest": plan.get("skill_digest"),
+            "baseline": dict(plan.get("baseline") or {}),
+            "fixture_sets": list(plan.get("fixture_sets") or ()),
+            "fixtures": list(plan.get("fixtures") or ()),
+            "git_fixture": dict(plan.get("git_fixture") or {}),
+            "runtime_tools": list(plan.get("runtime_tools") or ()),
+            "companion_skills": list(plan.get("companion_skills") or ()),
+            "target_identity": record.get("target_identity"),
+            "target_identity_returncode": record.get(
+                "target_identity_returncode"
+            ),
+            "process": {
+                key: result.get(key)
+                for key in (
+                    "command",
+                    "returncode",
+                    "timed_out",
+                    "duration_ms",
+                    "total_tokens",
+                )
+            },
+            "model_evidence": _model_evidence(str(target), result),
+            "result_path": result_path.relative_to(skill_root).as_posix(),
+            "grading_path": grading_path.relative_to(skill_root).as_posix(),
+            "review_state": _review_state(expectations),
             "passed": passed,
             "total": total,
             "pass_rate": passed / total if total else 0.0,
@@ -82,10 +270,21 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
 
         bucket = configurations.setdefault(
             configuration,
-            {"passed": 0, "total": 0, "tokens": [], "durations_ms": []},
+            {
+                "passed": 0,
+                "total": 0,
+                "tokens": [],
+                "durations_ms": [],
+                "review_states": {
+                    "pending": 0,
+                    "pass": 0,
+                    "fail": 0,
+                },
+            },
         )
         bucket["passed"] += passed
         bucket["total"] += total
+        bucket["review_states"][case["review_state"]] += 1
         if isinstance(case["total_tokens"], (int, float)):
             bucket["tokens"].append(case["total_tokens"])
         if isinstance(case["duration_ms"], (int, float)):
@@ -101,10 +300,11 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             ),
             "mean_tokens": _mean(bucket["tokens"]),
             "mean_duration_ms": _mean(bucket["durations_ms"]),
+            "review_states": dict(bucket["review_states"]),
         }
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "skill_name": skill_name,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "configurations": summary,

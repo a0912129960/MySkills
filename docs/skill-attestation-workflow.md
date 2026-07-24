@@ -65,6 +65,25 @@ current directory digest of every Managed Skill. Raw model output stays under
      .scratch/skill-evals/batch-<run-id>
    ```
 
+   Generate the self-contained evidence report before asking a human to review:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py aggregate `
+     .scratch/skill-evals/batch-<run-id> --skill-name <name> `
+     --output .scratch/skill-evals/batch-<run-id>/<name>/benchmark.json
+   python tools/skill-evaluator/skill_evaluator.py report `
+     .scratch/skill-evals/batch-<run-id>/<name>/benchmark.json `
+     --output .scratch/skill-evals/batch-<run-id>/<name>/review.html
+   ```
+
+   The report shows the declared prompt, exact logical launch command, ordinary
+   and Git-backed fixtures, canonical Skill and baseline identities, target
+   identity and process status, normalized final response, structured
+   model/tool trace, raw streams, and current grading. It places With-Skill and
+   Baseline runs side by side for each target. A process pass is not a behavior
+   pass; the human records a specific reason for every assertion in the linked
+   `grading.json`.
+
 4. After completing every grading template, audit the reviewed evidence and
    create a pending draft:
 
