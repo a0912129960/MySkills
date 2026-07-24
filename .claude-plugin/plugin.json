@@ -1,0 +1,12 @@
+{
+  "name": "my-skills",
+  "version": "0.1.0",
+  "description": "Personal skills for controlled AI workflows.",
+  "author": {
+    "name": "B0016.SVR"
+  },
+  "license": "UNLICENSED",
+  "skills": [
+    "./skills/productivity/ai-handoff"
+  ]
+}

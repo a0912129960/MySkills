@@ -1,0 +1,6 @@
+interface:
+  display_name: "AI Handoff"
+  short_description: "Create safe cross-session AI handoffs"
+  default_prompt: "Use $ai-handoff to prepare a verified handoff for another AI session."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+{
+  "name": "my-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal installable Agent Skills",
+  "license": "UNLICENSED",
+  "skills": [
+    "./skills/productivity/ai-handoff"
+  ]
+}

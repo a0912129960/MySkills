@@ -1,0 +1,21 @@
+{
+  "name": "my-skills",
+  "owner": {
+    "name": "B0016.SVR"
+  },
+  "description": "Personal installable Agent Skills.",
+  "plugins": [
+    {
+      "name": "my-skills",
+      "source": "./",
+      "description": "Personal skills for controlled AI workflows.",
+      "category": "productivity",
+      "keywords": [
+        "handoff",
+        "agents",
+        "sessions",
+        "prompts"
+      ]
+    }
+  ]
+}
