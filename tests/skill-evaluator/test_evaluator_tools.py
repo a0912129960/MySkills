@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +25,229 @@ def load_module(name: str, filename: str):
 
 
 class SkillEvaluatorToolContractTests(unittest.TestCase):
+    def test_evaluation_case_manifest_covers_every_skill_and_full_baseline(
+        self,
+    ) -> None:
+        cases = load_module(
+            "skill_evaluator_cases",
+            "evaluation_cases.py",
+        )
+        document = cases.load_cases(ROOT)
+        plan = cases.build_plan(ROOT, document)
+        summary = cases.summarize_plan(plan)
+
+        self.assertEqual(summary["skill_count"], 42)
+        self.assertEqual(summary["model_run_count"], 336)
+        for name in summary["skills"]:
+            runs = [item for item in plan if item["skill_name"] == name]
+            self.assertEqual(len(runs), 8, name)
+            self.assertEqual(
+                {(item["target"], item["configuration"]) for item in runs},
+                {
+                    ("claude", "with_skill"),
+                    ("claude", "baseline"),
+                    ("codex", "with_skill"),
+                    ("codex", "baseline"),
+                },
+            )
+
+        invalid = copy.deepcopy(document)
+        invalid["skills"][0]["trigger_cases"][0]["expected_invocation"] = "implicit"
+        errors = cases.validate_cases(ROOT, invalid)
+        self.assertTrue(
+            any("expected_invocation" in error for error in errors),
+            errors,
+        )
+
+    def test_batch_plan_cli_is_read_only_and_filterable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "plan.json"
+            completed = subprocess.run(
+                [
+                    "python",
+                    str(ENTRY_POINT),
+                    "plan-batch",
+                    str(ROOT),
+                    "--skills",
+                    "qmd",
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            plan = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(plan["skill_count"], 1)
+            self.assertEqual(plan["model_run_count"], 8)
+            self.assertEqual(plan["skills"], ["qmd"])
+
+            preview = Path(temp_dir) / "preview.json"
+            preview_result = subprocess.run(
+                [
+                    "python",
+                    str(ENTRY_POINT),
+                    "run-batch",
+                    str(ROOT),
+                    "--skills",
+                    "qmd",
+                    "--max-runs",
+                    "2",
+                    "--output",
+                    str(preview),
+                ],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(preview_result.returncode, 0, preview_result.stderr)
+            preview_data = json.loads(preview.read_text(encoding="utf-8"))
+            self.assertFalse(preview_data["executed"])
+            self.assertEqual(preview_data["model_run_count"], 2)
+
+            denied = subprocess.run(
+                [
+                    "python",
+                    str(ENTRY_POINT),
+                    "run-batch",
+                    str(ROOT),
+                    "--skills",
+                    "qmd",
+                    "--max-runs",
+                    "1",
+                    "--execute",
+                ],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(denied.returncode, 1)
+            self.assertIn(
+                "--allow-ephemeral-auth-copy",
+                denied.stdout,
+            )
+
+    def test_review_templates_fail_closed_and_preserve_human_edits(self) -> None:
+        cases = load_module(
+            "skill_evaluator_review_templates",
+            "evaluation_cases.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            run = (
+                workspace
+                / "qmd"
+                / "retrieve-before-answer"
+                / "with_skill"
+                / "codex"
+            )
+            run.mkdir(parents=True)
+            (run / "result.json").write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "mode": "required",
+                            "assertions": [
+                                "retrieves full evidence",
+                                "cites the source",
+                            ],
+                        },
+                        "result": {"returncode": 0},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            first = cases.prepare_review_templates(workspace)
+            grading_path = run / "grading.json"
+            grading = json.loads(grading_path.read_text(encoding="utf-8"))
+            self.assertEqual(first["created_grading_count"], 1)
+            self.assertTrue(
+                all(
+                    item["passed"] is False
+                    and item["evidence"] == "PENDING HUMAN REVIEW"
+                    for item in grading["expectations"]
+                )
+            )
+
+            grading["expectations"][0]["passed"] = True
+            grading["expectations"][0]["evidence"] = "Reviewed evidence."
+            grading_path.write_text(
+                json.dumps(grading),
+                encoding="utf-8",
+            )
+            second = cases.prepare_review_templates(workspace)
+            preserved = json.loads(grading_path.read_text(encoding="utf-8"))
+            self.assertEqual(second["preserved_grading_count"], 1)
+            self.assertTrue(preserved["expectations"][0]["passed"])
+
+    def test_runner_isolates_skills_and_cleans_ephemeral_auth(self) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_auth",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            codex_home = root / "codex"
+            claude_home = root / "claude"
+            (codex_home / "skills").mkdir(parents=True)
+            (claude_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text(
+                '{"fixture": true}',
+                encoding="utf-8",
+            )
+            (codex_home / "config.toml").write_text(
+                "fixture = true",
+                encoding="utf-8",
+            )
+            (claude_home / ".credentials.json").write_text(
+                '{"fixture": true}',
+                encoding="utf-8",
+            )
+            (claude_home / "settings.json").write_text(
+                '{"fixture": true}',
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "CODEX_HOME": str(codex_home),
+                    "CLAUDE_CONFIG_DIR": str(claude_home),
+                    "OPENAI_API_KEY": "",
+                    "ANTHROPIC_API_KEY": "",
+                },
+                clear=False,
+            ):
+                with runners.isolated_target_environment(
+                    "codex",
+                    allow_ephemeral_auth_copy=True,
+                ) as codex_env:
+                    isolated_codex = Path(codex_env["CODEX_HOME"])
+                    self.assertTrue((isolated_codex / "auth.json").is_file())
+                    self.assertFalse((isolated_codex / "config.toml").exists())
+                    self.assertFalse((isolated_codex / "skills").exists())
+                self.assertFalse(isolated_codex.exists())
+
+                with runners.isolated_target_environment(
+                    "claude",
+                    allow_ephemeral_auth_copy=True,
+                ) as claude_env:
+                    isolated_claude = Path(claude_env["CLAUDE_CONFIG_DIR"])
+                    self.assertTrue(
+                        (isolated_claude / ".credentials.json").is_file()
+                    )
+                    self.assertFalse(
+                        (isolated_claude / "settings.json").exists()
+                    )
+                    self.assertFalse((isolated_claude / "skills").exists())
+                self.assertFalse(isolated_claude.exists())
+
     def test_attestation_digest_matches_installer_and_rejects_stale_content(
         self,
     ) -> None:

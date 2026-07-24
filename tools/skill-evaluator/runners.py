@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import queue
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from typing import Iterable
@@ -51,6 +53,8 @@ def build_command(
     model: str | None = None,
     *,
     explicit: bool = True,
+    baseline: bool = False,
+    safety: str = "read-only",
 ) -> list[str]:
     """Build the allowlisted target command without executing it."""
 
@@ -65,12 +69,36 @@ def build_command(
             "Return only evidence produced in this isolated run."
         )
     if target == "claude":
-        command = ["claude", "-p", evaluation_prompt, "--output-format", "json"]
+        command = [
+            "claude",
+            "-p",
+            evaluation_prompt,
+            "--output-format",
+            "json",
+            "--no-session-persistence",
+        ]
+        if baseline:
+            command.append("--disable-slash-commands")
+        if safety == "read-only":
+            command.extend(["--tools", "Read,Glob,Grep"])
+        else:
+            command.extend(["--tools", "Read,Write,Edit,Glob,Grep,Bash"])
         if model:
             command.extend(["--model", model])
         return command
 
-    command = ["codex", "exec", "--ephemeral", "--json"]
+    sandbox = "read-only" if safety == "read-only" else "workspace-write"
+    command = [
+        "codex",
+        "exec",
+        "--ephemeral",
+        "--json",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--skip-git-repo-check",
+        "--sandbox",
+        sandbox,
+    ]
     if model:
         command.extend(["--model", model])
     command.append(evaluation_prompt)
@@ -156,3 +184,55 @@ def evaluator_environment() -> dict[str, str]:
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     return env
+
+
+@contextmanager
+def isolated_target_environment(
+    target: str,
+    *,
+    allow_ephemeral_auth_copy: bool,
+):
+    """Isolate user Skills while copying only auth into an OS temp directory."""
+
+    if target not in TARGETS:
+        raise ValueError(f"unsupported evaluator target: {target}")
+    if not allow_ephemeral_auth_copy:
+        raise PermissionError(
+            "Model runs require --allow-ephemeral-auth-copy so user-wide "
+            "Skill discovery can be isolated without losing CLI authentication."
+        )
+
+    source_env = evaluator_environment()
+    with tempfile.TemporaryDirectory(prefix=f"myskills-{target}-auth-") as temp_dir:
+        isolated = Path(temp_dir)
+        env = source_env.copy()
+        if target == "codex":
+            env["CODEX_HOME"] = str(isolated)
+            if not env.get("OPENAI_API_KEY"):
+                source_home = Path(
+                    source_env.get("CODEX_HOME", Path.home() / ".codex")
+                )
+                _copy_auth_file(source_home / "auth.json", isolated / "auth.json")
+        else:
+            env["CLAUDE_CONFIG_DIR"] = str(isolated)
+            if not env.get("ANTHROPIC_API_KEY"):
+                source_home = Path(
+                    source_env.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")
+                )
+                _copy_auth_file(
+                    source_home / ".credentials.json",
+                    isolated / ".credentials.json",
+                )
+        yield env
+
+
+def _copy_auth_file(source: Path, destination: Path) -> None:
+    if not source.is_file():
+        raise FileNotFoundError(
+            f"CLI authentication file is unavailable for isolated evaluation: {source}"
+        )
+    shutil.copyfile(source, destination)
+    try:
+        os.chmod(destination, 0o600)
+    except OSError:
+        pass

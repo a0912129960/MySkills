@@ -20,9 +20,38 @@ current directory digest of every Managed Skill. Raw model output stays under
      --mode trigger --prompt "<natural trigger or non-trigger case>"
    ```
 
+   The authoritative batch cases are in `evaluations/cases.json`. Validate and
+   preview them before spending model quota:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py validate-cases .
+   python tools/skill-evaluator/skill_evaluator.py run-batch . --skills qmd
+   ```
+
+   A complete 42-Skill run currently contains 336 target/configuration calls:
+   Claude and Codex, with-Skill and no-Skill baseline, for one required and one
+   trigger case per Skill. Execution is deliberately gated:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py run-batch . `
+     --execute --allow-ephemeral-auth-copy
+   ```
+
+   The runner copies only the target CLI authentication file into an OS
+   temporary directory, loads no user settings or user-wide Skills, and removes
+   that directory after each call. Prompts, commands, and results are written
+   under the ignored batch workspace; credentials are never written there.
+
 3. Grade the raw results, compare required cases with a no-Skill or recorded
    previous-version baseline, and review the offline report. Claude evidence
    cannot substitute for Codex evidence or vice versa.
+
+   Generate fail-closed grading templates without overwriting prior human work:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py prepare-review `
+     .scratch/skill-evals/batch-<run-id>
+   ```
 
 4. After human review, write
    `attestations/skills/<name>.json` using

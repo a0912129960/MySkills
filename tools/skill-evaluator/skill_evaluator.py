@@ -14,6 +14,7 @@ import yaml
 
 import aggregate_benchmark
 import attestations
+import evaluation_cases
 import generate_report
 import runners
 import validate_skill
@@ -140,6 +141,33 @@ def main(argv: list[str] | None = None) -> int:
     verify_repo_parser = subparsers.add_parser("verify-repository")
     verify_repo_parser.add_argument("repo_root", type=Path)
 
+    validate_cases_parser = subparsers.add_parser("validate-cases")
+    validate_cases_parser.add_argument("repo_root", type=Path)
+
+    plan_parser = subparsers.add_parser("plan-batch")
+    plan_parser.add_argument("repo_root", type=Path)
+    plan_parser.add_argument("--skills", nargs="*", default=[])
+    plan_parser.add_argument("--output", type=Path)
+
+    batch_parser = subparsers.add_parser("run-batch")
+    batch_parser.add_argument("repo_root", type=Path)
+    batch_parser.add_argument("--skills", nargs="*", default=[])
+    batch_parser.add_argument("--workspace", type=Path)
+    batch_parser.add_argument("--output", type=Path)
+    batch_parser.add_argument("--model")
+    batch_parser.add_argument("--timeout-seconds", type=float, default=300)
+    batch_parser.add_argument("--max-runs", type=int)
+    batch_parser.add_argument("--execute", action="store_true")
+    batch_parser.add_argument(
+        "--allow-ephemeral-auth-copy",
+        action="store_true",
+    )
+
+    prepare_review_parser = subparsers.add_parser("prepare-review")
+    prepare_review_parser.add_argument("workspace", type=Path)
+    prepare_review_parser.add_argument("--overwrite", action="store_true")
+    prepare_review_parser.add_argument("--output", type=Path)
+
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--json", action="store_true", dest="as_json")
 
@@ -253,6 +281,177 @@ def main(argv: list[str] | None = None) -> int:
         errors = attestations.validate_repository(args.repo_root)
         _write_json({"valid": not errors, "errors": errors})
         return 0 if not errors else 1
+
+    if args.command == "validate-cases":
+        try:
+            document = evaluation_cases.load_cases(args.repo_root)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            _write_json({"valid": False, "errors": [str(error)]})
+            return 1
+        _write_json(
+            {
+                "valid": True,
+                "skill_count": len(document["skills"]),
+                "errors": [],
+            }
+        )
+        return 0
+
+    if args.command == "plan-batch":
+        try:
+            document = evaluation_cases.load_cases(args.repo_root)
+            plan = evaluation_cases.build_plan(
+                args.repo_root,
+                document,
+                args.skills,
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            _write_json({"valid": False, "errors": [str(error)]}, args.output)
+            return 1
+        _write_json(evaluation_cases.summarize_plan(plan), args.output)
+        return 0
+
+    if args.command == "run-batch":
+        try:
+            document = evaluation_cases.load_cases(args.repo_root)
+            plan = evaluation_cases.build_plan(
+                args.repo_root,
+                document,
+                args.skills,
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            _write_json({"valid": False, "errors": [str(error)]}, args.output)
+            return 1
+        if args.max_runs is not None:
+            if args.max_runs < 1:
+                _write_json(
+                    {"valid": False, "errors": ["--max-runs must be positive"]},
+                    args.output,
+                )
+                return 1
+            plan = plan[: args.max_runs]
+        if not args.execute:
+            preview = evaluation_cases.summarize_plan(plan)
+            preview["executed"] = False
+            preview["authorization_required"] = (
+                "Rerun with --execute --allow-ephemeral-auth-copy; "
+                "this spends Claude/Codex model quota."
+            )
+            _write_json(preview, args.output)
+            return 0
+        if not args.allow_ephemeral_auth_copy:
+            _write_json(
+                {
+                    "valid": False,
+                    "errors": [
+                        "--execute also requires --allow-ephemeral-auth-copy"
+                    ],
+                },
+                args.output,
+            )
+            return 1
+
+        repo_root = args.repo_root.resolve()
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        workspace = (
+            args.workspace.resolve()
+            if args.workspace
+            else repo_root / ".scratch" / "skill-evals" / f"batch-{run_id}"
+        )
+        results: list[dict[str, Any]] = []
+        for item in plan:
+            run_root = (
+                workspace
+                / item["skill_name"]
+                / item["case_id"]
+                / item["configuration"]
+                / item["target"]
+            )
+            execution_root = run_root / "workspace"
+            skill_path = Path(item["skill_path"])
+            if item["configuration"] == "with_skill":
+                runners.prepare_isolated_workspace(
+                    skill_path,
+                    item["target"],
+                    execution_root,
+                )
+            else:
+                execution_root.mkdir(parents=True, exist_ok=True)
+            command = runners.build_command(
+                item["target"],
+                item["prompt"],
+                skill_path,
+                args.model,
+                explicit=item["explicit"],
+                baseline=item["configuration"] == "baseline",
+                safety=item["safety"],
+            )
+            with runners.isolated_target_environment(
+                item["target"],
+                allow_ephemeral_auth_copy=True,
+            ) as env:
+                identity = runners.run_command(
+                    [item["target"], "--version"],
+                    cwd=execution_root,
+                    env=env,
+                    timeout_seconds=30,
+                )
+                result = runners.run_command(
+                    command,
+                    cwd=execution_root,
+                    env=env,
+                    timeout_seconds=args.timeout_seconds,
+                )
+            record = {
+                "plan": item,
+                "target_identity": identity["stdout"].strip(),
+                "target_identity_returncode": identity["returncode"],
+                "result": result,
+            }
+            result_path = run_root / "result.json"
+            result_path.parent.mkdir(parents=True, exist_ok=True)
+            result_path.write_text(
+                json.dumps(record, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            results.append(
+                {
+                    "skill_name": item["skill_name"],
+                    "case_id": item["case_id"],
+                    "configuration": item["configuration"],
+                    "target": item["target"],
+                    "returncode": result["returncode"],
+                    "timed_out": result["timed_out"],
+                    "result_path": str(result_path),
+                }
+            )
+        batch_result = {
+            "schema_version": 1,
+            "executed": True,
+            "run_id": run_id,
+            "workspace": str(workspace),
+            "run_count": len(results),
+            "passed_processes": sum(
+                1
+                for item in results
+                if item["returncode"] == 0 and not item["timed_out"]
+            ),
+            "results": results,
+        }
+        _write_json(batch_result, args.output)
+        return 0 if batch_result["passed_processes"] == len(results) else 1
+
+    if args.command == "prepare-review":
+        try:
+            result = evaluation_cases.prepare_review_templates(
+                args.workspace,
+                overwrite=args.overwrite,
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            _write_json({"valid": False, "errors": [str(error)]}, args.output)
+            return 1
+        _write_json(result, args.output)
+        return 0
 
     result = smoke_contract()
     if args.as_json:
