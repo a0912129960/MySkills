@@ -18,6 +18,48 @@ from typing import Iterable
 TARGETS = ("claude", "codex")
 
 
+def prepare_evaluation_workspace(
+    skill_paths: Iterable[Path | str],
+    target: str,
+    workspace: Path | str,
+    *,
+    fixtures: Iterable[dict[str, str]] = (),
+) -> Path:
+    """Stage only declared Skills and deterministic UTF-8 fixture files."""
+
+    root = Path(workspace).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    for skill_path in skill_paths:
+        prepare_isolated_workspace(skill_path, target, root)
+    for fixture in fixtures:
+        if set(fixture) != {"path", "content"}:
+            raise ValueError("fixture fields must be exactly path and content")
+        relative = fixture["path"]
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or "\\" in relative
+            or relative.startswith("/")
+            or any(part in {"", ".", ".."} for part in relative.split("/"))
+            or relative.split("/")[0]
+            in {".agents", ".claude", ".codex", ".gemini"}
+        ):
+            raise ValueError(f"unsafe evaluation fixture path: {relative!r}")
+        content = fixture["content"]
+        if not isinstance(content, str):
+            raise ValueError(f"evaluation fixture content must be text: {relative}")
+        destination = (root / Path(*relative.split("/"))).resolve()
+        try:
+            destination.relative_to(root)
+        except ValueError as error:
+            raise ValueError(
+                f"evaluation fixture escapes the workspace: {relative}"
+            ) from error
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    return root
+
+
 def prepare_isolated_workspace(
     skill_path: Path | str,
     target: str,

@@ -45,6 +45,10 @@ before constructing cases or recording results.
 Default evaluation is report-only. List failures, unavailable capabilities, and
 recommendations without modifying the Skill.
 
+After completing human grading, use the evaluator's `draft-attestation`
+command. It must reject incomplete or failed raw evidence and leave report
+review, reviewer identity, notes, and overall status pending.
+
 Create a passing attestation only when structural checks, both primary target
 runs, required cases, and human review pass for the exact current digest.
 Record the digest, evaluator version, tested targets, result summary, and any

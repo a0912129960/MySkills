@@ -15,23 +15,44 @@
 Use one directory per case and configuration:
 
 ```text
-.scratch/skill-evals/<skill>/<run-id>/
-  <case>/
-    with_skill/
-      outputs/
-      grading.json
-      timing.json
-    baseline/
-      outputs/
-      grading.json
-      timing.json
-  benchmark.json
-  review.html
+.scratch/skill-evals/batch-<run-id>/
+  <skill>/
+    <case>/
+      with_skill/
+        <target>/
+          workspace/
+          result.json
+          grading.json
+      baseline/
+        <target>/
+          workspace/
+          result.json
+          grading.json
+    benchmark.json
+    review.html
+    attestation-draft.json
 ```
 
 `grading.json` expectations use exactly `text`, `passed`, and `evidence`.
-Timing records use `total_tokens`, `duration_ms`, and
-`total_duration_seconds`; use `null` when a runner does not expose a value.
+Each `result.json` records `duration_ms` and records `total_tokens` as `null`
+when the runner does not expose it.
+
+Required cases may declare deterministic UTF-8 `fixtures` and Managed
+`companion_skills`. The runner writes fixtures only below the isolated
+workspace, rejects Agent configuration paths and traversal, and stages only the
+declared companions. The no-Skill baseline receives the same fixtures and
+companions but not the Skill under evaluation.
+
+Every run plan records the current primary `skill_digest` and the deterministic
+`companion_skill_digests`. Draft audit rebuilds the current plan and rejects raw
+evidence when any staged Skill content has changed.
+
+`prepare-review` creates failing-until-reviewed grading templates and preserves
+existing human edits. After every planned run has a passing process, target
+identity, and completed human grading, `draft-attestation` aggregates the raw
+records, writes the offline report, and creates a pending draft. It fails closed
+for a missing run, stale plan, target identity failure, process failure, changed
+assertion, failed grade, or placeholder evidence.
 
 ## Attestation
 
@@ -46,3 +67,8 @@ A compact source-controlled attestation contains:
 
 Never infer a pass from missing data. A target that could not run is a failure,
 not an unavailable optional capability.
+
+The generated draft is not an attestation: its static review, human review, and
+overall status remain pending. A human reviews the offline report, records their
+identity and notes, changes only those pending review fields, and then runs
+`verify-attestation`. The tool never synthesizes a human approval.

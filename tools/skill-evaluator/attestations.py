@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -31,6 +31,68 @@ def directory_digest(path: Path | str) -> str:
         digest.update(struct.pack("<q", len(content)))
         digest.update(content)
     return f"sha256:{digest.hexdigest()}"
+
+
+def build_pending_draft(
+    skill_path: Path | str,
+    review: dict[str, Any],
+    *,
+    static_review_path: str,
+    structural_summary: str,
+) -> dict[str, Any]:
+    """Build a mechanically checked draft that still requires human review."""
+
+    skill = Path(skill_path).resolve()
+    assertion_count = review["assertion_count"]
+    baseline = review["baseline"]
+    return {
+        "$schema": "../attestation.schema.json",
+        "schema_version": 1,
+        "skill_name": skill.name,
+        "skill_digest": directory_digest(skill),
+        "source_digest": None,
+        "evaluation_level": review["evaluation_level"],
+        "evaluator_version": EVALUATOR_VERSION,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "targets": review["targets"],
+        "evidence": {
+            "raw_run_root": review["raw_run_root"],
+            "structural": {
+                "status": "pass",
+                "summary": structural_summary,
+            },
+            "baseline": {
+                "kind": baseline["kind"],
+                "identity": baseline["identity"],
+                "summary": (
+                    f"Reviewed {baseline['kind']} baseline "
+                    f"{baseline['identity']} for both targets."
+                ),
+            },
+            "assertions": {
+                "passed": assertion_count,
+                "total": assertion_count,
+                "summary": (
+                    f"All {assertion_count} human-graded assertions passed."
+                ),
+            },
+            "target_identities": review["target_identities"],
+            "efficiency": review["efficiency"],
+            "static_review": {
+                "status": "pending",
+                "path": static_review_path,
+                "summary": "Offline report generated; human review is still required.",
+            },
+        },
+        "human_review": {
+            "status": "pending",
+            "reviewer": "",
+            "reviewed_at": "",
+            "notes": "",
+        },
+        "unavailable_capabilities": [],
+        "status": "pending-human-review",
+    }
 
 
 def _is_datetime(value: object) -> bool:

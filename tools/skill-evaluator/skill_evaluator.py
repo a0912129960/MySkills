@@ -55,24 +55,39 @@ def smoke_contract() -> dict[str, Any]:
         checks["codex_command"] = codex[:3] == ["codex", "exec", "--ephemeral"]
 
         workspace = root / "workspace"
-        run_dir = workspace / "case" / "with_skill"
+        run_dir = (
+            workspace
+            / "fixture-skill"
+            / "case"
+            / "with_skill"
+            / "claude"
+        )
         run_dir.mkdir(parents=True)
+        (run_dir / "result.json").write_text(
+            json.dumps(
+                {
+                    "plan": {
+                        "skill_name": "fixture-skill",
+                        "case_id": "case",
+                        "configuration": "with_skill",
+                        "target": "claude",
+                    },
+                    "result": {
+                        "returncode": 0,
+                        "timed_out": False,
+                        "duration_ms": 0,
+                        "total_tokens": 0,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         (run_dir / "grading.json").write_text(
             json.dumps(
                 {
                     "expectations": [
                         {"text": "fixture", "passed": True, "evidence": "smoke"}
                     ]
-                }
-            ),
-            encoding="utf-8",
-        )
-        (run_dir / "timing.json").write_text(
-            json.dumps(
-                {
-                    "total_tokens": 0,
-                    "duration_ms": 0,
-                    "total_duration_seconds": 0,
                 }
             ),
             encoding="utf-8",
@@ -167,6 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     prepare_review_parser.add_argument("workspace", type=Path)
     prepare_review_parser.add_argument("--overwrite", action="store_true")
     prepare_review_parser.add_argument("--output", type=Path)
+
+    draft_parser = subparsers.add_parser("draft-attestation")
+    draft_parser.add_argument("repo_root", type=Path)
+    draft_parser.add_argument("workspace", type=Path)
+    draft_parser.add_argument("skill_name")
+    draft_parser.add_argument("--output", type=Path, required=True)
 
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -369,14 +390,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             execution_root = run_root / "workspace"
             skill_path = Path(item["skill_path"])
+            staged_skills = [
+                Path(path) for path in item["companion_skill_paths"]
+            ]
             if item["configuration"] == "with_skill":
-                runners.prepare_isolated_workspace(
-                    skill_path,
-                    item["target"],
-                    execution_root,
-                )
-            else:
-                execution_root.mkdir(parents=True, exist_ok=True)
+                staged_skills.insert(0, skill_path)
+            runners.prepare_evaluation_workspace(
+                staged_skills,
+                item["target"],
+                execution_root,
+                fixtures=item["fixtures"],
+            )
             command = runners.build_command(
                 item["target"],
                 item["prompt"],
@@ -451,6 +475,48 @@ def main(argv: list[str] | None = None) -> int:
             _write_json({"valid": False, "errors": [str(error)]}, args.output)
             return 1
         _write_json(result, args.output)
+        return 0
+
+    if args.command == "draft-attestation":
+        try:
+            repo_root = args.repo_root.resolve()
+            document = evaluation_cases.load_cases(repo_root)
+            review = evaluation_cases.audit_reviewed_skill(
+                repo_root,
+                args.workspace,
+                document,
+                args.skill_name,
+            )
+            skill_path = Path(review["skill_path"])
+            structural = validate_skill.validate_skill(skill_path)
+            if not structural["valid"]:
+                raise ValueError(
+                    "structural validation failed: "
+                    + "; ".join(structural["errors"])
+                )
+            skill_review_root = args.workspace.resolve() / args.skill_name
+            benchmark = aggregate_benchmark.aggregate_workspace(
+                args.workspace,
+                args.skill_name,
+            )
+            benchmark_path = skill_review_root / "benchmark.json"
+            _write_json(benchmark, benchmark_path)
+            report_path = skill_review_root / "review.html"
+            generate_report.write_static_report(benchmark, report_path)
+            relative_report = report_path.relative_to(repo_root).as_posix()
+            draft = attestations.build_pending_draft(
+                skill_path,
+                review,
+                static_review_path=relative_report,
+                structural_summary=(
+                    "MySkills structural validation passed for the current "
+                    "Skill directory."
+                ),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            _write_json({"valid": False, "errors": [str(error)]}, args.output)
+            return 1
+        _write_json(draft, args.output)
         return 0
 
     result = smoke_contract()

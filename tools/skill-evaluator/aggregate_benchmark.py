@@ -19,13 +19,38 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
     """Aggregate public grading/timing artifacts below a run workspace."""
 
     root = Path(workspace)
+    skill_root = root / skill_name
+    if not skill_root.is_dir():
+        skill_root = root
     configurations: dict[str, dict[str, Any]] = {}
     cases: list[dict[str, Any]] = []
+    grading_paths = sorted(skill_root.glob("*/*/*/grading.json"))
+    if not grading_paths:
+        raise ValueError(
+            f"{skill_root}: no reviewed batch grading files were found"
+        )
 
-    for grading_path in sorted(root.glob("*/*/grading.json")):
+    for grading_path in grading_paths:
         run_dir = grading_path.parent
-        case_name = run_dir.parent.name
-        configuration = run_dir.name
+        result_path = run_dir / "result.json"
+        if not result_path.is_file():
+            raise ValueError(f"{run_dir}: result.json is required")
+        record = json.loads(result_path.read_text(encoding="utf-8"))
+        plan = record.get("plan")
+        if not isinstance(plan, dict):
+            raise ValueError(f"{result_path}: batch plan is required")
+        case_name = plan.get("case_id")
+        configuration = plan.get("configuration")
+        target = plan.get("target")
+        if (
+            plan.get("skill_name") != skill_name
+            or case_name != run_dir.parents[1].name
+            or configuration != run_dir.parent.name
+            or target != run_dir.name
+        ):
+            raise ValueError(
+                f"{result_path}: plan metadata does not match the batch path"
+            )
         grading = json.loads(grading_path.read_text(encoding="utf-8"))
         expectations = grading.get("expectations", [])
         if not isinstance(expectations, list):
@@ -39,20 +64,18 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
 
         passed = sum(1 for item in expectations if item["passed"] is True)
         total = len(expectations)
-        timing_path = run_dir / "timing.json"
-        timing = (
-            json.loads(timing_path.read_text(encoding="utf-8"))
-            if timing_path.is_file()
-            else {}
-        )
+        result = record.get("result")
+        if not isinstance(result, dict):
+            raise ValueError(f"{result_path}: process result is required")
         case = {
             "case": case_name,
             "configuration": configuration,
+            "target": target,
             "passed": passed,
             "total": total,
             "pass_rate": passed / total if total else 0.0,
-            "total_tokens": timing.get("total_tokens"),
-            "duration_ms": timing.get("duration_ms"),
+            "total_tokens": result.get("total_tokens"),
+            "duration_ms": result.get("duration_ms"),
             "expectations": expectations,
         }
         cases.append(case)
