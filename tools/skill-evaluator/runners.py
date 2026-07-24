@@ -49,6 +49,8 @@ def build_command(
     prompt: str,
     skill_path: Path,
     model: str | None = None,
+    *,
+    explicit: bool = True,
 ) -> list[str]:
     """Build the allowlisted target command without executing it."""
 
@@ -56,11 +58,12 @@ def build_command(
         raise ValueError(f"unsupported evaluator target: {target}")
 
     skill = Path(skill_path).resolve()
-    evaluation_prompt = (
-        f"{prompt}\n\n"
-        f"Evaluate the installed Skill named ${skill.name}. "
-        "Return only evidence produced in this isolated run."
-    )
+    evaluation_prompt = prompt
+    if explicit:
+        evaluation_prompt += (
+            f"\n\nEvaluate the installed Skill named ${skill.name}. "
+            "Return only evidence produced in this isolated run."
+        )
     if target == "claude":
         command = ["claude", "-p", evaluation_prompt, "--output-format", "json"]
         if model:

@@ -22,6 +22,98 @@ def load_module(name: str, filename: str):
 
 
 class SkillEvaluatorToolContractTests(unittest.TestCase):
+    def test_attestation_digest_matches_installer_and_rejects_stale_content(
+        self,
+    ) -> None:
+        attestations = load_module(
+            "skill_evaluator_attestations",
+            "attestations.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skill = Path(temp_dir) / "fixture-skill"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text(
+                "---\nname: fixture-skill\ndescription: Fixture.\n---\n",
+                encoding="utf-8",
+            )
+            digest = attestations.directory_digest(skill)
+            command = (
+                "Import-Module -Force "
+                f"'{ROOT / 'scripts' / 'installer_core.psm1'}'; "
+                f"Get-DirectoryDigest -Path '{skill}'"
+            )
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", command],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(digest, f"sha256:{completed.stdout.strip()}")
+
+            target = {
+                "status": "pass",
+                "discovery": True,
+                "explicit_invocation": True,
+                "isolation": True,
+                "required_cases": {"passed": 1, "total": 1},
+                "trigger_results": {"passed": 1, "total": 1},
+                "summary": "Fixture target checks passed.",
+            }
+            data = {
+                "$schema": "../attestation.schema.json",
+                "schema_version": 1,
+                "skill_name": "fixture-skill",
+                "skill_digest": digest,
+                "source_digest": None,
+                "evaluation_level": "full",
+                "evaluator_version": attestations.EVALUATOR_VERSION,
+                "evaluated_at": "2026-07-24T00:00:00+00:00",
+                "targets": {"claude": target, "codex": target},
+                "human_review": {
+                    "status": "pass",
+                    "reviewer": "fixture reviewer",
+                    "reviewed_at": "2026-07-24T00:00:00+00:00",
+                    "notes": "Fixture review passed.",
+                },
+                "unavailable_capabilities": [],
+                "status": "pass",
+            }
+            attestation = Path(temp_dir) / "fixture-skill.json"
+            attestation.write_text(
+                json.dumps(data, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                attestations.validate_attestation(skill, attestation),
+                [],
+            )
+            (skill / "SKILL.md").write_text(
+                "---\nname: fixture-skill\ndescription: Changed.\n---\n",
+                encoding="utf-8",
+            )
+            errors = attestations.validate_attestation(skill, attestation)
+            self.assertTrue(
+                any("skill_digest" in error for error in errors),
+                errors,
+            )
+
+    def test_attestation_schema_requires_both_primary_targets_and_human_review(
+        self,
+    ) -> None:
+        schema = json.loads(
+            (
+                ROOT / "attestations" / "attestation.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            schema["properties"]["targets"]["required"],
+            ["claude", "codex"],
+        )
+        self.assertIn("human_review", schema["required"])
+
     def test_single_entry_point_runs_installer_smoke_contract(self) -> None:
         completed = subprocess.run(
             ["python", str(ENTRY_POINT), "smoke", "--json"],
@@ -102,6 +194,14 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertIn("--output-format", claude)
         self.assertEqual(codex[0:3], ["codex", "exec", "--ephemeral"])
         self.assertIn("--json", codex)
+        trigger = runners.build_command(
+            "codex",
+            "Natural trigger prompt.",
+            Path("C:/tmp/skill"),
+            explicit=False,
+        )
+        self.assertIn("Natural trigger prompt.", trigger[-1])
+        self.assertNotIn("$skill", trigger[-1])
 
     def test_runner_stages_only_the_requested_target_discovery_path(self) -> None:
         runners = load_module("skill_evaluator_runners_isolation", "runners.py")

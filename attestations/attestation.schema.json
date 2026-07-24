@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/a0912129960/MySkills/blob/main/attestations/attestation.schema.json",
+  "title": "MySkills Skill evaluation attestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "skill_name",
+    "skill_digest",
+    "source_digest",
+    "evaluation_level",
+    "evaluator_version",
+    "evaluated_at",
+    "targets",
+    "human_review",
+    "unavailable_capabilities",
+    "status"
+  ],
+  "properties": {
+    "$schema": {"const": "../attestation.schema.json"},
+    "schema_version": {"const": 1},
+    "skill_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "skill_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_digest": {
+      "oneOf": [
+        {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "evaluation_level": {"enum": ["snapshot-smoke", "full"]},
+    "evaluator_version": {"type": "string", "minLength": 1},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claude", "codex"],
+      "properties": {
+        "claude": {"$ref": "#/$defs/target"},
+        "codex": {"$ref": "#/$defs/target"}
+      }
+    },
+    "human_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reviewer", "reviewed_at", "notes"],
+      "properties": {
+        "status": {"const": "pass"},
+        "reviewer": {"type": "string", "minLength": 1},
+        "reviewed_at": {"type": "string", "format": "date-time"},
+        "notes": {"type": "string", "minLength": 1}
+      }
+    },
+    "unavailable_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "status": {"const": "pass"}
+  },
+  "$defs": {
+    "count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "total"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 1},
+        "total": {"type": "integer", "minimum": 1}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "discovery",
+        "explicit_invocation",
+        "isolation",
+        "required_cases",
+        "trigger_results",
+        "summary"
+      ],
+      "properties": {
+        "status": {"const": "pass"},
+        "discovery": {"const": true},
+        "explicit_invocation": {"const": true},
+        "isolation": {"const": true},
+        "required_cases": {"$ref": "#/$defs/count"},
+        "trigger_results": {"$ref": "#/$defs/count"},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

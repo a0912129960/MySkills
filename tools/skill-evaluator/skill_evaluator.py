@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -12,6 +13,7 @@ from typing import Any
 import yaml
 
 import aggregate_benchmark
+import attestations
 import generate_report
 import runners
 import validate_skill
@@ -110,6 +112,15 @@ def main(argv: list[str] | None = None) -> int:
     commands_parser.add_argument("--target", choices=["claude", "codex", "all"], default="all")
     commands_parser.add_argument("--model")
 
+    run_parser = subparsers.add_parser("run")
+    run_parser.add_argument("skill_path", type=Path)
+    run_parser.add_argument("--prompt", required=True)
+    run_parser.add_argument("--target", choices=["claude", "codex", "all"], default="all")
+    run_parser.add_argument("--mode", choices=["explicit", "trigger"], required=True)
+    run_parser.add_argument("--model")
+    run_parser.add_argument("--timeout-seconds", type=float, default=300)
+    run_parser.add_argument("--workspace", type=Path)
+
     aggregate_parser = subparsers.add_parser("aggregate")
     aggregate_parser.add_argument("workspace", type=Path)
     aggregate_parser.add_argument("--skill-name", required=True)
@@ -118,6 +129,16 @@ def main(argv: list[str] | None = None) -> int:
     report_parser = subparsers.add_parser("report")
     report_parser.add_argument("benchmark", type=Path)
     report_parser.add_argument("--output", type=Path, required=True)
+
+    digest_parser = subparsers.add_parser("digest")
+    digest_parser.add_argument("skill_path", type=Path)
+
+    verify_parser = subparsers.add_parser("verify-attestation")
+    verify_parser.add_argument("skill_path", type=Path)
+    verify_parser.add_argument("attestation", type=Path)
+
+    verify_repo_parser = subparsers.add_parser("verify-repository")
+    verify_repo_parser.add_argument("repo_root", type=Path)
 
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -144,6 +165,65 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(result)
         return 0
 
+    if args.command == "run":
+        skill = args.skill_path.resolve()
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        workspace = (
+            args.workspace.resolve()
+            if args.workspace
+            else Path.cwd()
+            / ".scratch"
+            / "skill-evals"
+            / skill.name
+            / run_id
+        )
+        targets = runners.TARGETS if args.target == "all" else (args.target,)
+        results: dict[str, Any] = {}
+        for target in targets:
+            target_workspace = runners.prepare_isolated_workspace(
+                skill,
+                target,
+                workspace / target,
+            )
+            command = runners.build_command(
+                target,
+                args.prompt,
+                skill,
+                args.model,
+                explicit=args.mode == "explicit",
+            )
+            result = runners.run_command(
+                command,
+                cwd=target_workspace,
+                env=runners.evaluator_environment(),
+                timeout_seconds=args.timeout_seconds,
+            )
+            result["mode"] = args.mode
+            result["target"] = target
+            result_path = target_workspace / "result.json"
+            result_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            results[target] = {
+                "returncode": result["returncode"],
+                "timed_out": result["timed_out"],
+                "result": str(result_path),
+            }
+        _write_json(
+            {
+                "skill_name": skill.name,
+                "skill_digest": attestations.directory_digest(skill),
+                "mode": args.mode,
+                "workspace": str(workspace),
+                "targets": results,
+            }
+        )
+        return 0 if all(
+            item["returncode"] == 0 and not item["timed_out"]
+            for item in results.values()
+        ) else 1
+
     if args.command == "aggregate":
         result = aggregate_benchmark.aggregate_workspace(
             args.workspace, args.skill_name
@@ -156,6 +236,23 @@ def main(argv: list[str] | None = None) -> int:
         generate_report.write_static_report(data, args.output)
         print(args.output)
         return 0
+
+    if args.command == "digest":
+        print(attestations.directory_digest(args.skill_path))
+        return 0
+
+    if args.command == "verify-attestation":
+        errors = attestations.validate_attestation(
+            args.skill_path,
+            args.attestation,
+        )
+        _write_json({"valid": not errors, "errors": errors})
+        return 0 if not errors else 1
+
+    if args.command == "verify-repository":
+        errors = attestations.validate_repository(args.repo_root)
+        _write_json({"valid": not errors, "errors": errors})
+        return 0 if not errors else 1
 
     result = smoke_contract()
     if args.as_json:

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -45,7 +47,24 @@ def _load_json(path: Path, errors: list[str]) -> dict[str, Any]:
     return value
 
 
-def validate_repository(root: Path = ROOT) -> list[str]:
+def _validate_attestations(root: Path) -> list[str]:
+    module_path = root / "tools" / "skill-evaluator" / "attestations.py"
+    spec = importlib.util.spec_from_file_location(
+        "myskills_attestations",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        return [f"Cannot load attestation validator: {module_path}"]
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.validate_repository(root)
+
+
+def validate_repository(
+    root: Path = ROOT,
+    *,
+    require_attestations: bool = True,
+) -> list[str]:
     """Return all repository contract violations."""
 
     errors: list[str] = []
@@ -197,11 +216,21 @@ def validate_repository(root: Path = ROOT) -> list[str]:
     if None in imported_dates:
         errors.append("Every Managed Skill must record imported_on provenance")
 
+    if require_attestations:
+        errors.extend(_validate_attestations(root))
+
     return errors
 
 
 def main() -> int:
-    errors = validate_repository()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--structural-only",
+        action="store_true",
+        help="Skip the release attestation gate while authoring.",
+    )
+    args = parser.parse_args()
+    errors = validate_repository(require_attestations=not args.structural_only)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
@@ -213,7 +242,11 @@ def main() -> int:
         for skill in inventory["skills"]
         if skill["state"] == "managed"
     )
-    print(f"Validated {len(names)} Managed Skill(s): {', '.join(names)}")
+    scope = "structural contracts" if args.structural_only else "release contracts"
+    print(
+        f"Validated {len(names)} Managed Skill(s) ({scope}): "
+        f"{', '.join(names)}"
+    )
     return 0
 
 

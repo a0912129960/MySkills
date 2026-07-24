@@ -1,0 +1,42 @@
+# Skill attestation workflow
+
+Release validation requires one passing, source-controlled attestation for the
+current directory digest of every Managed Skill. Raw model output stays under
+`.scratch/skill-evals/` and is never committed.
+
+1. Validate structure and print the current digest:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py validate skills/<bucket>/<name>
+   python tools/skill-evaluator/skill_evaluator.py digest skills/<bucket>/<name>
+   ```
+
+2. Run isolated explicit and trigger cases on Claude and Codex:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py run skills/<bucket>/<name> `
+     --mode explicit --prompt "<harmless required case>"
+   python tools/skill-evaluator/skill_evaluator.py run skills/<bucket>/<name> `
+     --mode trigger --prompt "<natural trigger or non-trigger case>"
+   ```
+
+3. Grade the raw results, compare required cases with a no-Skill or recorded
+   previous-version baseline, and review the offline report. Claude evidence
+   cannot substitute for Codex evidence or vice versa.
+
+4. After human review, write
+   `attestations/skills/<name>.json` using
+   `attestations/attestation.schema.json`. Do not mark an unavailable, failed,
+   unreviewed, or partially run target as passing.
+
+5. Verify the attestation and the release gate:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py verify-attestation `
+     skills/<bucket>/<name> attestations/skills/<name>.json
+   python scripts/validate_repo.py
+   ```
+
+Any change inside the Skill directory changes its digest and makes the previous
+attestation stale. `python scripts/validate_repo.py --structural-only` is only
+for authoring before evaluation; it is not a release pass.
