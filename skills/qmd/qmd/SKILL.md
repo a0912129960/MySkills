@@ -40,8 +40,9 @@ such as `collection add`, `update`, and `embed` mutate local index state; run
 them only for an explicit setup or maintenance request.
 
 If semantic/model-backed search fails, run `qmd doctor` and fall back to stronger
-BM25 lexical terms. The central MySkills installer owns the QMD package and
-optional MCP registration; this Skill never installs or upgrades it.
+BM25 lexical terms. Treat the declared QMD CLI or MCP transport as a verified
+runtime capability; do not change host dependency or transport configuration
+during Skill execution.
 
 Read [references/mcp-setup.md](references/mcp-setup.md) only for transport
 registration behavior.

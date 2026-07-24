@@ -27,7 +27,6 @@ For plugin or theme development, reload the component, inspect
 `obsidian dev:errors`, verify through a screenshot or DOM query, then inspect
 console errors. Use `obsidian help` for the current developer command surface.
 
-The central MySkills installer verifies this prerequisite but never installs
-Obsidian Desktop, enables its CLI setting, or changes persistent `PATH`.
-Verification may launch Obsidian because the CLI communicates with the desktop
+Require the official Obsidian CLI capability declared by MySkills. Its
+verification may launch Obsidian because the CLI communicates with the desktop
 application.

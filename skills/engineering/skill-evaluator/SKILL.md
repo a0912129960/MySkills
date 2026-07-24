@@ -15,8 +15,9 @@ recommendations and asks for a new evaluation of the resulting digest.
   directory digest.
 - Resolve the MySkills-managed evaluator launcher. Do not use a former source
   clone or a globally installed evaluator.
-- Require Python 3.10+, the private PyYAML environment, and working `claude` and
-  `codex` CLIs. Missing either target prevents a passing attestation.
+- Require the evaluator launcher and both `claude` and `codex` target
+  capabilities declared by MySkills. Missing either target prevents a passing
+  attestation.
 - Place raw runs under
   `.scratch\skill-evals\<skill-name>\<run-id>\`; this location is disposable
   and ignored.

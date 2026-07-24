@@ -56,7 +56,8 @@ class PlatformSkillContractTests(unittest.TestCase):
         )
         self.assertRegex(skill_md, r"(?m)^allowed-tools:\s*.+qmd")
         self.assertNotIn("npm install", skill_md)
-        self.assertIn("central MySkills installer", skill_md)
+        self.assertIn("verified\nruntime capability", skill_md)
+        self.assertIn("do not change host dependency", skill_md)
 
     def test_skill_evaluator_is_evaluation_only(self) -> None:
         skill_md = (
