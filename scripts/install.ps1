@@ -834,51 +834,228 @@ function Install-WikiRuntime {
     }
 }
 
-function Register-QmdMcp {
+function Test-QmdMcpText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PlatformId,
+        [Parameter(Mandatory = $true)]
+        [string]$Text
+    )
+
+    if ($PlatformId -eq "codex") {
+        return (
+            $Text -match "(?im)^\s*command:\s*qmd\s*$" -and
+            $Text -match "(?im)^\s*args:\s*mcp\s*$"
+        )
+    }
+    if ($PlatformId -eq "claude-code") {
+        $direct = (
+            $Text -match "(?im)^\s*Command:\s*qmd\s*$" -and
+            $Text -match "(?im)^\s*Args:\s*mcp\s*$"
+        )
+        $windowsWrapper = (
+            $Text -match "(?im)^\s*Command:\s*cmd(?:\.exe)?\s*$" -and
+            $Text -match "(?im)^\s*Args:\s*/c\s+qmd\s+mcp\s*$"
+        )
+        return $direct -or $windowsWrapper
+    }
+    return $false
+}
+
+function Get-QmdMcpPlans {
     param(
         [Parameter(Mandatory = $true)]
         [object[]]$Platforms
     )
 
+    $plans = @()
     foreach ($platform in $Platforms) {
         if (-not $platform.Available) {
             continue
         }
-        if ($platform.Id -eq "codex") {
-            & $platform.Executable mcp get qmd *> $null
-            if ($LASTEXITCODE -ne 0) {
-                & $platform.Executable mcp add qmd -- qmd mcp
-                if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to register QMD MCP for Codex."
+        if ($platform.Id -in @("codex", "claude-code")) {
+            $output = (& $platform.Executable mcp get qmd 2>&1 | Out-String)
+            $exists = $LASTEXITCODE -eq 0
+            $status = "MISSING"
+            if ($exists) {
+                $status = if (
+                    Test-QmdMcpText -PlatformId $platform.Id -Text $output
+                ) { "IDENTICAL" } else { "CONFLICT" }
+            }
+            $plans += [PSCustomObject]@{
+                Platform = $platform
+                Status = $status
+                Path = $null
+            }
+            continue
+        }
+        if ($platform.Id -eq "antigravity-cli") {
+            $path = Join-Path (
+                [Environment]::GetFolderPath("UserProfile")
+            ) ".gemini\config\mcp_config.json"
+            $status = "MISSING"
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                try {
+                    $config = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+                    $qmd = $null
+                    if ($null -ne $config.mcpServers) {
+                        $qmd = $config.mcpServers.qmd
+                    }
+                    if ($null -ne $qmd) {
+                        $args = @($qmd.args)
+                        $status = if (
+                            $qmd.command -eq "qmd" -and
+                            $args.Count -eq 1 -and
+                            $args[0] -eq "mcp"
+                        ) { "IDENTICAL" } else { "CONFLICT" }
+                    }
+                }
+                catch {
+                    $status = "CONFLICT"
                 }
             }
-            & $platform.Executable mcp get qmd *> $null
-            if ($LASTEXITCODE -ne 0) {
-                throw "Codex cannot discover the QMD MCP registration."
+            $plans += [PSCustomObject]@{
+                Platform = $platform
+                Status = $status
+                Path = $path
             }
-            Write-Output "MCP_VERIFIED`tcodex`tqmd"
-        }
-        elseif ($platform.Id -eq "claude-code") {
-            & $platform.Executable mcp get qmd *> $null
-            if ($LASTEXITCODE -ne 0) {
-                & $platform.Executable mcp add --scope user qmd -- qmd mcp
-                if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to register QMD MCP for Claude Code."
-                }
-            }
-            & $platform.Executable mcp get qmd *> $null
-            if ($LASTEXITCODE -ne 0) {
-                throw "Claude Code cannot discover the QMD MCP registration."
-            }
-            Write-Output "MCP_VERIFIED`tclaude-code`tqmd"
-        }
-        elseif ($platform.Id -eq "antigravity-cli") {
-            Write-Output (
-                "MCP_UNSUPPORTED`tAntigravity CLI exposes no command-backed MCP " +
-                "registration interface; Skill compatibility copy is unchanged."
-            )
         }
     }
+    return $plans
+}
+
+function Register-QmdMcp {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Plans
+    )
+
+    foreach ($plan in $Plans) {
+        $platform = $plan.Platform
+        if ($plan.Status -eq "CONFLICT") {
+            throw "Conflicting qmd MCP registration for $($platform.Id)."
+        }
+        if ($platform.Id -eq "codex" -and $plan.Status -eq "MISSING") {
+            & $platform.Executable mcp add qmd -- qmd mcp
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to register QMD MCP for Codex."
+            }
+        }
+        elseif ($platform.Id -eq "claude-code" -and $plan.Status -eq "MISSING") {
+            & $platform.Executable mcp add --scope user qmd -- qmd mcp
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to register QMD MCP for Claude Code."
+            }
+        }
+        elseif (
+            $platform.Id -eq "antigravity-cli" -and
+            $plan.Status -eq "MISSING"
+        ) {
+            $parent = Split-Path -Parent $plan.Path
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            $config = [PSCustomObject]@{}
+            if (Test-Path -LiteralPath $plan.Path -PathType Leaf) {
+                $config = Get-Content -Raw -LiteralPath $plan.Path | ConvertFrom-Json
+            }
+            if ($null -eq $config.mcpServers) {
+                $config | Add-Member -NotePropertyName mcpServers `
+                    -NotePropertyValue ([PSCustomObject]@{})
+            }
+            $config.mcpServers | Add-Member -NotePropertyName qmd `
+                -NotePropertyValue ([PSCustomObject]@{
+                    command = "qmd"
+                    args = @("mcp")
+                })
+            $temporary = Join-Path $parent (
+                ".mcp-config-" + [Guid]::NewGuid().ToString("N") + ".json"
+            )
+            try {
+                [IO.File]::WriteAllText(
+                    $temporary,
+                    ($config | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+                    (New-Object Text.UTF8Encoding($false))
+                )
+                Move-Item -LiteralPath $temporary -Destination $plan.Path -Force
+            }
+            finally {
+                if (Test-Path -LiteralPath $temporary) {
+                    Remove-Item -LiteralPath $temporary -Force
+                }
+            }
+        }
+
+        if ($platform.Id -in @("codex", "claude-code")) {
+            $output = (& $platform.Executable mcp get qmd 2>&1 | Out-String)
+            if (
+                $LASTEXITCODE -ne 0 -or
+                -not (Test-QmdMcpText -PlatformId $platform.Id -Text $output)
+            ) {
+                throw "$($platform.Id) cannot verify the QMD MCP registration."
+            }
+        }
+        else {
+            $verify = Get-Content -Raw -LiteralPath $plan.Path | ConvertFrom-Json
+            if (
+                $verify.mcpServers.qmd.command -ne "qmd" -or
+                @($verify.mcpServers.qmd.args)[0] -ne "mcp"
+            ) {
+                throw "Antigravity cannot verify the QMD MCP registration."
+            }
+        }
+        Write-Output "MCP_VERIFIED`t$($platform.Id)`tqmd"
+    }
+}
+
+function Test-AgentSkillDiscovery {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Platform,
+        [Parameter(Mandatory = $true)]
+        [string]$SkillName,
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath
+    )
+
+    if (-not (Test-Path -LiteralPath (Join-Path $TargetPath "SKILL.md"))) {
+        return $false
+    }
+    if ($Platform.Id -eq "antigravity-cli") {
+        return $true
+    }
+    if ($Platform.Id -eq "codex") {
+        $prompt = "Use `$" + $SkillName + " for this discovery check."
+        $output = (
+            & $Platform.Executable debug prompt-input $prompt 2>&1 | Out-String
+        )
+        if ($LASTEXITCODE -ne 0) {
+            return $false
+        }
+        return (
+            $output.Contains("- $SkillName`:") -and
+            $output.Contains("$SkillName/SKILL.md")
+        )
+    }
+    if ($Platform.Id -eq "claude-code") {
+        $prompt = (
+            "/{0} This is an installation discovery smoke test. " +
+            "Do not use tools; reply exactly MYSKILLS_DISCOVERY_OK." -f $SkillName
+        )
+        $output = (
+            & $Platform.Executable `
+                --bare `
+                --print `
+                --no-session-persistence `
+                --tools "" `
+                --max-budget-usd 0.05 `
+                $prompt 2>&1 |
+                Out-String
+        )
+        return (
+            $LASTEXITCODE -eq 0 -and
+            $output.Contains("MYSKILLS_DISCOVERY_OK")
+        )
+    }
+    return $false
 }
 
 try {
@@ -972,7 +1149,108 @@ try {
         Write-Output "DryRun: no dependency, Skill, configuration, or state changes will occur."
     }
 
+    $sourceFailures = @{}
+    $deploymentPlans = @()
+    Write-Output "TARGETS"
+    foreach ($skill in $selectedSkills) {
+        $source = Join-Path $repoRoot (
+            "skills\{0}\{1}" -f $skill.category, $skill.managed_name
+        )
+        if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+            $sourceFailures[$skill.managed_name] = (
+                "repository source is missing: $source"
+            )
+            Write-Output "SOURCE_MISSING`t$($skill.managed_name)`t$source"
+            continue
+        }
+        foreach ($targetId in @($skill.install_targets)) {
+            $platform = $platforms | Where-Object { $_.Id -eq $targetId } |
+                Select-Object -First 1
+            if ($null -eq $platform -or -not $platform.Available) {
+                $deploymentPlans += [PSCustomObject]@{
+                    Skill = $skill
+                    Source = $source
+                    TargetId = $targetId
+                    Platform = $platform
+                    Target = $null
+                    Key = "$targetId|$($skill.managed_name)"
+                    Available = $false
+                    Observation = $null
+                }
+                Write-Output (
+                    "TARGET`t$targetId`t$($skill.managed_name)`tNOT_INSTALLED"
+                )
+                continue
+            }
+
+            $target = Join-Path $platform.Destination $skill.managed_name
+            Assert-TargetWithinDestination `
+                -Target $target `
+                -Destination $platform.Destination
+            $key = "$targetId|$($skill.managed_name)"
+            $record = $null
+            if ($records.ContainsKey($key)) {
+                $record = $records[$key]
+            }
+            $observation = Get-TargetObservation `
+                -Source $source `
+                -Target $target `
+                -Record $record
+            $deploymentPlans += [PSCustomObject]@{
+                Skill = $skill
+                Source = $source
+                TargetId = $targetId
+                Platform = $platform
+                Target = $target
+                Key = $key
+                Available = $true
+                Observation = $observation
+            }
+            Write-Output (
+                "TARGET`t$targetId`t$($skill.managed_name)`t" +
+                "$($observation.Status)`t$target"
+            )
+        }
+    }
+
+    $qmdSelected = @(
+        $selectedSkills | Where-Object { $_.managed_name -eq "qmd" }
+    ).Count -gt 0
+    $qmdMcpPlans = @()
+    $qmdMcpFailure = $null
+    if ($RegisterQmdMcp -and $qmdSelected -and $Action -eq "Install") {
+        try {
+            $qmdMcpPlans = @(
+                Get-QmdMcpPlans -Platforms $platforms
+            )
+            foreach ($mcpPlan in $qmdMcpPlans) {
+                Write-Output (
+                    "MCP`t$($mcpPlan.Platform.Id)`tqmd`t$($mcpPlan.Status)"
+                )
+            }
+        }
+        catch {
+            $qmdMcpFailure = $_.Exception.Message
+            Write-Output "MCP`tqmd`tPREFLIGHT_FAILED`t$qmdMcpFailure"
+        }
+    }
+
     $dependencyBlocks = @{}
+    if ($null -ne $qmdMcpFailure) {
+        $dependencyBlocks["qmd"] = @(
+            "MCP preflight failed: $qmdMcpFailure"
+        )
+    }
+    elseif (@($qmdMcpPlans | Where-Object { $_.Status -eq "CONFLICT" }).Count -gt 0) {
+        $conflicts = @(
+            $qmdMcpPlans |
+                Where-Object { $_.Status -eq "CONFLICT" } |
+                ForEach-Object { $_.Platform.Id }
+        )
+        $dependencyBlocks["qmd"] = @(
+            "conflicting qmd MCP registration: $($conflicts -join ', ')"
+        )
+    }
     foreach ($dependency in $applicableDependencies) {
         $result = $dependencyResults[$dependency.id]
         $available = $result.status -eq "COMPATIBLE"
@@ -1135,40 +1413,42 @@ try {
             $blocked++
             continue
         }
-        $source = Join-Path $repoRoot (
-            "skills\{0}\{1}" -f $skill.category, $skill.managed_name
-        )
-        if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+        if ($sourceFailures.ContainsKey($skill.managed_name)) {
             Write-Output (
-                "BLOCKED`t$($skill.managed_name)`trepository source is missing: $source"
+                "BLOCKED`t$($skill.managed_name)`t" +
+                $sourceFailures[$skill.managed_name]
             )
             $blocked++
             continue
         }
 
-        foreach ($targetId in @($skill.install_targets)) {
+        $skillPlans = @(
+            $deploymentPlans | Where-Object {
+                $_.Skill.managed_name -eq $skill.managed_name
+            }
+        )
+        foreach ($deployment in $skillPlans) {
             $requested++
-            $platform = $platforms | Where-Object { $_.Id -eq $targetId } |
-                Select-Object -First 1
-            if ($null -eq $platform -or -not $platform.Available) {
+            $targetId = $deployment.TargetId
+            if (-not $deployment.Available) {
                 Write-Output (
                     "SKIPPED_NOT_INSTALLED`t$targetId`t$($skill.managed_name)"
                 )
                 $skipped++
                 continue
             }
-
-            $target = Join-Path $platform.Destination $skill.managed_name
-            Assert-TargetWithinDestination -Target $target -Destination $platform.Destination
-            $key = "$targetId|$($skill.managed_name)"
-            $record = $null
-            if ($records.ContainsKey($key)) {
-                $record = $records[$key]
+            $platform = $deployment.Platform
+            $source = $deployment.Source
+            $target = $deployment.Target
+            $key = $deployment.Key
+            $observation = $deployment.Observation
+            $discoveryCheck = {
+                param($InstalledPath)
+                return Test-AgentSkillDiscovery `
+                    -Platform $platform `
+                    -SkillName $skill.managed_name `
+                    -TargetPath $InstalledPath
             }
-            $observation = Get-TargetObservation `
-                -Source $source `
-                -Target $target `
-                -Record $record
 
             if ($Action -eq "Status") {
                 Write-Output (
@@ -1177,14 +1457,18 @@ try {
                 continue
             }
             if ($Action -eq "Verify") {
-                if ($observation.Status -eq "CURRENT") {
+                if (
+                    $observation.Status -eq "CURRENT" -and
+                    (& $discoveryCheck $target)
+                ) {
                     Write-Output "VERIFIED`t$targetId`t$($skill.managed_name)"
                     $installed++
                 }
                 else {
                     Write-Output (
                         "BLOCKED`t$targetId`t$($skill.managed_name)`t" +
-                        "expected CURRENT, found $($observation.Status)"
+                        "expected CURRENT with Agent discovery; found " +
+                        "$($observation.Status) or discovery failure"
                     )
                     $blocked++
                 }
@@ -1221,7 +1505,8 @@ try {
                 continue
             }
 
-            switch ($observation.Status) {
+            try {
+                switch ($observation.Status) {
                 "CURRENT" {
                     Write-Output "CURRENT`t$targetId`t$($skill.managed_name)"
                     $skipped++
@@ -1231,7 +1516,10 @@ try {
                         Write-Output "WOULD_INSTALL`t$targetId`t$($skill.managed_name)"
                     }
                     else {
-                        $hash = Install-DirectorySnapshot -Source $source -Target $target
+                        $hash = Install-DirectorySnapshot `
+                            -Source $source `
+                            -Target $target `
+                            -Verify $discoveryCheck
                         $records[$key] = New-StateRecord `
                             -Platform $targetId `
                             -Skill $skill.managed_name `
@@ -1247,7 +1535,10 @@ try {
                         Write-Output "WOULD_UPDATE`t$targetId`t$($skill.managed_name)"
                     }
                     else {
-                        $hash = Update-DirectorySnapshot -Source $source -Target $target
+                        $hash = Update-DirectorySnapshot `
+                            -Source $source `
+                            -Target $target `
+                            -Verify $discoveryCheck
                         $records[$key] = New-StateRecord `
                             -Platform $targetId `
                             -Skill $skill.managed_name `
@@ -1268,6 +1559,12 @@ try {
                             Write-Output "WOULD_ADOPT`t$targetId`t$($skill.managed_name)"
                         }
                         else {
+                            if (-not (& $discoveryCheck $target)) {
+                                throw (
+                                    "Agent discovery failed for adopted target " +
+                                    "$targetId/$($skill.managed_name)"
+                                )
+                            }
                             $records[$key] = New-StateRecord `
                                 -Platform $targetId `
                                 -Skill $skill.managed_name `
@@ -1292,7 +1589,10 @@ try {
                             $backupHash = Backup-DirectorySnapshot `
                                 -Source $target `
                                 -Backup $backup
-                            $hash = Update-DirectorySnapshot -Source $source -Target $target
+                            $hash = Update-DirectorySnapshot `
+                                -Source $source `
+                                -Target $target `
+                                -Verify $discoveryCheck
                             $backups += [ordered]@{
                                 platform = $targetId
                                 skill = $skill.managed_name
@@ -1336,7 +1636,10 @@ try {
                             $backupHash = Backup-DirectorySnapshot `
                                 -Source $target `
                                 -Backup $backup
-                            $hash = Update-DirectorySnapshot -Source $source -Target $target
+                            $hash = Update-DirectorySnapshot `
+                                -Source $source `
+                                -Target $target `
+                                -Verify $discoveryCheck
                             $backups += [ordered]@{
                                 platform = $targetId
                                 skill = $skill.managed_name
@@ -1365,22 +1668,40 @@ try {
                     }
                 }
             }
+            }
+            catch {
+                Write-Output (
+                    "BLOCKED`t$targetId`t$($skill.managed_name)`t" +
+                    $_.Exception.Message
+                )
+                $blocked++
+            }
         }
     }
 
-    $qmdSelected = @(
-        $selectedSkills | Where-Object { $_.managed_name -eq "qmd" }
-    ).Count -gt 0
     if ($RegisterQmdMcp -and $qmdSelected -and $Action -eq "Install") {
-        if ($DryRun) {
-            Write-Output "WOULD_REGISTER_MCP`tqmd`tinstalled Agent CLIs"
+        if ($dependencyBlocks.ContainsKey("qmd")) {
+            Write-Output (
+                "MCP_BLOCKED`tqmd`t" +
+                ($dependencyBlocks["qmd"] -join "; ")
+            )
+        }
+        elseif ($DryRun) {
+            foreach (
+                $mcpPlan in $qmdMcpPlans |
+                    Where-Object { $_.Status -eq "MISSING" }
+            ) {
+                Write-Output (
+                    "WOULD_REGISTER_MCP`t$($mcpPlan.Platform.Id)`tqmd"
+                )
+            }
         }
         elseif (
             $dependencyResults.ContainsKey("qmd") -and
             $dependencyResults["qmd"].status -eq "COMPATIBLE"
         ) {
             try {
-                Register-QmdMcp -Platforms $platforms
+                Register-QmdMcp -Plans $qmdMcpPlans
             }
             catch {
                 Write-Output "MCP_BLOCKED`tqmd`t$($_.Exception.Message)"

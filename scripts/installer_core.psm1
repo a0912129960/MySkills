@@ -96,7 +96,9 @@ function Install-DirectorySnapshot {
         [string]$Source,
 
         [Parameter(Mandatory = $true)]
-        [string]$Target
+        [string]$Target,
+
+        [scriptblock]$Verify
     )
 
     $resolvedSource = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Source).Path)
@@ -124,6 +126,10 @@ function Install-DirectorySnapshot {
             throw "Copied snapshot digest mismatch for $resolvedTarget"
         }
         Move-Item -LiteralPath $staging -Destination $resolvedTarget
+        if ($null -ne $Verify -and -not (& $Verify $resolvedTarget)) {
+            Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+            throw "Post-copy verification failed for $resolvedTarget"
+        }
         return $sourceHash
     }
     finally {
@@ -140,7 +146,9 @@ function Update-DirectorySnapshot {
         [string]$Source,
 
         [Parameter(Mandatory = $true)]
-        [string]$Target
+        [string]$Target,
+
+        [scriptblock]$Verify
     )
 
     $resolvedTarget = [IO.Path]::GetFullPath($Target)
@@ -157,16 +165,18 @@ function Update-DirectorySnapshot {
         Move-Item -LiteralPath $resolvedTarget -Destination $previous
         $movedPrevious = $true
         Move-Item -LiteralPath $replacement -Destination $resolvedTarget
+        if ($null -ne $Verify -and -not (& $Verify $resolvedTarget)) {
+            throw "Post-copy verification failed for $resolvedTarget"
+        }
         Remove-Item -LiteralPath $previous -Recurse -Force
         $movedPrevious = $false
         return $sourceHash
     }
     catch {
-        if (
-            $movedPrevious -and
-            -not (Test-Path -LiteralPath $resolvedTarget) -and
-            (Test-Path -LiteralPath $previous)
-        ) {
+        if ($movedPrevious -and (Test-Path -LiteralPath $previous)) {
+            if (Test-Path -LiteralPath $resolvedTarget) {
+                Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+            }
             Move-Item -LiteralPath $previous -Destination $resolvedTarget
             $movedPrevious = $false
         }

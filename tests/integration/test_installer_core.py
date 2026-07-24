@@ -181,6 +181,57 @@ class InstallerCoreTests(unittest.TestCase):
                 "local edits\n",
             )
 
+    def test_failed_post_copy_verification_removes_a_new_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            (source / "SKILL.md").write_text("new\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "Install-DirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET "
+                "-Verify { param($Path) return $false }",
+                environment={
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Post-copy verification failed", result.stderr)
+            self.assertFalse(target.exists())
+
+    def test_failed_update_verification_restores_the_previous_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            target.mkdir(parents=True)
+            (source / "SKILL.md").write_text("new\n", encoding="utf-8")
+            (target / "SKILL.md").write_text("old\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "Update-DirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET "
+                "-Verify { param($Path) return $false }",
+                environment={
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Post-copy verification failed", result.stderr)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                "old\n",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
