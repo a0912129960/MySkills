@@ -70,6 +70,17 @@ review and does not receive an automatic pass. A completed platform suite is not
 automatically retried to seek a better score. Any later rerun is a new, explicitly authorized
 evaluation.
 
+### Outcome oracle
+
+Every case defines its expected observable outcome and classification rules before execution.
+Objective requirements are graded with deterministic assertions whenever possible. Subjective
+quality is graded by a human against a written rubric whose criteria and pass conditions were
+fixed before the output was seen.
+
+An expected outcome or rubric is not edited after a run merely to change its result. If review
+shows that a case or its oracle was invalid, that run is classified as invalid; the corrected
+case receives a new version and is executed only as a new, explicitly authorized evaluation.
+
 ### Human review
 
 Human review cannot override a platform threshold failure by changing it directly to a pass.
@@ -138,7 +149,6 @@ The following items remain under discussion and are not yet acceptance rules:
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
 - Case counts and thresholds for non-trigger outcome and trajectory evaluation.
-- The result oracle for objective and subjective outcomes.
 - Which trajectory constraints are acceptance-critical.
 - Token-budget warning and failure criteria.
 - Golden Dataset ownership and approval.
