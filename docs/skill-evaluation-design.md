@@ -94,6 +94,14 @@ Together, the records show how a Skill changed, which problems it previously exh
 whether later evaluations resolved them. Machine-readable evidence supports the human-readable
 record but does not replace it.
 
+Failure localization is based only on observable evidence; the evaluator does not infer hidden
+model reasoning. For a black-box Skill without tools or side effects, the concise record needs
+only the input, expected result, actual result, and classification. When invocation, tool use,
+or external state is observable, the record also identifies the directly observed point of
+divergence, such as invocation, tool selection, parameters or ordering, tool-result handling,
+or final outcome. If the available evidence cannot support a classification, the evaluation is
+invalid rather than a Skill failure.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
