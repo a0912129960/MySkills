@@ -83,7 +83,18 @@ current directory digest of every Managed Skill. Raw model output stays under
    evaluator-owned deny rules for the source repository and host Skill/config
    roots. Shell commands that Claude otherwise treats as implicitly safe are
    forced through the non-interactive permission gate in those cases. No user
-   settings or user exec-policy rules are copied. Prompts, commands, machine
+   settings or user exec-policy rules are copied. Claude runs explicitly load
+   only project/local setting sources; the evaluator writes its deny and ask
+   rules into the disposable workspace's project settings so those rules are
+   part of the actual launch boundary. Runs require an empty strict MCP
+   configuration, disable Chrome integration, and isolate Windows home,
+   AppData, and XDG paths in the ephemeral profile. The isolation audit rejects
+   raw Claude commands that omit or override those controls. Each Claude result
+   also retains a sanitized environment manifest that classifies relevant paths
+   relative to the ephemeral profile or execution workspace (including QMD's
+   workspace-local XDG directories); missing,
+   malformed, or external-path evidence invalidates the measurement. Prompts,
+   commands, machine
    isolation results, and model output are written under the ignored batch
    workspace; credentials are never written there. Immediately before and
    after the target call, the evaluator snapshots the disposable execution

@@ -255,6 +255,7 @@ def _execute_batch_item(
             execution_workspace=execution_root,
         )
         external_tool_evidence = {}
+        environment_isolation = None
         with runners.isolated_target_environment(
             item["target"],
             allow_ephemeral_auth_copy=True,
@@ -273,6 +274,7 @@ def _execute_batch_item(
                 item["target"] == "claude"
                 and item["safety"] == "read-only"
             ),
+            execution_workspace=execution_root,
         ) as env:
             if item["runtime_tools"] or item["external_tools"]:
                 preparation = runners.prepare_runtime_environment(
@@ -287,6 +289,13 @@ def _execute_batch_item(
                 env = preparation.environment
                 external_tool_evidence = (
                     preparation.external_tool_evidence
+                )
+            if item["target"] == "claude":
+                environment_isolation = (
+                    runners.claude_environment_isolation_evidence(
+                        env,
+                        execution_root,
+                    )
                 )
             identity = runners.run_command(
                 [item["target"], "--version"],
@@ -319,6 +328,8 @@ def _execute_batch_item(
                 audit_undeclared_bash=(
                     item["safety"] == "read-only"
                 ),
+                command=result.get("command", []),
+                environment_isolation=environment_isolation,
             )
         )
     completed_at = datetime.now(timezone.utc).isoformat()
@@ -329,6 +340,7 @@ def _execute_batch_item(
         "target_identity": identity["stdout"].strip(),
         "target_identity_returncode": identity["returncode"],
         "external_tool_evidence": external_tool_evidence,
+        "environment_isolation": environment_isolation,
         "workspace_changes": _workspace_changes(
             workspace_before,
             workspace_after,
@@ -536,7 +548,16 @@ def main(argv: list[str] | None = None) -> int:
                         else ()
                     ),
                     restrict_implicit_shell=target == "claude",
+                    execution_workspace=execution_root,
                 ) as env:
+                    environment_isolation = (
+                        runners.claude_environment_isolation_evidence(
+                            env,
+                            execution_root,
+                        )
+                        if target == "claude"
+                        else None
+                    )
                     result = runners.run_command(
                         command,
                         cwd=execution_root,
@@ -553,12 +574,15 @@ def main(argv: list[str] | None = None) -> int:
                         target,
                         evidence,
                         execution_root,
+                        command=result.get("command", []),
+                        environment_isolation=environment_isolation,
                     )
                 )
             record = {
                 "mode": args.mode,
                 "target": target,
                 "execution_workspace": execution_workspace,
+                "environment_isolation": environment_isolation,
                 "isolation_violations": isolation_violations,
                 "result": result,
             }

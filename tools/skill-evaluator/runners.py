@@ -803,6 +803,11 @@ def build_command(
             "stream-json",
             "--verbose",
             "--no-session-persistence",
+            "--setting-sources=project,local",
+            "--mcp-config",
+            "{}",
+            "--strict-mcp-config",
+            "--no-chrome",
         ]
         if safety == "read-only":
             command.extend(["--permission-mode", "dontAsk"])
@@ -966,6 +971,76 @@ def evaluator_environment() -> dict[str, str]:
     return env
 
 
+def _isolated_path_label(
+    value: object,
+    profile: Path,
+    workspace: Path,
+) -> str:
+    if not isinstance(value, str) or not value:
+        return "missing-or-invalid"
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        return "missing-or-invalid"
+    resolved = candidate.resolve()
+    if resolved == profile:
+        return "profile-root"
+    try:
+        relative = resolved.relative_to(profile)
+    except ValueError:
+        pass
+    else:
+        return "profile/" + relative.as_posix()
+    if resolved == workspace:
+        return "workspace-root"
+    try:
+        relative = resolved.relative_to(workspace)
+    except ValueError:
+        return "outside-isolation-roots"
+    return "workspace/" + relative.as_posix()
+
+
+def claude_environment_isolation_evidence(
+    env: dict[str, str],
+    execution_workspace: Path | str,
+) -> dict[str, object]:
+    """Return sanitized evidence for the actual Claude child environment."""
+
+    profile_text = env.get("CLAUDE_CONFIG_DIR")
+    if not profile_text or not Path(profile_text).is_absolute():
+        profile = Path.cwd() / "__missing_claude_profile__"
+    else:
+        profile = Path(profile_text).resolve()
+    workspace = Path(execution_workspace).resolve()
+    keys = (
+        "USERPROFILE",
+        "HOME",
+        "CLAUDE_CONFIG_DIR",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    )
+    home_match: bool | None = None
+    if os.name == "nt":
+        home_drive, home_path = os.path.splitdrive(str(profile))
+        home_match = (
+            env.get("HOMEDRIVE") == home_drive
+            and env.get("HOMEPATH") == home_path
+        )
+    return {
+        "schema_version": 1,
+        "paths": {
+            key: _isolated_path_label(
+                env.get(key),
+                profile,
+                workspace,
+            )
+            for key in keys
+        },
+        "windows_home_matches_profile": home_match,
+    }
+
+
 @contextmanager
 def isolated_execution_workspace(repository: Path | str):
     """Create a disposable evaluation workspace outside the repository."""
@@ -994,6 +1069,7 @@ def isolated_target_environment(
     allowed_commands: Iterable[str] = (),
     denied_read_roots: Iterable[Path | str] = (),
     restrict_implicit_shell: bool = False,
+    execution_workspace: Path | str | None = None,
 ):
     """Isolate user Skills while copying only auth into an OS temp directory."""
 
@@ -1037,6 +1113,32 @@ def isolated_target_environment(
                 declared_allowed_commands,
             )
         else:
+            if execution_workspace is None:
+                raise ValueError(
+                    "Claude isolation requires an execution workspace"
+                )
+            app_data = isolated / "AppData" / "Roaming"
+            local_app_data = isolated / "AppData" / "Local"
+            xdg_config = isolated / ".config"
+            xdg_cache = isolated / ".cache"
+            for directory in (
+                app_data,
+                local_app_data,
+                xdg_config,
+                xdg_cache,
+            ):
+                directory.mkdir(parents=True, exist_ok=True)
+            env["APPDATA"] = str(app_data)
+            env["LOCALAPPDATA"] = str(local_app_data)
+            env["XDG_CONFIG_HOME"] = str(xdg_config)
+            env["XDG_CACHE_HOME"] = str(xdg_cache)
+            if os.name == "nt":
+                home_drive, home_path = os.path.splitdrive(str(isolated))
+                env["HOMEDRIVE"] = home_drive
+                env["HOMEPATH"] = home_path
+            else:
+                env.pop("HOMEDRIVE", None)
+                env.pop("HOMEPATH", None)
             env["CLAUDE_CONFIG_DIR"] = str(isolated)
             if not env.get("ANTHROPIC_API_KEY"):
                 source_home = Path(
@@ -1048,7 +1150,7 @@ def isolated_target_environment(
                 )
             _write_isolated_claude_settings(
                 source_env,
-                isolated,
+                Path(execution_workspace).resolve() / ".claude",
                 declared_denied_read_roots,
                 restrict_implicit_shell=restrict_implicit_shell,
             )
@@ -1154,6 +1256,7 @@ def _write_isolated_claude_settings(
 ) -> None:
     """Deny Claude file tools access to host config and repository roots."""
 
+    destination.mkdir(parents=True, exist_ok=True)
     roots = {Path(root).resolve() for root in denied_read_roots}
     source_config = source_env.get("CLAUDE_CONFIG_DIR")
     if source_config:

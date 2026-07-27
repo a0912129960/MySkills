@@ -401,6 +401,7 @@ def _build_case(
             "tool_calls": [],
             "final_output": None,
             "external_state": None,
+            "environment_isolation": None,
             "unavailable": [
                 {
                     "field": "external_state",
@@ -437,6 +438,15 @@ def _build_case(
             "Raw result plan does not match the current case manifest."
         )
         return case, metadata
+
+    raw_environment = raw.get("environment_isolation")
+    if (
+        item["target"] == "claude"
+        and not aggregate_benchmark.claude_environment_isolation_violations(
+            raw_environment
+        )
+    ):
+        case["observed"]["environment_isolation"] = raw_environment
 
     metadata["started_at"] = _valid_datetime(raw.get("started_at"))
     metadata["completed_at"] = _valid_datetime(raw.get("completed_at"))
@@ -571,6 +581,33 @@ def _build_case(
             "Run a new evaluation with isolation auditing enabled.",
         )
     elif evidence is not None and isinstance(execution_workspace, str):
+        raw_result = raw.get("result")
+        command = (
+            raw_result.get("command", [])
+            if isinstance(raw_result, dict)
+            else []
+        )
+        command_violations = (
+            aggregate_benchmark.claude_command_isolation_violations(
+                command,
+                execution_workspace,
+                allowed_commands=[
+                    *item["runtime_tools"],
+                    *item["external_tools"],
+                ],
+                read_only=item.get("safety", "read-only") == "read-only",
+            )
+            if item["target"] == "claude"
+            else []
+        )
+        environment_isolation = raw.get("environment_isolation")
+        environment_violations = (
+            aggregate_benchmark.claude_environment_isolation_violations(
+                environment_isolation
+            )
+            if item["target"] == "claude"
+            else []
+        )
         recomputed = aggregate_benchmark.model_isolation_violations(
             item["target"],
             evidence,
@@ -582,14 +619,27 @@ def _build_case(
             audit_undeclared_bash=(
                 item.get("safety", "read-only") == "read-only"
             ),
+            command=command,
+            environment_isolation=environment_isolation,
         )
         if recomputed:
-            technical_failure = technical_failure or (
-                "fail",
-                "isolation",
-                "; ".join(recomputed),
-                "Restrict the Skill trajectory and run a new evaluation.",
-            )
+            if command_violations or environment_violations:
+                technical_failure = technical_failure or (
+                    "invalid",
+                    "isolation",
+                    "; ".join(recomputed),
+                    (
+                        "Fix the evaluator isolation boundary and run a new "
+                        "evaluation."
+                    ),
+                )
+            else:
+                technical_failure = technical_failure or (
+                    "fail",
+                    "isolation",
+                    "; ".join(recomputed),
+                    "Restrict the Skill trajectory and run a new evaluation.",
+                )
         elif stored_isolation != recomputed:
             technical_failure = technical_failure or (
                 "invalid",

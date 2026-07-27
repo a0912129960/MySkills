@@ -845,6 +845,10 @@ def audit_reviewed_skill(
                     audit_undeclared_bash=(
                         item["safety"] == "read-only"
                     ),
+                    command=result.get("command", []),
+                    environment_isolation=record.get(
+                        "environment_isolation"
+                    ),
                 )
             )
             if (

@@ -65,6 +65,7 @@ def valid_record() -> dict[str, object]:
             "tool_calls": [],
             "final_output": "The requested result.",
             "external_state": None,
+            "environment_isolation": None,
             "unavailable": [],
         },
         "assertion_results": [
@@ -168,11 +169,38 @@ class EvaluationRecordContractTests(unittest.TestCase):
                 "failure",
             },
         )
+        self.assertIn(
+            "environment_isolation",
+            schema["$defs"]["observed"]["required"],
+        )
 
     def test_record_validator_accepts_reviewable_git_record(self) -> None:
         records = load_records_module()
 
         self.assertEqual(records.validate_record_document(valid_record()), [])
+
+    def test_record_validator_accepts_workspace_isolated_qmd_xdg_paths(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        record["targets"]["claude"]["cases"][0]["observed"][
+            "environment_isolation"
+        ] = {
+            "schema_version": 1,
+            "paths": {
+                "USERPROFILE": "profile-root",
+                "HOME": "profile-root",
+                "CLAUDE_CONFIG_DIR": "profile-root",
+                "APPDATA": "profile/AppData/Roaming",
+                "LOCALAPPDATA": "workspace/.runtime/localappdata",
+                "XDG_CONFIG_HOME": "workspace/.runtime/qmd/xdg-config",
+                "XDG_CACHE_HOME": "workspace/.runtime/qmd/cache",
+            },
+            "windows_home_matches_profile": True,
+        }
+
+        self.assertEqual(records.validate_record_document(record), [])
 
     def test_passing_case_requires_only_required_assertions_to_pass(
         self,

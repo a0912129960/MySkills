@@ -231,6 +231,7 @@ def _render_run(case: dict[str, Any]) -> str:
     result_path = _relative_href(case.get("result_path"))
     grading_path = _relative_href(case.get("grading_path"))
     external_tool_evidence = case.get("external_tool_evidence") or {}
+    environment_isolation = case.get("environment_isolation")
     workspace_changes = case.get("workspace_changes") or []
     raw_result_state = case.get("raw_result_state", "present")
     return f"""
@@ -265,6 +266,10 @@ def _render_run(case: dict[str, Any]) -> str:
   <h5>Machine isolation audit</h5>
   <p>Audit state: {_escape(audit_state)}</p>
   {isolation_details}
+  <details>
+    <summary>Sanitized child environment isolation evidence</summary>
+    <pre>{_json_text(environment_isolation)}</pre>
+  </details>
   <h5>Exact logical launch command (includes the actual prompt)</h5>
   <pre>{_json_text(process.get('command'))}</pre>
   <p>

@@ -92,6 +92,14 @@ Each Codex run uses an evaluator-owned ephemeral profile and `untrusted`
 approval. Each Claude read-only run uses evaluator-owned permissions scoped to
 declared tools and the disposable workspace. User settings, user exec-policy
 rules, and undeclared Skills are not copied.
+Claude launch evidence must show project/local-only settings, an empty strict
+MCP configuration, disabled Chrome integration, and a sanitized child
+environment manifest whose home, AppData, and XDG paths remain inside the
+ephemeral profile or execution workspace. Evaluator-owned deny and ask rules
+are written to the disposable workspace's project settings so the declared
+setting sources load them; QMD may relocate XDG state only to its declared
+workspace-local runtime directories. Missing or malformed launch or environment
+evidence is an invalid measurement, not a Skill failure.
 
 Every run plan records the current primary Skill digest plus every staged
 companion and runtime digest. Review audit rebuilds the plan, reparses raw Tool

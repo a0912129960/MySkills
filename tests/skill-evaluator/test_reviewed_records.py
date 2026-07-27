@@ -134,6 +134,22 @@ def pending_review_with_sanitization() -> dict[str, object]:
     }
 
 
+def isolated_claude_environment_evidence() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "paths": {
+            "USERPROFILE": "profile-root",
+            "HOME": "profile-root",
+            "CLAUDE_CONFIG_DIR": "profile-root",
+            "APPDATA": "profile/AppData/Roaming",
+            "LOCALAPPDATA": "profile/AppData/Local",
+            "XDG_CONFIG_HOME": "profile/.config",
+            "XDG_CACHE_HOME": "profile/.cache",
+        },
+        "windows_home_matches_profile": True if sys.platform == "win32" else None,
+    }
+
+
 class ReviewedRecordBuilderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -144,6 +160,10 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
         cls.records = load_module(
             "skill_evaluator_records_for_builder",
             "evaluation_records.py",
+        )
+        cls.runners = load_module(
+            "skill_evaluator_runners_for_builder",
+            "runners.py",
         )
 
     def make_workspace(
@@ -226,8 +246,25 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
                         "external_tool_evidence": {},
                         "workspace_changes": [],
                         "execution_workspace": str(execution),
+                        "environment_isolation": (
+                            isolated_claude_environment_evidence()
+                            if target == "claude"
+                            else None
+                        ),
                         "isolation_violations": [],
                         "result": {
+                            "command": (
+                                self.runners.build_command(
+                                    "claude",
+                                    "fixture",
+                                    Path(item["skill_path"]),
+                                    explicit=item["explicit"],
+                                    safety=item["safety"],
+                                    execution_workspace=execution,
+                                )
+                                if target == "claude"
+                                else ["codex", "exec", "fixture"]
+                            ),
                             "returncode": 0,
                             "timed_out": False,
                             "duration_ms": 25,
@@ -380,6 +417,99 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
             case = record["targets"]["claude"]["cases"][0]
             self.assertEqual(case["status"], "fail")
             self.assertEqual(case["failure"]["stage"], "isolation")
+
+    def test_evaluator_isolation_defect_invalidates_measurement(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            workspace, plan = self.make_workspace(repo)
+            result_path = (
+                workspace
+                / "fixture-skill"
+                / "normal-use"
+                / "claude"
+                / "result.json"
+            )
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
+            raw["result"]["command"] = [
+                "claude",
+                "-p",
+                "fixture",
+            ]
+            evidence = self.builder.aggregate_benchmark.model_evidence(
+                "claude",
+                raw["result"],
+            )
+            raw["isolation_violations"] = (
+                self.builder.aggregate_benchmark.model_isolation_violations(
+                    "claude",
+                    evidence,
+                    raw["execution_workspace"],
+                    command=raw["result"]["command"],
+                )
+            )
+            result_path.write_text(json.dumps(raw), encoding="utf-8")
+
+            record = self.builder.build_record_from_plan(
+                repo,
+                workspace,
+                "fixture-skill",
+                "20260727T120000Z-evaluator-isolation",
+                plan,
+                human_review=final_review(),
+            )
+
+            case = record["targets"]["claude"]["cases"][0]
+            self.assertEqual(case["status"], "invalid")
+            self.assertEqual(case["failure"]["stage"], "isolation")
+            self.assertIn(
+                "does not exclude user settings",
+                case["failure"]["reason"],
+            )
+
+    def test_missing_environment_evidence_invalidates_measurement(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            workspace, plan = self.make_workspace(repo)
+            result_path = (
+                workspace
+                / "fixture-skill"
+                / "normal-use"
+                / "claude"
+                / "result.json"
+            )
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
+            raw["environment_isolation"] = None
+            evidence = self.builder.aggregate_benchmark.model_evidence(
+                "claude",
+                raw["result"],
+            )
+            raw["isolation_violations"] = (
+                self.builder.aggregate_benchmark.model_isolation_violations(
+                    "claude",
+                    evidence,
+                    raw["execution_workspace"],
+                    command=raw["result"]["command"],
+                    environment_isolation=None,
+                )
+            )
+            result_path.write_text(json.dumps(raw), encoding="utf-8")
+
+            record = self.builder.build_record_from_plan(
+                repo,
+                workspace,
+                "fixture-skill",
+                "20260727T120000Z-environment-isolation",
+                plan,
+                human_review=final_review(),
+            )
+
+            case = record["targets"]["claude"]["cases"][0]
+            self.assertEqual(case["status"], "invalid")
+            self.assertEqual(case["failure"]["stage"], "isolation")
+            self.assertIn(
+                "environment isolation evidence is missing",
+                case["failure"]["reason"],
+            )
 
     def test_stale_raw_plan_retains_the_plan_and_digest_actually_tested(
         self,
@@ -1005,8 +1135,27 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
                             "target_identity_returncode": 0,
                             "external_tool_evidence": {},
                             "execution_workspace": str(execution),
+                            "environment_isolation": (
+                                isolated_claude_environment_evidence()
+                                if target == "claude"
+                                else None
+                            ),
                             "isolation_violations": [],
                             "result": {
+                                "command": (
+                                    self.runners.build_command(
+                                        "claude",
+                                        "fixture",
+                                        Path(item["skill_path"]),
+                                        explicit=item["explicit"],
+                                        safety=item["safety"],
+                                        runtime_tools=item["runtime_tools"],
+                                        external_tools=item["external_tools"],
+                                        execution_workspace=execution,
+                                    )
+                                    if target == "claude"
+                                    else ["codex", "exec", "fixture"]
+                                ),
                                 "returncode": 0,
                                 "timed_out": False,
                                 "duration_ms": 5,

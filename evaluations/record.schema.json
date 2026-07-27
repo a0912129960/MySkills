@@ -169,6 +169,61 @@
         "reason": {"type": "string", "minLength": 1}
       }
     },
+    "environmentIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "paths",
+        "windows_home_matches_profile"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "USERPROFILE",
+            "HOME",
+            "CLAUDE_CONFIG_DIR",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME"
+          ],
+          "properties": {
+            "USERPROFILE": {"const": "profile-root"},
+            "HOME": {"const": "profile-root"},
+            "CLAUDE_CONFIG_DIR": {"const": "profile-root"},
+            "APPDATA": {"const": "profile/AppData/Roaming"},
+            "LOCALAPPDATA": {
+              "enum": [
+                "profile/AppData/Local",
+                "workspace/.runtime/localappdata"
+              ]
+            },
+            "XDG_CONFIG_HOME": {
+              "enum": [
+                "profile/.config",
+                "workspace/.runtime/qmd/xdg-config"
+              ]
+            },
+            "XDG_CACHE_HOME": {
+              "enum": [
+                "profile/.cache",
+                "workspace/.runtime/qmd/cache"
+              ]
+            }
+          }
+        },
+        "windows_home_matches_profile": {
+          "oneOf": [
+            {"const": true},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
     "observed": {
       "type": "object",
       "additionalProperties": false,
@@ -178,6 +233,7 @@
         "tool_calls",
         "final_output",
         "external_state",
+        "environment_isolation",
         "unavailable"
       ],
       "properties": {
@@ -198,6 +254,12 @@
         "external_state": {
           "oneOf": [
             {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "environment_isolation": {
+          "oneOf": [
+            {"$ref": "#/$defs/environmentIsolation"},
             {"type": "null"}
           ]
         },

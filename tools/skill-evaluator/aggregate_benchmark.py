@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import statistics
@@ -13,6 +14,8 @@ from typing import Any, Iterable
 
 
 PENDING_EVIDENCE = "PENDING HUMAN REVIEW"
+_COMMAND_NOT_AUDITED = object()
+_ENVIRONMENT_NOT_AUDITED = object()
 
 
 def _mean(values: list[float]) -> float | None:
@@ -290,6 +293,228 @@ def _declared_command(
     )
 
 
+def claude_command_isolation_violations(
+    command: object,
+    execution_workspace: Path | str,
+    *,
+    allowed_commands: Iterable[str] = (),
+    read_only: bool,
+) -> list[str]:
+    """Validate the observable Claude launch boundary."""
+
+    if (
+        not isinstance(command, (list, tuple))
+        or not command
+        or not all(isinstance(value, str) for value in command)
+    ):
+        return ["Claude command isolation evidence is malformed"]
+    command_values = list(command)
+    violations: list[str] = []
+    value_options = {
+        "-p",
+        "--output-format",
+        "--mcp-config",
+        "--permission-mode",
+        "--tools",
+        "--allowedTools",
+        "--model",
+    }
+    flag_options = {
+        "--verbose",
+        "--no-session-persistence",
+        "--strict-mcp-config",
+        "--no-chrome",
+        "--setting-sources=project,local",
+    }
+    parsed_values: dict[str, list[str]] = {
+        option: [] for option in value_options
+    }
+    parsed_flags = {option: 0 for option in flag_options}
+    shape_valid = command_values[0] == "claude"
+    index = 1
+    while shape_valid and index < len(command_values):
+        token = command_values[index]
+        if token in flag_options:
+            parsed_flags[token] += 1
+            index += 1
+            continue
+        if token not in value_options or index + 1 >= len(command_values):
+            shape_valid = False
+            break
+        parsed_values[token].append(command_values[index + 1])
+        index += 2
+
+    normalized_workspace = Path(execution_workspace).resolve().as_posix()
+    normalized_workspace = normalized_workspace.rstrip("/")
+    if re.match(r"^[A-Za-z]:", normalized_workspace):
+        normalized_workspace = (
+            "/" + normalized_workspace[0].lower()
+            + normalized_workspace[2:]
+        )
+    workspace_pattern = f"/{normalized_workspace}/**"
+    declared_commands = tuple(allowed_commands)
+    read_only_tools = (
+        "Read,Glob,Grep,Bash"
+        if declared_commands
+        else "Read,Glob,Grep"
+    )
+    allowed_tool_entries = [
+        f"Read({workspace_pattern})",
+        *(f"Bash({name} *)" for name in declared_commands),
+    ]
+    expected_allowed_tools = ",".join(allowed_tool_entries)
+    tools_values = parsed_values["--tools"]
+    expected_permission_mode = ["dontAsk"] if read_only else []
+    expected_tools = (
+        [read_only_tools]
+        if read_only
+        else ["Read,Write,Edit,Glob,Grep,Bash"]
+    )
+    expected_allowed_tools_values = (
+        [expected_allowed_tools] if read_only else []
+    )
+    shape_valid = shape_valid and (
+        len(parsed_values["-p"]) == 1
+        and bool(parsed_values["-p"][0])
+        and parsed_values["--output-format"] == ["stream-json"]
+        and parsed_flags["--verbose"] == 1
+        and parsed_flags["--no-session-persistence"] == 1
+        and parsed_flags["--setting-sources=project,local"] == 1
+        and parsed_values["--mcp-config"] == ["{}"]
+        and parsed_flags["--strict-mcp-config"] == 1
+        and parsed_flags["--no-chrome"] == 1
+        and parsed_values["--permission-mode"]
+        == expected_permission_mode
+        and tools_values == expected_tools
+        and parsed_values["--allowedTools"]
+        == expected_allowed_tools_values
+        and len(parsed_values["--model"]) <= 1
+        and all(
+            value and not value.startswith("-")
+            for value in parsed_values["--model"]
+        )
+    )
+    if not shape_valid:
+        violations.append(
+            "Claude command shape permits undeclared capabilities"
+        )
+    setting_source_tokens = [
+        token
+        for token in command_values
+        if token == "--setting-sources"
+        or token.startswith("--setting-sources=")
+    ]
+    extra_settings = [
+        token
+        for token in command_values
+        if token == "--settings" or token.startswith("--settings=")
+    ]
+    if (
+        setting_source_tokens != ["--setting-sources=project,local"]
+        or extra_settings
+    ):
+        violations.append(
+            "Claude command does not exclude user settings"
+        )
+    mcp_tokens = [
+        index
+        for index, token in enumerate(command_values)
+        if token == "--mcp-config" or token.startswith("--mcp-config=")
+    ]
+    if len(mcp_tokens) != 1:
+        mcp_boundary_valid = False
+    else:
+        mcp_index = mcp_tokens[0]
+        mcp_boundary_valid = (
+            command_values[mcp_index] == "--mcp-config"
+            and mcp_index + 2 < len(command_values)
+            and command_values[mcp_index + 1] == "{}"
+            and command_values[mcp_index + 2].startswith("--")
+            and command_values.count("--strict-mcp-config") == 1
+        )
+    if not mcp_boundary_valid:
+        violations.append(
+            "Claude command does not enforce an empty MCP configuration"
+        )
+    if (
+        command_values.count("--no-chrome") != 1
+        or "--chrome" in command_values
+    ):
+        violations.append(
+            "Claude command does not disable Chrome integration"
+        )
+    return violations
+
+
+def claude_environment_isolation_violations(
+    evidence: object,
+) -> list[str]:
+    """Validate sanitized evidence for the Claude child environment."""
+
+    expected_keys = {
+        "USERPROFILE": "profile-root",
+        "HOME": "profile-root",
+        "CLAUDE_CONFIG_DIR": "profile-root",
+        "APPDATA": "profile/AppData/Roaming",
+    }
+    if (
+        not isinstance(evidence, dict)
+        or set(evidence)
+        != {
+            "schema_version",
+            "paths",
+            "windows_home_matches_profile",
+        }
+        or evidence.get("schema_version") != 1
+        or not isinstance(evidence.get("paths"), dict)
+        or set(evidence["paths"])
+        != {
+            *expected_keys,
+            "LOCALAPPDATA",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME",
+        }
+    ):
+        return [
+            (
+                "Claude environment isolation evidence is missing or "
+                "malformed"
+            )
+        ]
+    violations = [
+        f"Claude environment path is not isolated: {key}"
+        for key, expected in expected_keys.items()
+        if evidence["paths"].get(key) != expected
+    ]
+    if evidence["paths"].get("LOCALAPPDATA") not in {
+        "profile/AppData/Local",
+        "workspace/.runtime/localappdata",
+    }:
+        violations.append(
+            "Claude environment path is not isolated: LOCALAPPDATA"
+        )
+    if evidence["paths"].get("XDG_CONFIG_HOME") not in {
+        "profile/.config",
+        "workspace/.runtime/qmd/xdg-config",
+    }:
+        violations.append(
+            "Claude environment path is not isolated: XDG_CONFIG_HOME"
+        )
+    if evidence["paths"].get("XDG_CACHE_HOME") not in {
+        "profile/.cache",
+        "workspace/.runtime/qmd/cache",
+    }:
+        violations.append(
+            "Claude environment path is not isolated: XDG_CACHE_HOME"
+        )
+    expected_home_match: bool | None = True if os.name == "nt" else None
+    if evidence.get("windows_home_matches_profile") is not expected_home_match:
+        violations.append(
+            "Claude Windows home variables do not match the isolated profile"
+        )
+    return violations
+
+
 def model_isolation_violations(
     target: str,
     evidence: dict[str, Any],
@@ -297,17 +522,37 @@ def model_isolation_violations(
     *,
     allowed_commands: Iterable[str] = (),
     audit_undeclared_bash: bool = True,
+    command: object = _COMMAND_NOT_AUDITED,
+    environment_isolation: object = _ENVIRONMENT_NOT_AUDITED,
 ) -> list[str]:
     """Return successful Claude tool actions outside the declared boundary."""
 
     if target != "claude":
         return []
     workspace = Path(execution_workspace).resolve()
-    violations = [
-        f"Claude evidence parse error: {error}"
-        for error in evidence.get("parse_errors") or ()
-        if isinstance(error, str) and error
-    ]
+    violations = (
+        []
+        if command is _COMMAND_NOT_AUDITED
+        else claude_command_isolation_violations(
+            command,
+            execution_workspace,
+            allowed_commands=allowed_commands,
+            read_only=audit_undeclared_bash,
+        )
+    )
+    if environment_isolation is not _ENVIRONMENT_NOT_AUDITED:
+        violations.extend(
+            claude_environment_isolation_violations(
+                environment_isolation
+            )
+        )
+    violations.extend(
+        [
+            f"Claude evidence parse error: {error}"
+            for error in evidence.get("parse_errors") or ()
+            if isinstance(error, str) and error
+        ]
+    )
     violations.extend(_claude_trace_errors(evidence))
     file_fields = {
         "Read": ("file_path",),
@@ -753,6 +998,10 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             audit_undeclared_bash=(
                 plan.get("safety", "read-only") == "read-only"
             ),
+            command=result.get("command", []),
+            environment_isolation=record.get(
+                "environment_isolation"
+            ),
         )
         if stored_isolation_valid:
             isolation_violations = list(stored_isolation)
@@ -816,6 +1065,9 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "raw_result_state": raw_result_state,
             "model_evidence": evidence,
             "execution_workspace": execution_workspace,
+            "environment_isolation": record.get(
+                "environment_isolation"
+            ),
             "isolation_violations": list(isolation_violations),
             "isolation_audit_state": isolation_audit_state,
             "result_path": result_path.relative_to(skill_root).as_posix(),

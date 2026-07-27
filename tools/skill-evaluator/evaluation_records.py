@@ -449,6 +449,60 @@ def _validate_target(target: str, value: object) -> list[str]:
     return errors
 
 
+def _valid_environment_isolation(value: object) -> bool:
+    if (
+        not isinstance(value, dict)
+        or set(value)
+        != {
+            "schema_version",
+            "paths",
+            "windows_home_matches_profile",
+        }
+        or value.get("schema_version") != 1
+    ):
+        return False
+    paths = value.get("paths")
+    if (
+        not isinstance(paths, dict)
+        or set(paths)
+        != {
+            "USERPROFILE",
+            "HOME",
+            "CLAUDE_CONFIG_DIR",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME",
+        }
+    ):
+        return False
+    return (
+        paths["USERPROFILE"] == "profile-root"
+        and paths["HOME"] == "profile-root"
+        and paths["CLAUDE_CONFIG_DIR"] == "profile-root"
+        and paths["APPDATA"] == "profile/AppData/Roaming"
+        and paths["LOCALAPPDATA"]
+        in {
+            "profile/AppData/Local",
+            "workspace/.runtime/localappdata",
+        }
+        and paths["XDG_CONFIG_HOME"]
+        in {
+            "profile/.config",
+            "workspace/.runtime/qmd/xdg-config",
+        }
+        and paths["XDG_CACHE_HOME"]
+        in {
+            "profile/.cache",
+            "workspace/.runtime/qmd/cache",
+        }
+        and (
+            value["windows_home_matches_profile"] is True
+            or value["windows_home_matches_profile"] is None
+        )
+    )
+
+
 def _validate_case(prefix: str, value: object) -> list[str]:
     if not isinstance(value, dict) or set(value) != CASE_FIELDS:
         return [f"{prefix} fields are invalid"]
@@ -546,6 +600,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
         "tool_calls",
         "final_output",
         "external_state",
+        "environment_isolation",
         "unavailable",
     }:
         errors.append(f"{prefix}.observed fields are invalid")
@@ -573,6 +628,14 @@ def _validate_case(prefix: str, value: object) -> list[str]:
         external_state = observed.get("external_state")
         if external_state is not None and not isinstance(external_state, str):
             errors.append(f"{prefix}.observed.external_state is invalid")
+        environment_isolation = observed.get("environment_isolation")
+        if (
+            environment_isolation is not None
+            and not _valid_environment_isolation(environment_isolation)
+        ):
+            errors.append(
+                f"{prefix}.observed.environment_isolation is invalid"
+            )
         unavailable = observed.get("unavailable")
         if not isinstance(unavailable, list):
             errors.append(f"{prefix}.observed.unavailable must be an array")
