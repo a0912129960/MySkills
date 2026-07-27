@@ -83,17 +83,32 @@ Each evaluation record contains at least:
 - the assertions, scores, and reasons for the classification; and
 - elapsed time and token usage when the runner exposes them.
 
-The reviewable evaluation record is retained in the MySkills Git repository. It must be
-sanitized before it is staged: credentials, personal data, machine-specific private paths,
-and other secrets are never committed. Unsanitized runner output may exist only as ignored,
-temporary execution data and is not the repository's acceptance evidence.
+Every evaluation run, including development runs and runs classified as failed or invalid,
+has a reviewable record retained in the MySkills Git repository. Records are append-only:
+correcting a Skill, case, or evaluator produces a new record rather than deleting or replacing
+the earlier result.
+
+The record is concise and human-readable. It identifies the stage at which a failure occurred,
+the observed problem, and the corrective action or improvement carried into a later iteration.
+Together, the records show how a Skill changed, which problems it previously exhibited, and
+whether later evaluations resolved them. Machine-readable evidence supports the human-readable
+record but does not replace it.
+
+Every record must be sanitized before it is staged: credentials, personal data,
+machine-specific private paths, and other secrets are never committed. Unsanitized runner
+output may exist only as ignored, temporary execution data and is not the repository's
+acceptance evidence.
+
+If accumulated evaluation records later become too large or difficult to operate, MySkills
+will add an archive mechanism without discarding their history. Archive design is deferred
+until an actual size or operability problem is observed.
 
 ## Unresolved decisions
 
 The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
-  retention policy for superseded evaluations.
+  concise human-readable format.
 - Case counts, sampling protocol, and platform-specific thresholds.
 - The result oracle for objective and subjective outcomes.
 - Which trajectory constraints are acceptance-critical.
