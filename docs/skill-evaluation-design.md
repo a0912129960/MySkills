@@ -59,16 +59,15 @@ a platform policy failure.
 
 ### Implicit trigger evaluation
 
-Each Implicit-invocation Skill has a fixed ten-case trigger suite for each platform in an
+Each Implicit-invocation Skill has a fixed three-case trigger suite for each platform in an
 evaluation run:
 
-- five cases that should invoke the Skill;
-- five cases that should not invoke the Skill; and
-- paraphrase variants and nearest-Skill boundary cases within those ten cases.
+- one direct case that should invoke the Skill;
+- one paraphrased case that should still invoke the Skill; and
+- one nearest-Skill boundary case that should not invoke the Skill.
 
-Each case is executed once per platform. A platform reaches the trigger threshold when at
-least nine of its ten classifications are correct. Results are not retried after they are
-known.
+Each case is executed once per platform. All three classifications must be correct for the
+platform to pass trigger evaluation. Results are not retried after they are known.
 
 ### Platform-specific results
 
