@@ -157,6 +157,23 @@ Using a less efficient but valid approach, a different safe tool, or semanticall
 syntax is recorded as a warning rather than a failure. Trajectory requirements are declared
 before execution and cannot be added after observing a run.
 
+### Token-budget evaluation
+
+Evaluation records the initial Skill size, reference material actually loaded, and token usage
+when the platform exposes it. A `SKILL.md` longer than 5,000 words produces a review warning
+but does not fail solely because of its length.
+
+A token-budget observation causes an acceptance failure only when:
+
+- execution exceeds a platform limit or a Skill-specific resource limit declared before the
+  run;
+- a simple case loads substantial content that is observably unrelated to the task; or
+- excessive loaded content causes the required outcome to fail.
+
+Reference loading is evaluated against the needs of the case. A large task may legitimately
+load more material than a small task, so absolute content size is not used as a universal
+correctness proxy.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -172,7 +189,6 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Token-budget warning and failure criteria.
 - Golden Dataset ownership and approval.
 - Regression-suite execution conditions.
 - Risk levels that require red-team, shadow-mode, or canary evaluation.
