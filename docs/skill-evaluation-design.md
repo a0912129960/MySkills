@@ -52,6 +52,11 @@ the same Skill has the same classification on every supported platform.
 An Explicit-invocation Skill must succeed when explicitly invoked and must not be selected
 implicitly. It is not graded on a positive implicit-trigger rate.
 
+Each Explicit-invocation Skill has three negative implicit-selection cases for each platform.
+The prompts are close to the Skill's scope but do not explicitly name or invoke it. Each case
+is executed once per platform, and all three must remain untriggered; any implicit selection is
+a platform policy failure.
+
 ### Implicit trigger evaluation
 
 Each Implicit-invocation Skill has a fixed ten-case trigger suite for each platform in an
@@ -236,9 +241,3 @@ acceptance evidence.
 If accumulated evaluation records later become too large or difficult to operate, MySkills
 will add an archive mechanism without discarding their history. Archive design is deferred
 until an actual size or operability problem is observed.
-
-## Unresolved decisions
-
-The following items remain under discussion and are not yet acceptance rules:
-
-- The negative implicit-selection case count for Explicit-invocation Skills.
