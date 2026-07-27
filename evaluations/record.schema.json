@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/a0912129960/MySkills/blob/main/evaluations/record.schema.json",
+  "title": "MySkills Skill evaluation record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "run_id",
+    "skill_name",
+    "skill_digest",
+    "case_manifest_digest",
+    "evaluator_version",
+    "started_at",
+    "completed_at",
+    "status",
+    "targets",
+    "human_review",
+    "warnings",
+    "sanitization"
+  ],
+  "properties": {
+    "$schema": {"const": "../../../record.schema.json"},
+    "schema_version": {"const": 1},
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "skill_name": {"$ref": "#/$defs/kebab"},
+    "skill_digest": {"$ref": "#/$defs/digest"},
+    "case_manifest_digest": {"$ref": "#/$defs/digest"},
+    "evaluator_version": {"const": "myskills-skill-evaluator/3"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "status": {"$ref": "#/$defs/resultStatus"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claude", "codex"],
+      "properties": {
+        "claude": {"$ref": "#/$defs/target"},
+        "codex": {"$ref": "#/$defs/target"}
+      }
+    },
+    "human_review": {"$ref": "#/$defs/humanReview"},
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "sanitization": {"$ref": "#/$defs/sanitization"}
+  },
+  "$defs": {
+    "kebab": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resultStatus": {
+      "enum": ["pass", "fail", "invalid", "human-review-required"]
+    },
+    "stringAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unavailable_reason"],
+      "properties": {
+        "value": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "unavailable_reason": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "integerAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unavailable_reason"],
+      "properties": {
+        "value": {
+          "oneOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "unavailable_reason": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "description", "required"],
+      "properties": {
+        "id": {"$ref": "#/$defs/kebab"},
+        "kind": {
+          "enum": ["deterministic", "human-rubric", "trajectory"]
+        },
+        "description": {"type": "string", "minLength": 1},
+        "required": {"type": "boolean"}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invocation", "outcome", "assertions"],
+      "properties": {
+        "invocation": {
+          "enum": ["explicit", "implicit", "not-invoked"]
+        },
+        "outcome": {"type": "string", "minLength": 1},
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assertion"}
+        }
+      }
+    },
+    "toolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "name",
+        "arguments",
+        "status",
+        "result_summary"
+      ],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1},
+        "name": {"type": "string", "minLength": 1},
+        "arguments": {"type": "object"},
+        "status": {"enum": ["success", "failure"]},
+        "result_summary": {"type": "string"}
+      }
+    },
+    "unavailableObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "reason"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation",
+        "tool_calls",
+        "final_output",
+        "external_state",
+        "unavailable"
+      ],
+      "properties": {
+        "invocation": {
+          "enum": ["explicit", "implicit", "not-invoked", "unknown"]
+        },
+        "tool_calls": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/toolCall"}
+        },
+        "final_output": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "external_state": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "unavailable": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/unavailableObservation"}
+        }
+      }
+    },
+    "assertionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assertion_id", "status", "evidence"],
+      "properties": {
+        "assertion_id": {"$ref": "#/$defs/kebab"},
+        "status": {"$ref": "#/$defs/resultStatus"},
+        "evidence": {"type": "string", "minLength": 1}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "reason", "corrective_action"],
+      "properties": {
+        "stage": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "reason": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "corrective_action": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "kind",
+        "prompt",
+        "expected",
+        "observed",
+        "assertion_results",
+        "status",
+        "failure"
+      ],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/kebab"},
+        "kind": {"enum": ["core", "invocation", "golden"]},
+        "prompt": {"type": "string", "minLength": 1},
+        "expected": {"$ref": "#/$defs/expected"},
+        "observed": {"$ref": "#/$defs/observed"},
+        "assertion_results": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assertionResult"}
+        },
+        "status": {"$ref": "#/$defs/resultStatus"},
+        "failure": {"$ref": "#/$defs/failure"}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "runner",
+        "duration_ms",
+        "total_tokens",
+        "cases"
+      ],
+      "properties": {
+        "status": {"$ref": "#/$defs/resultStatus"},
+        "runner": {"$ref": "#/$defs/stringAvailability"},
+        "duration_ms": {"type": "integer", "minimum": 0},
+        "total_tokens": {"$ref": "#/$defs/integerAvailability"},
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/case"}
+        }
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reviewer",
+        "reviewed_at",
+        "reason",
+        "corrective_action"
+      ],
+      "properties": {
+        "status": {"enum": ["not-required", "pending", "pass"]},
+        "reviewer": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "reviewed_at": {
+          "oneOf": [
+            {"type": "string", "format": "date-time"},
+            {"type": "null"}
+          ]
+        },
+        "reason": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "corrective_action": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "redactions"],
+      "properties": {
+        "status": {"const": "pass"},
+        "redactions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

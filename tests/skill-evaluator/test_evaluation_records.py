@@ -1,0 +1,265 @@
+from __future__ import annotations
+
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+TOOLS_ROOT = ROOT / "tools" / "skill-evaluator"
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+
+
+def load_records_module():
+    path = TOOLS_ROOT / "evaluation_records.py"
+    spec = importlib.util.spec_from_file_location("skill_evaluator_records", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def valid_record() -> dict[str, object]:
+    digest = "sha256:" + ("a" * 64)
+    case = {
+        "case_id": "normal-use",
+        "kind": "core",
+        "prompt": "Use the explicitly invoked fixture Skill to produce the requested result.",
+        "expected": {
+            "invocation": "explicit",
+            "outcome": "The requested result is present.",
+            "assertions": [
+                {
+                    "id": "requested-result",
+                    "kind": "human-rubric",
+                    "description": "The requested result is correct and complete.",
+                    "required": True,
+                }
+            ],
+        },
+        "observed": {
+            "invocation": "explicit",
+            "tool_calls": [],
+            "final_output": "The requested result.",
+            "external_state": None,
+            "unavailable": [],
+        },
+        "assertion_results": [
+            {
+                "assertion_id": "requested-result",
+                "status": "pass",
+                "evidence": "The final output contains the requested result.",
+            }
+        ],
+        "status": "pass",
+        "failure": {
+            "stage": None,
+            "reason": None,
+            "corrective_action": None,
+        },
+    }
+    target = {
+        "status": "pass",
+        "runner": {
+            "value": "fixture-runner 1.0",
+            "unavailable_reason": None,
+        },
+        "duration_ms": 25,
+        "total_tokens": {
+            "value": 120,
+            "unavailable_reason": None,
+        },
+        "cases": [case],
+    }
+    return {
+        "$schema": "../../../record.schema.json",
+        "schema_version": 1,
+        "run_id": "20260727T120000Z-fixture",
+        "skill_name": "fixture-skill",
+        "skill_digest": digest,
+        "case_manifest_digest": digest,
+        "evaluator_version": "myskills-skill-evaluator/3",
+        "started_at": "2026-07-27T12:00:00Z",
+        "completed_at": "2026-07-27T12:00:01Z",
+        "status": "pass",
+        "targets": {
+            "claude": target,
+            "codex": target,
+        },
+        "human_review": {
+            "status": "pass",
+            "reviewer": "Fixture Reviewer",
+            "reviewed_at": "2026-07-27T12:01:00Z",
+            "reason": "The written rubric is satisfied.",
+            "corrective_action": None,
+        },
+        "warnings": [],
+        "sanitization": {
+            "status": "pass",
+            "redactions": [],
+        },
+    }
+
+
+class EvaluationRecordContractTests(unittest.TestCase):
+    def test_record_schema_declares_reviewable_evidence_contract(self) -> None:
+        schema = json.loads(
+            (ROOT / "evaluations" / "record.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 1)
+        self.assertEqual(
+            set(schema["required"]),
+            {
+                "$schema",
+                "schema_version",
+                "run_id",
+                "skill_name",
+                "skill_digest",
+                "case_manifest_digest",
+                "evaluator_version",
+                "started_at",
+                "completed_at",
+                "status",
+                "targets",
+                "human_review",
+                "warnings",
+                "sanitization",
+            },
+        )
+        self.assertEqual(
+            set(schema["$defs"]["case"]["required"]),
+            {
+                "case_id",
+                "kind",
+                "prompt",
+                "expected",
+                "observed",
+                "assertion_results",
+                "status",
+                "failure",
+            },
+        )
+
+    def test_record_validator_accepts_reviewable_git_record(self) -> None:
+        records = load_records_module()
+
+        self.assertEqual(records.validate_record_document(valid_record()), [])
+
+    def test_record_loader_accepts_canonical_source_controlled_path(self) -> None:
+        records = load_records_module()
+        record = valid_record()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = (
+                root
+                / "evaluations"
+                / "records"
+                / record["skill_name"]
+                / record["run_id"]
+                / "record.json"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                json.dumps(record, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(records.load_record(root, path), record)
+
+    def test_failed_case_requires_observable_failure_location(self) -> None:
+        records = load_records_module()
+        record = copy.deepcopy(valid_record())
+        record["status"] = "fail"
+        for target in record["targets"].values():
+            target["status"] = "fail"
+            target["cases"][0]["status"] = "fail"
+
+        errors = records.validate_record_document(record)
+
+        self.assertTrue(
+            any(
+                "failed or invalid case requires an observable stage and reason"
+                in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_passing_human_rubric_requires_completed_human_review(self) -> None:
+        records = load_records_module()
+        record = copy.deepcopy(valid_record())
+        record["human_review"] = {
+            "status": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "reason": None,
+            "corrective_action": None,
+        }
+
+        errors = records.validate_record_document(record)
+
+        self.assertTrue(
+            any(
+                "passing human-rubric record requires completed human review"
+                in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_source_controlled_record_requires_completed_sanitization(self) -> None:
+        records = load_records_module()
+        record = copy.deepcopy(valid_record())
+        record["sanitization"]["status"] = "pending"
+
+        errors = records.validate_record_document(record)
+
+        self.assertTrue(
+            any("sanitization.status must be 'pass'" in error for error in errors),
+            errors,
+        )
+
+    def test_tool_trajectory_requires_contiguous_call_order(self) -> None:
+        records = load_records_module()
+        record = copy.deepcopy(valid_record())
+        tool_calls = [
+            {
+                "sequence": 2,
+                "name": "fixture.read",
+                "arguments": {"path": "fixture/input.txt"},
+                "status": "success",
+                "result_summary": "Read the fixture.",
+            },
+            {
+                "sequence": 1,
+                "name": "fixture.write",
+                "arguments": {"path": "fixture/output.txt"},
+                "status": "success",
+                "result_summary": "Wrote the result.",
+            },
+        ]
+        for target in record["targets"].values():
+            target["cases"][0]["observed"]["tool_calls"] = tool_calls
+
+        errors = records.validate_record_document(record)
+
+        self.assertTrue(
+            any(
+                "tool_calls sequence must be contiguous and ordered"
+                in error
+                for error in errors
+            ),
+            errors,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
