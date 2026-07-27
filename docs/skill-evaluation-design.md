@@ -174,6 +174,18 @@ Reference loading is evaluated against the needs of the case. A large task may l
 load more material than a small task, so absolute content size is not used as a universal
 correctness proxy.
 
+### Golden Dataset
+
+A new Skill is not required to begin with a large synthetic Golden Dataset. Its initial
+acceptance uses the required core cases, and a Golden Dataset is accumulated as reviewed,
+real-use cases become available.
+
+Every Golden case is de-identified, records its provenance, and has a human-approved expected
+outcome. AI may propose candidate cases or variants, but a candidate does not become Golden
+evidence until a human reviews and approves both the input and expected outcome. Later changes
+to an approved case or oracle create a new version rather than rewriting its evaluation
+history.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -189,6 +201,5 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Golden Dataset ownership and approval.
 - Regression-suite execution conditions.
 - Risk levels that require red-team, shadow-mode, or canary evaluation.
