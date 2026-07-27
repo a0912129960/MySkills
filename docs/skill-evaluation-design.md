@@ -1,7 +1,6 @@
 # Skill Evaluation Design
 
-Status: Draft. Confirmed decisions are normative; unresolved decisions do not define a
-release gate.
+Status: Accepted design; implementation pending. Confirmed on 2026-07-27.
 
 ## Purpose
 
