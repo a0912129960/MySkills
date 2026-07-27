@@ -147,6 +147,16 @@ necessary for task correctness or safety. A semantically equivalent command or s
 alternative tool is not a failure unless the Skill contract requires the specific choice. If
 a required trajectory cannot be observed, the case cannot receive a trajectory pass.
 
+A trajectory observation causes an acceptance failure only when it:
+
+- changes or jeopardizes the required final outcome;
+- violates safety, authorization, or unacceptable-side-effect constraints; or
+- violates a mandatory process explicitly defined by the Skill contract.
+
+Using a less efficient but valid approach, a different safe tool, or semantically equivalent
+syntax is recorded as a warning rather than a failure. Trajectory requirements are declared
+before execution and cannot be added after observing a run.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -162,7 +172,6 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Which trajectory constraints are acceptance-critical.
 - Token-budget warning and failure criteria.
 - Golden Dataset ownership and approval.
 - Regression-suite execution conditions.
