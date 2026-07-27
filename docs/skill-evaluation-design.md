@@ -186,6 +186,19 @@ evidence until a human reviews and approves both the input and expected outcome.
 to an approved case or oracle create a new version rather than rewriting its evaluation
 history.
 
+### Regression scope
+
+Regression evaluation follows the behavior that a change can affect:
+
+- Adding or removing a Skill, or changing a Skill name, description, or invocation
+  classification, runs the complete Skill Library trigger suite on both Claude and Codex.
+  The suite includes every applicable trigger, non-trigger, paraphrase, and boundary case.
+- A change limited to a Skill's internal execution content runs that Skill's core cases,
+  approved Golden Dataset, and the cases of any explicitly affected dependent Skill.
+
+Each regression case is executed once per platform. A failed result is not automatically
+retried.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -201,5 +214,4 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Regression-suite execution conditions.
 - Risk levels that require red-team, shadow-mode, or canary evaluation.
