@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_ROOT = ROOT / "tools" / "skill-evaluator"
+ENTRY_POINT = TOOLS_ROOT / "skill_evaluator.py"
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
@@ -173,6 +175,82 @@ class EvaluationRecordContractTests(unittest.TestCase):
             )
 
             self.assertEqual(records.load_record(root, path), record)
+
+    def test_record_writer_creates_append_only_human_and_machine_evidence(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            output = records.write_record(root, record)
+
+            self.assertEqual(
+                output,
+                root
+                / "evaluations"
+                / "records"
+                / record["skill_name"]
+                / record["run_id"],
+            )
+            self.assertEqual(
+                json.loads(
+                    (output / "record.json").read_text(encoding="utf-8")
+                ),
+                record,
+            )
+            summary = (output / "summary.md").read_text(encoding="utf-8")
+            self.assertIn("# Skill evaluation: fixture-skill", summary)
+            self.assertIn("Run: `20260727T120000Z-fixture`", summary)
+            self.assertIn("| Claude | pass | 1/1 |", summary)
+            self.assertIn("Expected: The requested result is present.", summary)
+            self.assertIn("Actual: The requested result.", summary)
+            with self.assertRaisesRegex(
+                FileExistsError,
+                "evaluation record already exists",
+            ):
+                records.write_record(root, record)
+
+    def test_publish_record_cli_writes_canonical_evidence(self) -> None:
+        record = valid_record()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "repo"
+            root.mkdir()
+            draft = Path(temp_dir) / "record-draft.json"
+            draft.write_text(
+                json.dumps(record, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ENTRY_POINT),
+                    "publish-record",
+                    str(root),
+                    str(draft),
+                ],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            output = (
+                root
+                / "evaluations"
+                / "records"
+                / record["skill_name"]
+                / record["run_id"]
+            )
+            self.assertEqual(Path(completed.stdout.strip()), output)
+            self.assertEqual(
+                json.loads((output / "record.json").read_text(encoding="utf-8")),
+                record,
+            )
 
     def test_failed_case_requires_observable_failure_location(self) -> None:
         records = load_records_module()

@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import re
+import tempfile
 from typing import Any
 
 
@@ -53,6 +55,148 @@ CASE_FIELDS = {
 RESULT_STATUSES = {"pass", "fail", "invalid", "human-review-required"}
 
 
+def read_record_document(record_path: Path | str) -> dict[str, Any]:
+    """Read and validate a record document without imposing its final Git path."""
+
+    path = Path(record_path)
+    try:
+        document: Any = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"invalid evaluation record: {error}") from error
+    errors = validate_record_document(document)
+    if errors:
+        raise ValueError("\n".join(errors))
+    return document
+
+
+def write_record(
+    repo_root: Path | str,
+    document: dict[str, Any],
+) -> Path:
+    """Atomically write one append-only machine and human evaluation record."""
+
+    errors = validate_record_document(document)
+    if errors:
+        raise ValueError("\n".join(errors))
+    root = Path(repo_root).resolve()
+    parent = (
+        root
+        / "evaluations"
+        / "records"
+        / document["skill_name"]
+    )
+    destination = parent / document["run_id"]
+    parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        raise FileExistsError(f"evaluation record already exists: {destination}")
+    with tempfile.TemporaryDirectory(
+        prefix=f".{document['run_id']}-",
+        dir=parent,
+        ignore_cleanup_errors=True,
+    ) as temp_dir:
+        temporary = Path(temp_dir)
+        (temporary / "record.json").write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (temporary / "summary.md").write_text(
+            render_summary(document),
+            encoding="utf-8",
+            newline="\n",
+        )
+        os.replace(temporary, destination)
+    return destination
+
+
+def render_summary(document: dict[str, Any]) -> str:
+    """Render the concise, deterministic human review surface for a record."""
+
+    lines = [
+        f"# Skill evaluation: {document['skill_name']}",
+        "",
+        f"- Run: `{document['run_id']}`",
+        f"- Skill digest: `{document['skill_digest']}`",
+        f"- Status: **{document['status']}**",
+        f"- Started: {document['started_at']}",
+        f"- Completed: {document['completed_at']}",
+        "",
+        "## Platform results",
+        "",
+        "| Platform | Status | Passed cases | Duration | Tokens |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
+    for target_name in TARGETS:
+        target = document["targets"][target_name]
+        cases = target["cases"]
+        passed = sum(case["status"] == "pass" for case in cases)
+        tokens = target["total_tokens"]["value"]
+        token_text = (
+            str(tokens)
+            if tokens is not None
+            else f"N/A ({_brief(target['total_tokens']['unavailable_reason'])})"
+        )
+        lines.append(
+            f"| {target_name.title()} | {target['status']} | "
+            f"{passed}/{len(cases)} | {target['duration_ms']} ms | "
+            f"{token_text} |"
+        )
+
+    lines.extend(["", "## Case evidence", ""])
+    for target_name in TARGETS:
+        for case in document["targets"][target_name]["cases"]:
+            lines.extend(
+                [
+                    f"### {target_name.title()} / {case['case_id']} "
+                    f"({case['status']})",
+                    "",
+                    f"- Expected: {_brief(case['expected']['outcome'])}",
+                    f"- Actual: {_brief(case['observed']['final_output'])}",
+                ]
+            )
+            calls = case["observed"]["tool_calls"]
+            if calls:
+                trajectory = " -> ".join(
+                    f"{call['sequence']}:{call['name']}[{call['status']}]"
+                    for call in calls
+                )
+                lines.append(f"- Tool trajectory: {trajectory}")
+            failure = case["failure"]
+            if case["status"] in {"fail", "invalid"}:
+                lines.extend(
+                    [
+                        f"- Failure point: {_brief(failure['stage'])}",
+                        f"- Reason: {_brief(failure['reason'])}",
+                        "- Corrective action: "
+                        f"{_brief(failure['corrective_action'])}",
+                    ]
+                )
+            lines.append("")
+
+    review = document["human_review"]
+    lines.extend(
+        [
+            "## Human review",
+            "",
+            f"- Status: {review['status']}",
+            f"- Reviewer: {_brief(review['reviewer'])}",
+            f"- Reason: {_brief(review['reason'])}",
+            f"- Corrective action: {_brief(review['corrective_action'])}",
+            "",
+            "## Warnings",
+            "",
+        ]
+    )
+    if document["warnings"]:
+        lines.extend(f"- {warning}" for warning in document["warnings"])
+    else:
+        lines.append("- None")
+    return "\n".join(lines) + "\n"
+
+
 def load_record(
     repo_root: Path | str,
     record_path: Path | str,
@@ -75,14 +219,8 @@ def load_record(
             "evaluation record path must be "
             "evaluations/records/<skill>/<run-id>/record.json"
         )
-    try:
-        document: Any = json.loads(
-            path.read_text(encoding="utf-8"),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
-        raise ValueError(f"invalid evaluation record: {error}") from error
-    errors = validate_record_document(document)
+    document = read_record_document(path)
+    errors: list[str] = []
     if isinstance(document, dict):
         if document.get("skill_name") != parts[2]:
             errors.append("evaluation record path skill does not match skill_name")
@@ -474,6 +612,15 @@ def _matches(value: object, pattern: re.Pattern[str]) -> bool:
 
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _brief(value: object, limit: int = 240) -> str:
+    if value is None:
+        return "N/A"
+    normalized = " ".join(str(value).split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
 
 
 def _is_datetime(value: object) -> bool:

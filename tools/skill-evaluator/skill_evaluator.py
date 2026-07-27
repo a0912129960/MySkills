@@ -15,6 +15,7 @@ import yaml
 import aggregate_benchmark
 import attestations
 import evaluation_cases
+import evaluation_records
 import generate_report
 import runners
 import validate_skill
@@ -308,6 +309,10 @@ def main(argv: list[str] | None = None) -> int:
     draft_parser.add_argument("workspace", type=Path)
     draft_parser.add_argument("skill_name")
     draft_parser.add_argument("--output", type=Path, required=True)
+
+    publish_record_parser = subparsers.add_parser("publish-record")
+    publish_record_parser.add_argument("repo_root", type=Path)
+    publish_record_parser.add_argument("record_draft", type=Path)
 
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -645,6 +650,16 @@ def main(argv: list[str] | None = None) -> int:
             _write_json({"valid": False, "errors": [str(error)]}, args.output)
             return 1
         _write_json(draft, args.output)
+        return 0
+
+    if args.command == "publish-record":
+        try:
+            document = evaluation_records.read_record_document(args.record_draft)
+            output = evaluation_records.write_record(args.repo_root, document)
+        except (OSError, ValueError) as error:
+            print(f"ERROR: {error}")
+            return 1
+        print(output)
         return 0
 
     result = smoke_contract()
