@@ -35,11 +35,13 @@ Evaluation is selected by Skill capability rather than applying every test type 
 - A Skill that uses tools or can cause side effects is additionally evaluated for required
   trajectory constraints, including parameters, ordering, safety, and unacceptable side
   effects.
-- Shadow-mode and canary evaluation apply only when the Skill's risk and real integration
-  capabilities make those stages relevant.
 
 Red-team evaluation is deferred. It is not designed, executed, or used as a release gate in
 the current phase. MySkills may introduce it later through a separately reviewed change.
+
+Shadow-mode and canary evaluation are also deferred. They are not current release gates and
+will be reconsidered only when MySkills manages a Skill that can affect real external systems
+or users.
 
 ### Invocation classification
 
@@ -217,4 +219,3 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Risk levels that require shadow-mode or canary evaluation.
