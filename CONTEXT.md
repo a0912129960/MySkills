@@ -29,6 +29,14 @@ _Avoid_: Git history, installation source
 A governance rule enforced by a manifest schema, CLI guard, validator, or automated test rather than relying on documentation alone.
 _Avoid_: Guideline, undocumented convention
 
+**Explicit-invocation Skill**:
+A Managed Skill that enters a workflow only after the human explicitly names or invokes it; the AI must not select it implicitly on any supported platform.
+_Avoid_: Human-only Skill, manual Skill
+
+**Implicit-invocation Skill**:
+A Managed Skill that the AI may select from the task context and Skill description without the human naming it; explicit invocation remains valid, and the classification is the same on every supported platform.
+_Avoid_: Automatic Skill, AI-only Skill
+
 **Skill Dependency**:
 A third-party executable, runtime, CLI, or package required for a Managed Skill to work on a supported computer.
 _Avoid_: Skill, bundled tool

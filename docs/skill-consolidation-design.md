@@ -687,6 +687,10 @@ tools are selected only when required by the task and project.
 
 ### Skill evaluation
 
+- The normative evaluation model is defined in
+  [`skill-evaluation-design.md`](skill-evaluation-design.md). This section retains the
+  repository-level integration constraints; the attestation runbook documents execution
+  steps rather than acceptance policy.
 - The LLM Wiki source candidate `skill-creator` is transformed into the human-only
   Engineering Skill `skill-evaluator`. It does not author or package Skills. A platform
   creator or the repository-owned `scripts\new-skill.ps1` scaffolder creates or edits the
@@ -724,6 +728,12 @@ tools are selected only when required by the task and project.
   required cases. Antigravity is outside the behavioral attestation in the first version.
   Claude description optimization uses `claude -p` only when explicitly requested for the
   Claude target and proposes, rather than silently applies, the winning description.
+- Claude and Codex evaluation scores are calculated independently and cannot offset each
+  other. When exactly one platform reaches its required threshold, the evaluation is marked
+  as requiring human review rather than receiving an automatic pass. A completed platform
+  suite is not automatically retried to seek a better score; any later rerun is a new,
+  explicitly authorized evaluation so nondeterministic retries cannot consume tokens merely
+  to obtain a favorable result.
 - Automated evaluation requires Python 3.10 or later. MySkills never installs or upgrades
   Python; missing or incompatible Python blocks `skill-evaluator` from being copied because it
   cannot produce the required automated attestation.
