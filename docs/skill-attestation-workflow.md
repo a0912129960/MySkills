@@ -15,9 +15,11 @@ current directory digest of every Managed Skill. Raw model output stays under
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py run skills/<bucket>/<name> `
-     --mode explicit --prompt "<harmless required case>"
+     --mode explicit --prompt "<harmless required case>" `
+     --allow-ephemeral-auth-copy
    python tools/skill-evaluator/skill_evaluator.py run skills/<bucket>/<name> `
-     --mode trigger --prompt "<natural trigger or non-trigger case>"
+     --mode trigger --prompt "<natural trigger or non-trigger case>" `
+     --allow-ephemeral-auth-copy
    ```
 
    The authoritative batch cases are in `evaluations/cases.json`. Validate and
@@ -55,16 +57,21 @@ current directory digest of every Managed Skill. Raw model output stays under
    ```
 
    The runner copies only the target CLI authentication file into an OS
-   temporary directory and removes that directory after each call. For Codex it
-   creates a clean `config.toml` that disables every discovered user Skill
-   while leaving the staged workspace Skill visible. The profile also contains
-   evaluator-owned exec-policy rules that allow only the guarded launcher names
-   declared by the case. Codex uses `untrusted` approval, so an absolute host
-   executable or any undeclared command remains unmatched and is rejected by
-   the non-interactive run instead of bypassing the guarded launcher. No user
-   settings or user exec-policy rules are copied. Prompts, commands, and
-   results are written under the ignored batch workspace; credentials are
-   never written there.
+   temporary directory and removes that directory after each call. The
+   execution workspace is a second OS temporary directory outside the
+   repository; only declared Skills and fixtures are staged there, and it is
+   removed after its result is captured. For Codex the clean profile disables
+   every discovered user Skill and contains evaluator-owned exec-policy rules
+   that allow only case-declared guarded launcher names. Codex uses `untrusted`
+   approval, so absolute host executables and undeclared commands are rejected
+   by the non-interactive run. Claude read-only cases use `dontAsk` with only
+   declared tools pre-approved inside the disposable execution workspace, plus
+   evaluator-owned deny rules for the source repository and host Skill/config
+   roots. Shell commands that Claude otherwise treats as implicitly safe are
+   forced through the non-interactive permission gate in those cases. No user
+   settings or user exec-policy rules are copied. Prompts, commands, machine
+   isolation results, and model output are written under the ignored batch
+   workspace; credentials are never written there.
 
 3. Grade the raw results, compare required cases with a no-Skill or recorded
    previous-version baseline, and review the offline report. Claude evidence
@@ -94,9 +101,13 @@ current directory digest of every Managed Skill. Raw model output stays under
    normalized final response, structured model/tool trace, raw streams, and
    current grading. Claude runs use verbose stream JSON so Bash/Read tool use
    and tool results remain reviewable rather than being collapsed into only the
-   final answer. The report places With-Skill and Baseline runs side by side for
-   each target. A process pass is not a behavior pass; the human records a
-   specific reason for every assertion in the linked `grading.json`.
+   final answer. Each run also has a visible machine isolation PASS/FAIL badge;
+   a successful out-of-workspace file tool, or an undeclared Bash command in a
+   read-only case, blocks attestation. Missing or malformed audit data is a
+   failure, not a pass. The
+   report places With-Skill and Baseline runs side by side for each target. A
+   process pass is not a behavior pass; the human records a specific reason for
+   every assertion in the linked `grading.json`.
 
 4. After completing every grading template, audit the reviewed evidence and
    create a pending draft:
@@ -110,7 +121,8 @@ current directory digest of every Managed Skill. Raw model output stays under
    The draft intentionally remains non-passing until a human records the final
    review fields required by `attestations/attestation.schema.json`. Do not mark
    an unavailable, failed, unreviewed, stale, or partially run target as
-   passing.
+   passing. Draft audit reparses each raw model trace, recomputes its isolation
+   result, and rejects a stored result that was removed or changed.
 
 5. Verify the attestation and the release gate:
 

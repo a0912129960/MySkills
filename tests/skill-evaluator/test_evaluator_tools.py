@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_ROOT = ROOT / "tools" / "skill-evaluator"
 ENTRY_POINT = TOOLS_ROOT / "skill_evaluator.py"
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
 
 
 def load_module(name: str, filename: str):
@@ -191,6 +194,29 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn(
                 "--allow-ephemeral-auth-copy",
                 denied.stdout,
+            )
+
+            denied_single = subprocess.run(
+                [
+                    "python",
+                    str(ENTRY_POINT),
+                    "run",
+                    str(ROOT / "skills" / "qmd" / "qmd"),
+                    "--mode",
+                    "explicit",
+                    "--prompt",
+                    "Do not execute without the isolation authorization.",
+                ],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(denied_single.returncode, 1)
+            self.assertIn(
+                "--allow-ephemeral-auth-copy",
+                denied_single.stdout,
             )
 
     def test_plan_carries_fixture_files_and_companion_skills(self) -> None:
@@ -852,12 +878,30 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             "external_tool_evidence": (
                                 external_tool_evidence(item)
                             ),
+                            "execution_workspace": str(
+                                Path(tempfile.gettempdir())
+                                / "discarded-myskills-evaluation"
+                                / item["case_id"]
+                                / item["configuration"]
+                                / item["target"]
+                            ),
+                            "isolation_violations": [],
                             "result": {
                                 "returncode": 0,
                                 "timed_out": False,
                                 "duration_ms": 10,
                                 "total_tokens": 20,
-                                "stdout": "fixture evidence",
+                                "stdout": (
+                                    json.dumps(
+                                        {
+                                            "type": "result",
+                                            "result": "fixture evidence",
+                                        }
+                                    )
+                                    + "\n"
+                                    if item["target"] == "claude"
+                                    else "fixture evidence"
+                                ),
                                 "stderr": "",
                             },
                         }
@@ -894,7 +938,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(
+                completed.returncode,
+                0,
+                completed.stdout
+                + completed.stderr
+                + (
+                    output.read_text(encoding="utf-8")
+                    if output.is_file()
+                    else ""
+                ),
+            )
             draft = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(draft["status"], "pending-human-review")
             self.assertEqual(draft["human_review"]["status"], "pending")
@@ -913,7 +967,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertTrue((workspace / "qmd" / "review.html").is_file())
 
             external_item = next(
-                item for item in plan if item["external_tools"] == ["qmd"]
+                item
+                for item in plan
+                if item["external_tools"] == ["qmd"]
+                and item["target"] == "claude"
             )
             external_result_path = (
                 workspace
@@ -981,6 +1038,110 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     "qmd",
                 )
             external_record["external_tool_evidence"] = valid_external_evidence
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            external_record["isolation_violations"] = [
+                "Claude Read accessed the canonical Skill outside its "
+                "execution workspace."
+            ]
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "model isolation did not pass",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+            external_record["isolation_violations"] = []
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            execution_workspace = external_record.pop(
+                "execution_workspace"
+            )
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "execution workspace is missing or not absolute",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+            external_record["execution_workspace"] = execution_workspace
+
+            original_result = copy.deepcopy(external_record["result"])
+            external_record["result"]["stdout"] = "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "tampered-read",
+                                        "name": "Read",
+                                        "input": {
+                                            "file_path": str(
+                                                ROOT
+                                                / "skills"
+                                                / "qmd"
+                                                / "qmd"
+                                                / "SKILL.md"
+                                            )
+                                        },
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "tampered-read",
+                                        "content": "escaped",
+                                        "is_error": False,
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                ]
+            )
+            external_result_path.write_text(
+                json.dumps(external_record),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "stored model isolation audit does not match the raw trace",
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
+            external_record["result"] = original_result
             external_result_path.write_text(
                 json.dumps(external_record),
                 encoding="utf-8",
@@ -1123,14 +1284,38 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 with runners.isolated_target_environment(
                     "claude",
                     allow_ephemeral_auth_copy=True,
+                    denied_read_roots=[root / "repository"],
+                    restrict_implicit_shell=True,
                 ) as claude_env:
                     isolated_claude = Path(claude_env["CLAUDE_CONFIG_DIR"])
                     self.assertTrue(
                         (isolated_claude / ".credentials.json").is_file()
                     )
-                    self.assertFalse(
-                        (isolated_claude / "settings.json").exists()
+                    isolated_settings = json.loads(
+                        (isolated_claude / "settings.json").read_text(
+                            encoding="utf-8"
+                        )
                     )
+                    deny_rules = isolated_settings["permissions"]["deny"]
+                    ask_rules = isolated_settings["permissions"]["ask"]
+                    normalized_repository = (
+                        (root / "repository").resolve().as_posix()
+                    )
+                    expected_repository_rule = (
+                        "Read(//"
+                        + normalized_repository[0].lower()
+                        + normalized_repository[2:]
+                        + "/**)"
+                    )
+                    self.assertIn(expected_repository_rule, deny_rules)
+                    self.assertTrue(
+                        any(claude_home.name in rule for rule in deny_rules)
+                    )
+                    self.assertIn("Bash(ls *)", ask_rules)
+                    self.assertIn("Bash(find *)", ask_rules)
+                    self.assertIn("Bash(cat *)", ask_rules)
+                    self.assertIn("Bash(echo *)", ask_rules)
+                    self.assertNotIn("fixture", isolated_settings)
                     self.assertFalse((isolated_claude / "skills").exists())
                     self.assertEqual(
                         claude_env["USERPROFILE"],
@@ -1138,6 +1323,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     )
                     self.assertEqual(claude_env["HOME"], str(isolated_claude))
                 self.assertFalse(isolated_claude.exists())
+
+    def test_execution_workspace_is_ephemeral_and_outside_repository(
+        self,
+    ) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_execution_workspace",
+            "runners.py",
+        )
+        with runners.isolated_execution_workspace(ROOT) as workspace:
+            self.assertTrue(workspace.is_dir())
+            with self.assertRaises(ValueError):
+                workspace.relative_to(ROOT)
+        self.assertFalse(workspace.exists())
 
     @unittest.skipUnless(os.name == "nt", "Codex execpolicy CLI contract")
     def test_codex_runtime_rule_allows_only_the_guarded_launcher_name(
@@ -1434,7 +1632,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
     def test_runner_builds_isolated_commands_for_both_required_targets(self) -> None:
         runners = load_module("skill_evaluator_runners", "runners.py")
         claude = runners.build_command(
-            "claude", "Use the test skill.", Path("C:/tmp/skill"), model=None
+            "claude",
+            "Use the test skill.",
+            Path("C:/tmp/skill"),
+            model=None,
+            execution_workspace=Path("C:/evaluation/workspace"),
         )
         codex = runners.build_command(
             "codex", "Use the test skill.", Path("C:/tmp/skill"), model=None
@@ -1446,6 +1648,32 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "stream-json",
         )
         self.assertIn("--verbose", claude)
+        self.assertEqual(
+            claude[claude.index("--permission-mode") + 1],
+            "dontAsk",
+        )
+        claude_allowed = claude[claude.index("--allowedTools") + 1].split(",")
+        self.assertIn(
+            "Read(//c/evaluation/workspace/**)",
+            claude_allowed,
+        )
+        self.assertNotIn("Read", claude_allowed)
+        self.assertNotIn("Glob", claude_allowed)
+        self.assertNotIn("Grep", claude_allowed)
+        temporary = runners.build_command(
+            "claude",
+            "Create the requested fixture.",
+            Path("C:/tmp/skill"),
+            model=None,
+            safety="temporary-workspace",
+            execution_workspace=Path("C:/evaluation/workspace"),
+        )
+        self.assertNotIn("--permission-mode", temporary)
+        self.assertNotIn("--allowedTools", temporary)
+        self.assertEqual(
+            temporary[temporary.index("--tools") + 1],
+            "Read,Write,Edit,Glob,Grep,Bash",
+        )
         self.assertEqual(
             codex[0:4],
             ["codex", "--ask-for-approval", "untrusted", "exec"],
@@ -1532,6 +1760,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "Query the fixture Wiki.",
             Path("C:/tmp/wiki-query"),
             runtime_tools=["obsidian-wiki"],
+            execution_workspace=Path("C:/evaluation/workspace"),
         )
 
         tools = command[command.index("--tools") + 1]
@@ -1542,7 +1771,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         )
         self.assertEqual(
             allowed_tools,
-            "Read,Glob,Grep,Bash(obsidian-wiki *)",
+            (
+                "Read(//c/evaluation/workspace/**),"
+                "Bash(obsidian-wiki *)"
+            ),
         )
         self.assertNotIn(",Bash,", f",{allowed_tools},")
         qmd_command = runners.build_command(
@@ -1550,10 +1782,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "Search the fixture index.",
             Path("C:/tmp/qmd"),
             external_tools=["qmd"],
+            execution_workspace=Path("C:/evaluation/workspace"),
         )
         self.assertEqual(
             qmd_command[qmd_command.index("--allowedTools") + 1],
-            "Read,Glob,Grep,Bash(qmd *)",
+            "Read(//c/evaluation/workspace/**),Bash(qmd *)",
         )
         with self.assertRaisesRegex(ValueError, "runtime tools are invalid"):
             runners.build_command(
@@ -2394,6 +2627,304 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             ],
         )
         self.assertEqual(parsed_claude["parse_errors"], [])
+        isolation_stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "outside-read",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": (
+                                            "C:\\project\\MySkills\\skills"
+                                            "\\qmd\\qmd\\SKILL.md"
+                                        )
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "outside-read",
+                                    "content": "canonical Skill",
+                                    "is_error": False,
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "generic-bash",
+                                    "name": "Bash",
+                                    "input": {
+                                        "command": "find C:\\project\\MySkills"
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "guarded-qmd",
+                                    "name": "Bash",
+                                    "input": {
+                                        "command": "qmd search fixture"
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "relative-read",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "..\\host-secret.txt"
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "outside-write",
+                                    "name": "Write",
+                                    "input": {
+                                        "file_path": (
+                                            "C:\\project\\MySkills\\escaped.txt"
+                                        )
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "compound-qmd",
+                                    "name": "Bash",
+                                    "input": {
+                                        "command": (
+                                            "qmd search fixture && "
+                                            "type C:\\project\\MySkills\\secret"
+                                        )
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "malformed-grep",
+                                    "name": "Grep",
+                                    "input": {
+                                        "pattern": "secret",
+                                        "path": 42,
+                                    },
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "malformed-bash",
+                                    "name": "Bash",
+                                    "input": {"command": None},
+                                },
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "generic-bash",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "guarded-qmd",
+                                    "content": "fixture result",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "relative-read",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "outside-write",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "compound-qmd",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "malformed-grep",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "malformed-bash",
+                                    "content": "escaped",
+                                    "is_error": False,
+                                },
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "fixture result",
+                        "permission_denials": [],
+                    }
+                ),
+            ]
+        )
+        isolation_evidence = aggregate._claude_evidence(isolation_stream)
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                isolation_evidence,
+                Path("C:/evaluation/workspace"),
+                allowed_commands=["qmd"],
+            ),
+            [
+                (
+                    "Read accessed C:\\project\\MySkills\\skills\\qmd\\qmd"
+                    "\\SKILL.md outside C:\\evaluation\\workspace"
+                ),
+                "Bash executed undeclared command: find C:\\project\\MySkills",
+                (
+                    "Read accessed ..\\host-secret.txt outside "
+                    "C:\\evaluation\\workspace"
+                ),
+                (
+                    "Write accessed C:\\project\\MySkills\\escaped.txt outside "
+                    "C:\\evaluation\\workspace"
+                ),
+                (
+                    "Bash executed undeclared command: qmd search fixture && "
+                    "type C:\\project\\MySkills\\secret"
+                ),
+                (
+                    "Grep returned success with malformed path field(s): path"
+                ),
+                "Bash returned success without an auditable command",
+            ],
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                {
+                    "events": [
+                        {
+                            "type": "tool_use",
+                            "id": "orphan",
+                            "name": "Read",
+                            "input": {"file_path": "fixture/input.txt"},
+                        }
+                    ],
+                    "parse_errors": [],
+                    "metadata": {"terminal_result_count": 1},
+                },
+                Path("C:/evaluation/workspace"),
+            ),
+            ["Claude evidence has tool use without result: orphan"],
+        )
+        truncated = aggregate._claude_evidence(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "truncated response"}
+                        ]
+                    },
+                }
+            )
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                truncated,
+                Path("C:/evaluation/workspace"),
+            ),
+            [
+                "Claude evidence must contain exactly one terminal result event"
+            ],
+        )
+        temporary_bash = aggregate._claude_evidence(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "temporary-python",
+                                        "name": "Bash",
+                                        "input": {
+                                            "command": (
+                                                "python -m unittest discover "
+                                                "-s tests"
+                                            )
+                                        },
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "temporary-python",
+                                        "content": "OK",
+                                        "is_error": False,
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "result",
+                            "result": "Tests passed.",
+                            "permission_denials": [],
+                        }
+                    ),
+                ]
+            )
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                temporary_bash,
+                Path("C:/evaluation/workspace"),
+                audit_undeclared_bash=False,
+            ),
+            [],
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
@@ -2583,6 +3114,20 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                         "fixture_root": "fixture/qmd-notes",
                                     }
                                 },
+                                "execution_workspace": str(
+                                    run_dir / "workspace"
+                                ),
+                                "isolation_violations": (
+                                    [
+                                        "Read accessed canonical Skill outside "
+                                        "the execution workspace"
+                                    ]
+                                    if (
+                                        target == "claude"
+                                        and configuration == "baseline"
+                                    )
+                                    else []
+                                ),
                                 "result": {
                                     "command": [target, "fixture prompt"],
                                     "returncode": 0,
@@ -2666,6 +3211,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("Tool</strong>: Bash", html)
             self.assertIn("qmd search fixture", html)
             self.assertIn("fixture qmd evidence", html)
+            self.assertIn("ISOLATION FAIL", html)
+            self.assertIn(
+                "Read accessed canonical Skill outside",
+                html,
+            )
             self.assertIn("Codex final answer", html)
             self.assertIn("Get-Content fixture/input.txt", html)
             self.assertIn("With Skill", html)
@@ -2678,6 +3228,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("qmd 2.5.3", html)
             self.assertIn("C:/tools/qmd.ps1", html)
             self.assertIn("Committed baseline files", html)
+            missing_audit_html = report._render_run(
+                {
+                    "configuration": "with_skill",
+                    "process": {
+                        "returncode": 0,
+                        "timed_out": False,
+                    },
+                    "target_identity_returncode": 0,
+                }
+            )
+            self.assertIn("ISOLATION FAIL", missing_audit_html)
+            self.assertNotIn("ISOLATION PASS", missing_audit_html)
+            self.assertIn("Audit state: missing", missing_audit_html)
             self.assertIn("Working-tree changes", html)
             self.assertIn("committed", html)
             self.assertIn("changed", html)

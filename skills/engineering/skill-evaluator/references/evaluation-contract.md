@@ -57,8 +57,19 @@ guarded launcher names, and Codex uses `untrusted` approval. Absolute host
 executables and undeclared commands therefore remain unmatched and are rejected
 by the non-interactive run instead of bypassing the guarded launcher; user
 exec-policy rules are not copied into the ephemeral profile.
-Claude emits verbose stream JSON; aggregation retains assistant text, tool use,
-tool results, the final response, metadata, and parse warnings for human review.
+Every target runs from a disposable OS temporary workspace outside the source
+repository. Claude read-only cases use `dontAsk` with only case-declared tools
+pre-approved, scoped to the disposable execution workspace. Its
+evaluator-owned settings deny file-tool reads from the source repository and
+host Skill/config roots and force implicitly safe shell commands through the
+non-interactive permission gate for those cases. Claude emits verbose stream
+JSON; aggregation retains assistant text,
+tool use, tool results, the final response, metadata, parse warnings, and
+machine-detected isolation violations for human review. Draft audit reparses
+the raw trace and compares a recomputed result with the stored result. A
+missing, malformed, changed, or non-empty isolation audit blocks attestation.
+Undeclared Bash commands are isolation violations in read-only cases;
+temporary-workspace cases retain their existing command policy.
 
 Every run plan records the current primary `skill_digest` and the deterministic
 `companion_skill_digests`. Draft audit rebuilds the current plan and rejects raw

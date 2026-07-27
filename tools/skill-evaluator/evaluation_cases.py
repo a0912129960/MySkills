@@ -12,6 +12,8 @@ import struct
 import subprocess
 from typing import Any, Iterable
 
+import aggregate_benchmark
+
 
 TARGETS = ("claude", "codex")
 CONFIGURATIONS = ("with_skill", "baseline")
@@ -552,6 +554,74 @@ def audit_reviewed_skill(
         if not isinstance(result, dict):
             errors.append(f"{result_path}: process result is missing")
             continue
+        execution_workspace = record.get("execution_workspace")
+        execution_path: Path | None = None
+        if (
+            not isinstance(execution_workspace, str)
+            or not execution_workspace.strip()
+            or not Path(execution_workspace).is_absolute()
+        ):
+            errors.append(
+                f"{result_path}: execution workspace is missing or not absolute"
+            )
+        else:
+            execution_path = Path(execution_workspace).resolve()
+            try:
+                execution_path.relative_to(repo)
+            except ValueError:
+                pass
+            else:
+                errors.append(
+                    f"{result_path}: execution workspace is inside the repository"
+                )
+
+        isolation_violations = record.get("isolation_violations")
+        stored_isolation_valid = (
+            isinstance(isolation_violations, list)
+            and all(
+                isinstance(violation, str) and violation.strip()
+                for violation in isolation_violations
+            )
+        )
+        if not stored_isolation_valid:
+            errors.append(f"{result_path}: model isolation audit is missing")
+        elif isolation_violations:
+            errors.append(
+                f"{result_path}: model isolation did not pass: "
+                + "; ".join(isolation_violations)
+            )
+        if execution_path is not None:
+            evidence = aggregate_benchmark.model_evidence(
+                item["target"],
+                result,
+            )
+            recomputed_isolation = (
+                aggregate_benchmark.model_isolation_violations(
+                    item["target"],
+                    evidence,
+                    execution_path,
+                    allowed_commands=[
+                        *item["runtime_tools"],
+                        *item["external_tools"],
+                    ],
+                    audit_undeclared_bash=(
+                        item["safety"] == "read-only"
+                    ),
+                )
+            )
+            if (
+                stored_isolation_valid
+                and isolation_violations != recomputed_isolation
+            ):
+                errors.append(
+                    f"{result_path}: stored model isolation audit does not "
+                    "match the raw trace"
+                )
+            if recomputed_isolation:
+                errors.append(
+                    f"{result_path}: model isolation did not pass: "
+                    + "; ".join(recomputed_isolation)
+                )
         if result.get("returncode") != 0 or result.get("timed_out") is not False:
             errors.append(f"{result_path}: model process did not pass")
         duration = result.get("duration_ms")

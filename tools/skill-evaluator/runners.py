@@ -23,6 +23,25 @@ from typing import Any, Iterable, NamedTuple
 TARGETS = ("claude", "codex")
 RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
 EXTERNAL_TOOLS = ("qmd",)
+CLAUDE_READ_ONLY_SHELL_COMMANDS = (
+    "cat",
+    "cd",
+    "diff",
+    "du",
+    "echo",
+    "find",
+    "git",
+    "grep",
+    "head",
+    "ls",
+    "pwd",
+    "stat",
+    "tail",
+    "type",
+    "wc",
+    "where",
+    "which",
+)
 
 
 class RuntimePreparation(NamedTuple):
@@ -739,6 +758,7 @@ def build_command(
     safety: str = "read-only",
     runtime_tools: Iterable[str] = (),
     external_tools: Iterable[str] = (),
+    execution_workspace: Path | str | None = None,
 ) -> list[str]:
     """Build the allowlisted target command without executing it."""
 
@@ -764,6 +784,18 @@ def build_command(
             "Return only evidence produced in this isolated run."
         )
     if target == "claude":
+        workspace_permissions: list[str] = []
+        if execution_workspace is not None:
+            pattern = _claude_absolute_path_pattern(
+                Path(execution_workspace)
+            )
+            workspace_permissions.append(f"Read({pattern})")
+            if safety != "read-only":
+                workspace_permissions.extend(
+                    [
+                        f"Edit({pattern})",
+                    ]
+                )
         command = [
             "claude",
             "-p",
@@ -773,18 +805,21 @@ def build_command(
             "--verbose",
             "--no-session-persistence",
         ]
+        if safety == "read-only":
+            command.extend(["--permission-mode", "dontAsk"])
         if baseline:
             command.append("--disable-slash-commands")
         if safety == "read-only":
             tools = ["Read", "Glob", "Grep"]
-            allowed_tools = list(tools)
+            allowed_tools = list(workspace_permissions)
             if allowed_commands:
                 tools.append("Bash")
             allowed_tools.extend(
                 f"Bash({name} *)" for name in allowed_commands
             )
             command.extend(["--tools", ",".join(tools)])
-            command.extend(["--allowedTools", ",".join(allowed_tools)])
+            if allowed_tools:
+                command.extend(["--allowedTools", ",".join(allowed_tools)])
         else:
             command.extend(["--tools", "Read,Write,Edit,Glob,Grep,Bash"])
         if model:
@@ -935,24 +970,51 @@ def evaluator_environment() -> dict[str, str]:
 
 
 @contextmanager
+def isolated_execution_workspace(repository: Path | str):
+    """Create a disposable evaluation workspace outside the repository."""
+
+    repo = Path(repository).resolve()
+    with tempfile.TemporaryDirectory(
+        prefix="myskills-eval-workspace-"
+    ) as temp_dir:
+        workspace = Path(temp_dir).resolve()
+        try:
+            workspace.relative_to(repo)
+        except ValueError:
+            pass
+        else:
+            raise RuntimeError(
+                "evaluation execution workspace must be outside the repository"
+            )
+        yield workspace
+
+
+@contextmanager
 def isolated_target_environment(
     target: str,
     *,
     allow_ephemeral_auth_copy: bool,
     allowed_commands: Iterable[str] = (),
+    denied_read_roots: Iterable[Path | str] = (),
+    restrict_implicit_shell: bool = False,
 ):
     """Isolate user Skills while copying only auth into an OS temp directory."""
 
     if target not in TARGETS:
         raise ValueError(f"unsupported evaluator target: {target}")
     declared_allowed_commands = tuple(allowed_commands)
+    declared_denied_read_roots = tuple(
+        Path(root).resolve() for root in denied_read_roots
+    )
     known_commands = set(RUNTIME_TOOLS) | set(EXTERNAL_TOOLS)
     if (
         len(declared_allowed_commands) != len(set(declared_allowed_commands))
         or any(name not in known_commands for name in declared_allowed_commands)
         or (target != "codex" and declared_allowed_commands)
+        or (target != "claude" and declared_denied_read_roots)
+        or (target != "claude" and restrict_implicit_shell)
     ):
-        raise ValueError("allowed commands are invalid")
+        raise ValueError("target isolation policy is invalid")
     if not allow_ephemeral_auth_copy:
         raise PermissionError(
             "Model runs require --allow-ephemeral-auth-copy so user-wide "
@@ -987,6 +1049,12 @@ def isolated_target_environment(
                     source_home / ".credentials.json",
                     isolated / ".credentials.json",
                 )
+            _write_isolated_claude_settings(
+                source_env,
+                isolated,
+                declared_denied_read_roots,
+                restrict_implicit_shell=restrict_implicit_shell,
+            )
         yield env
 
 
@@ -1065,6 +1133,58 @@ def _write_isolated_codex_rules(
         )
     (rules_root / "default.rules").write_text(
         "\n".join(lines),
+        encoding="utf-8",
+    )
+
+
+def _claude_absolute_path_pattern(path: Path) -> str:
+    normalized = path.resolve().as_posix().rstrip("/")
+    if re.match(r"^[A-Za-z]:", normalized):
+        normalized = "/" + normalized[0].lower() + normalized[2:]
+    return f"/{normalized}/**"
+
+
+def _claude_absolute_read_rule(path: Path) -> str:
+    return f"Read({_claude_absolute_path_pattern(path)})"
+
+
+def _write_isolated_claude_settings(
+    source_env: dict[str, str],
+    destination: Path,
+    denied_read_roots: Iterable[Path],
+    *,
+    restrict_implicit_shell: bool,
+) -> None:
+    """Deny Claude file tools access to host config and repository roots."""
+
+    roots = {Path(root).resolve() for root in denied_read_roots}
+    source_config = source_env.get("CLAUDE_CONFIG_DIR")
+    if source_config:
+        roots.add(Path(source_config).resolve())
+    for key in ("HOME", "USERPROFILE"):
+        value = source_env.get(key)
+        if value:
+            home = Path(value).resolve()
+            roots.add(home / ".claude")
+            roots.add(home / ".agents")
+    host_home = Path.home().resolve()
+    roots.add(host_home / ".claude")
+    roots.add(host_home / ".agents")
+
+    permissions = {
+        "deny": sorted(
+            {_claude_absolute_read_rule(root) for root in roots},
+            key=str.casefold,
+        ),
+    }
+    if restrict_implicit_shell:
+        permissions["ask"] = [
+            f"Bash({name} *)"
+            for name in CLAUDE_READ_ONLY_SHELL_COMMANDS
+        ]
+    settings = {"permissions": permissions}
+    (destination / "settings.json").write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 

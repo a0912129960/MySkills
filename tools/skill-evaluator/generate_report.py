@@ -178,6 +178,41 @@ def _render_run(case: dict[str, Any]) -> str:
         else "PROCESS FAIL"
     )
     process_class = "pass" if process_state == "PROCESS PASS" else "fail"
+    raw_isolation = case.get("isolation_violations")
+    audit_state = case.get("isolation_audit_state")
+    if audit_state is None:
+        audit_state = (
+            "fail" if isinstance(raw_isolation, list) and raw_isolation
+            else "pass" if isinstance(raw_isolation, list)
+            else "missing"
+        )
+    isolation_violations = (
+        list(raw_isolation)
+        if isinstance(raw_isolation, list)
+        else []
+    )
+    isolation_passed = audit_state == "pass" and not isolation_violations
+    isolation_state = (
+        "ISOLATION PASS" if isolation_passed else "ISOLATION FAIL"
+    )
+    isolation_class = "pass" if isolation_passed else "fail"
+    isolation_details = (
+        "<ul>"
+        + "".join(
+            f"<li>{_escape(violation)}</li>"
+            for violation in isolation_violations
+        )
+        + "</ul>"
+        if isolation_violations
+        else (
+            "<p>No successful out-of-workspace tool access was detected.</p>"
+            if isolation_passed
+            else (
+                "<p>Isolation audit is missing, malformed, or does not match "
+                "the raw trace.</p>"
+            )
+        )
+    )
     result_path = _relative_href(case.get("result_path"))
     grading_path = _relative_href(case.get("grading_path"))
     external_tool_evidence = case.get("external_tool_evidence") or {}
@@ -186,6 +221,7 @@ def _render_run(case: dict[str, Any]) -> str:
   <h4>{title}</h4>
   <p>
     <span class="badge {process_class}">{process_state}</span>
+    <span class="badge {isolation_class}">{isolation_state}</span>
     <span class="badge {_escape(case.get('review_state'))}">
       HUMAN REVIEW: {_escape(str(case.get('review_state')).upper())}
     </span>
@@ -199,7 +235,12 @@ def _render_run(case: dict[str, Any]) -> str:
     <dt>Total tokens</dt><dd>{_escape(process.get('total_tokens'))}</dd>
     <dt>Safety</dt><dd>{_escape(case.get('safety'))}</dd>
     <dt>Explicit Skill invocation</dt><dd>{_escape(case.get('explicit'))}</dd>
+    <dt>Execution workspace</dt>
+    <dd>{_escape(case.get('execution_workspace'))}</dd>
   </dl>
+  <h5>Machine isolation audit</h5>
+  <p>Audit state: {_escape(audit_state)}</p>
+  {isolation_details}
   <h5>Exact logical launch command (includes the actual prompt)</h5>
   <pre>{_json_text(process.get('command'))}</pre>
   <p>

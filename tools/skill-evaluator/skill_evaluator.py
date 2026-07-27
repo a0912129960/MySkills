@@ -111,12 +111,133 @@ def smoke_contract() -> dict[str, Any]:
     return {"passed": all(checks.values()), "checks": checks}
 
 
+def _execute_batch_item(
+    item: dict[str, Any],
+    repo_root: Path,
+    *,
+    model: str | None,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    """Execute one plan item in a disposable workspace outside the repository."""
+
+    skill_path = Path(item["skill_path"])
+    staged_skills = [
+        Path(path) for path in item["companion_skill_paths"]
+    ]
+    if item["configuration"] == "with_skill":
+        staged_skills.insert(0, skill_path)
+    with runners.isolated_execution_workspace(repo_root) as execution_root:
+        runners.prepare_evaluation_workspace(
+            staged_skills,
+            item["target"],
+            execution_root,
+            fixtures=item["fixtures"],
+            git_fixture=item["git_fixture"],
+        )
+        command = runners.build_command(
+            item["target"],
+            item["prompt"],
+            skill_path,
+            model,
+            explicit=item["explicit"],
+            baseline=item["configuration"] == "baseline",
+            safety=item["safety"],
+            runtime_tools=item["runtime_tools"],
+            external_tools=item["external_tools"],
+            execution_workspace=execution_root,
+        )
+        external_tool_evidence = {}
+        with runners.isolated_target_environment(
+            item["target"],
+            allow_ephemeral_auth_copy=True,
+            allowed_commands=(
+                [
+                    *item["runtime_tools"],
+                    *item["external_tools"],
+                ]
+                if item["target"] == "codex"
+                else ()
+            ),
+            denied_read_roots=(
+                [repo_root] if item["target"] == "claude" else ()
+            ),
+            restrict_implicit_shell=(
+                item["target"] == "claude"
+                and item["safety"] == "read-only"
+            ),
+        ) as env:
+            if item["runtime_tools"] or item["external_tools"]:
+                preparation = runners.prepare_runtime_environment(
+                    execution_root,
+                    item["runtime_tool_sources"],
+                    item["runtime_tool_digests"],
+                    repo_root=repo_root,
+                    safety=item["safety"],
+                    base_env=env,
+                    external_tools=item["external_tools"],
+                )
+                env = preparation.environment
+                external_tool_evidence = (
+                    preparation.external_tool_evidence
+                )
+            identity = runners.run_command(
+                [item["target"], "--version"],
+                cwd=execution_root,
+                env=env,
+                timeout_seconds=30,
+            )
+            result = runners.run_command(
+                command,
+                cwd=execution_root,
+                env=env,
+                timeout_seconds=timeout_seconds,
+            )
+        execution_workspace = str(execution_root)
+        evidence = aggregate_benchmark.model_evidence(
+            item["target"],
+            result,
+        )
+        isolation_violations = (
+            aggregate_benchmark.model_isolation_violations(
+                item["target"],
+                evidence,
+                execution_root,
+                allowed_commands=[
+                    *item["runtime_tools"],
+                    *item["external_tools"],
+                ],
+                audit_undeclared_bash=(
+                    item["safety"] == "read-only"
+                ),
+            )
+        )
+    return {
+        "plan": item,
+        "target_identity": identity["stdout"].strip(),
+        "target_identity_returncode": identity["returncode"],
+        "external_tool_evidence": external_tool_evidence,
+        "execution_workspace": execution_workspace,
+        "isolation_violations": isolation_violations,
+        "result": result,
+    }
+
+
 def _write_json(value: Any, output: Path | None = None) -> None:
     text = json.dumps(value, ensure_ascii=False, indent=2)
     if output:
         output.write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
+
+
+def _source_boundary(skill_path: Path) -> Path:
+    """Return the nearest repository root, or the Skill directory itself."""
+
+    skill = skill_path.resolve()
+    for candidate in (skill, *skill.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return skill
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -132,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     commands_parser.add_argument("--prompt", default="Run a harmless Skill smoke test.")
     commands_parser.add_argument("--target", choices=["claude", "codex", "all"], default="all")
     commands_parser.add_argument("--model")
+    commands_parser.add_argument("--workspace", type=Path, default=Path.cwd())
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("skill_path", type=Path)
@@ -141,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--model")
     run_parser.add_argument("--timeout-seconds", type=float, default=300)
     run_parser.add_argument("--workspace", type=Path)
+    run_parser.add_argument(
+        "--allow-ephemeral-auth-copy",
+        action="store_true",
+    )
 
     aggregate_parser = subparsers.add_parser("aggregate")
     aggregate_parser.add_argument("workspace", type=Path)
@@ -212,7 +338,11 @@ def main(argv: list[str] | None = None) -> int:
         targets = runners.TARGETS if args.target == "all" else (args.target,)
         result = {
             target: runners.build_command(
-                target, args.prompt, args.skill_path, args.model
+                target,
+                args.prompt,
+                args.skill_path,
+                args.model,
+                execution_workspace=args.workspace.resolve(),
             )
             for target in targets
         }
@@ -220,7 +350,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
+        if not args.allow_ephemeral_auth_copy:
+            _write_json(
+                {
+                    "valid": False,
+                    "errors": [
+                        "run requires --allow-ephemeral-auth-copy"
+                    ],
+                }
+            )
+            return 1
         skill = args.skill_path.resolve()
+        source_boundary = _source_boundary(skill)
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         workspace = (
             args.workspace.resolve()
@@ -234,29 +375,61 @@ def main(argv: list[str] | None = None) -> int:
         targets = runners.TARGETS if args.target == "all" else (args.target,)
         results: dict[str, Any] = {}
         for target in targets:
-            target_workspace = runners.prepare_isolated_workspace(
-                skill,
-                target,
-                workspace / target,
-            )
-            command = runners.build_command(
-                target,
-                args.prompt,
-                skill,
-                args.model,
-                explicit=args.mode == "explicit",
-            )
-            result = runners.run_command(
-                command,
-                cwd=target_workspace,
-                env=runners.evaluator_environment(),
-                timeout_seconds=args.timeout_seconds,
-            )
-            result["mode"] = args.mode
-            result["target"] = target
-            result_path = target_workspace / "result.json"
+            with runners.isolated_execution_workspace(
+                source_boundary
+            ) as execution_root:
+                runners.prepare_isolated_workspace(
+                    skill,
+                    target,
+                    execution_root,
+                )
+                command = runners.build_command(
+                    target,
+                    args.prompt,
+                    skill,
+                    args.model,
+                    explicit=args.mode == "explicit",
+                    execution_workspace=execution_root,
+                )
+                with runners.isolated_target_environment(
+                    target,
+                    allow_ephemeral_auth_copy=True,
+                    denied_read_roots=(
+                        [source_boundary]
+                        if target == "claude"
+                        else ()
+                    ),
+                    restrict_implicit_shell=target == "claude",
+                ) as env:
+                    result = runners.run_command(
+                        command,
+                        cwd=execution_root,
+                        env=env,
+                        timeout_seconds=args.timeout_seconds,
+                    )
+                execution_workspace = str(execution_root)
+                evidence = aggregate_benchmark.model_evidence(
+                    target,
+                    result,
+                )
+                isolation_violations = (
+                    aggregate_benchmark.model_isolation_violations(
+                        target,
+                        evidence,
+                        execution_root,
+                    )
+                )
+            record = {
+                "mode": args.mode,
+                "target": target,
+                "execution_workspace": execution_workspace,
+                "isolation_violations": isolation_violations,
+                "result": result,
+            }
+            result_path = workspace / target / "result.json"
+            result_path.parent.mkdir(parents=True, exist_ok=True)
             result_path.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+                json.dumps(record, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
             results[target] = {
@@ -393,77 +566,13 @@ def main(argv: list[str] | None = None) -> int:
                 / item["configuration"]
                 / item["target"]
             )
-            execution_root = run_root / "workspace"
-            skill_path = Path(item["skill_path"])
-            staged_skills = [
-                Path(path) for path in item["companion_skill_paths"]
-            ]
-            if item["configuration"] == "with_skill":
-                staged_skills.insert(0, skill_path)
-            runners.prepare_evaluation_workspace(
-                staged_skills,
-                item["target"],
-                execution_root,
-                fixtures=item["fixtures"],
-                git_fixture=item["git_fixture"],
+            record = _execute_batch_item(
+                item,
+                repo_root,
+                model=args.model,
+                timeout_seconds=args.timeout_seconds,
             )
-            command = runners.build_command(
-                item["target"],
-                item["prompt"],
-                skill_path,
-                args.model,
-                explicit=item["explicit"],
-                baseline=item["configuration"] == "baseline",
-                safety=item["safety"],
-                runtime_tools=item["runtime_tools"],
-                external_tools=item["external_tools"],
-            )
-            external_tool_evidence = {}
-            with runners.isolated_target_environment(
-                item["target"],
-                allow_ephemeral_auth_copy=True,
-                allowed_commands=(
-                    [
-                        *item["runtime_tools"],
-                        *item["external_tools"],
-                    ]
-                    if item["target"] == "codex"
-                    else ()
-                ),
-            ) as env:
-                if item["runtime_tools"] or item["external_tools"]:
-                    preparation = runners.prepare_runtime_environment(
-                        execution_root,
-                        item["runtime_tool_sources"],
-                        item["runtime_tool_digests"],
-                        repo_root=args.repo_root,
-                        safety=item["safety"],
-                        base_env=env,
-                        external_tools=item["external_tools"],
-                    )
-                    env = preparation.environment
-                    external_tool_evidence = (
-                        preparation.external_tool_evidence
-                    )
-                identity = runners.run_command(
-                    [item["target"], "--version"],
-                    cwd=execution_root,
-                    env=env,
-                    timeout_seconds=30,
-                )
-                result = runners.run_command(
-                    command,
-                    cwd=execution_root,
-                    env=env,
-                    timeout_seconds=args.timeout_seconds,
-                )
-            record = {
-                "plan": item,
-                "target_identity": identity["stdout"].strip(),
-                "target_identity_returncode": identity["returncode"],
-                "external_tool_evidence": external_tool_evidence,
-                "result": result,
-            }
+            result = record["result"]
             result_path = run_root / "result.json"
             result_path.parent.mkdir(parents=True, exist_ok=True)
             result_path.write_text(
