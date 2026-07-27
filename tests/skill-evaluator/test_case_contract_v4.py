@@ -48,6 +48,33 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
             self.assertRegex(relative, r"^cases/[a-z0-9]+(?:-[a-z0-9]+)*\.json$")
             self.assertTrue((ROOT / "evaluations" / relative).is_file())
 
+    def test_parallel_case_ownership_is_complete_and_non_overlapping(
+        self,
+    ) -> None:
+        index = json.loads(
+            (ROOT / "evaluations" / "cases.json").read_text(encoding="utf-8")
+        )
+        ownership = json.loads(
+            (ROOT / "evaluations" / "case-ownership.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        groups = ownership["agents"]
+        flattened = [
+            path
+            for group in ("agent-a", "agent-b", "agent-c")
+            for path in groups[group]
+        ]
+        expected = [
+            f"evaluations/{path}"
+            for path in index["skill_case_files"]
+        ]
+
+        self.assertEqual(len(groups), 3)
+        self.assertTrue(all(len(groups[group]) == 14 for group in groups))
+        self.assertEqual(len(flattened), len(set(flattened)))
+        self.assertEqual(sorted(flattened), sorted(expected))
+
     def test_every_skill_has_fixed_core_and_invocation_suites(self) -> None:
         document = self.cases.load_cases(ROOT)
         self.assertEqual(document["schema_version"], 4)

@@ -1,0 +1,66 @@
+{
+  "$schema": "./case-ownership.schema.json",
+  "schema_version": 1,
+  "coordinator_owned": [
+    "CLAUDE.md",
+    "CONTEXT.md",
+    "attestations/**",
+    "docs/**",
+    "evaluations/*.json",
+    "evaluations/*.schema.json",
+    "evaluations/records/**",
+    "scripts/**",
+    "tests/**",
+    "tools/skill-evaluator/**"
+  ],
+  "agents": {
+    "agent-a": [
+      "evaluations/cases/ai-handoff.json",
+      "evaluations/cases/ask-myskills.json",
+      "evaluations/cases/code-review.json",
+      "evaluations/cases/codebase-design.json",
+      "evaluations/cases/diagnosing-bugs.json",
+      "evaluations/cases/domain-modeling.json",
+      "evaluations/cases/grill-me.json",
+      "evaluations/cases/grill-with-docs.json",
+      "evaluations/cases/grilling.json",
+      "evaluations/cases/implement.json",
+      "evaluations/cases/improve-codebase-architecture.json",
+      "evaluations/cases/project-rules-init.json",
+      "evaluations/cases/prototype.json",
+      "evaluations/cases/session-checkpoint.json"
+    ],
+    "agent-b": [
+      "evaluations/cases/cross-linker.json",
+      "evaluations/cases/graph-colorize.json",
+      "evaluations/cases/json-canvas.json",
+      "evaluations/cases/llm-wiki.json",
+      "evaluations/cases/memory-bridge.json",
+      "evaluations/cases/obsidian-bases.json",
+      "evaluations/cases/obsidian-cli.json",
+      "evaluations/cases/obsidian-markdown.json",
+      "evaluations/cases/qmd.json",
+      "evaluations/cases/skill-evaluator.json",
+      "evaluations/cases/spec-package-generator.json",
+      "evaluations/cases/tag-taxonomy.json",
+      "evaluations/cases/tdd.json",
+      "evaluations/cases/to-spec.json"
+    ],
+    "agent-c": [
+      "evaluations/cases/wiki-capture.json",
+      "evaluations/cases/wiki-context-pack.json",
+      "evaluations/cases/wiki-dashboard.json",
+      "evaluations/cases/wiki-dedup.json",
+      "evaluations/cases/wiki-history-ingest.json",
+      "evaluations/cases/wiki-ingest.json",
+      "evaluations/cases/wiki-lint.json",
+      "evaluations/cases/wiki-query.json",
+      "evaluations/cases/wiki-rebuild.json",
+      "evaluations/cases/wiki-research.json",
+      "evaluations/cases/wiki-setup.json",
+      "evaluations/cases/wiki-status.json",
+      "evaluations/cases/wiki-synthesize.json",
+      "evaluations/cases/wiki-update.json"
+    ]
+  }
+}
