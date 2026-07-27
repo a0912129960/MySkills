@@ -18,21 +18,10 @@ def _mean(values: list[float]) -> float | None:
     return statistics.fmean(values) if values else None
 
 
-def _claude_evidence(stdout: str) -> dict[str, Any]:
-    evidence: dict[str, Any] = {
-        "final_response": "",
-        "events": [],
-        "metadata": {},
-        "parse_errors": [],
-    }
-    try:
-        payload = json.loads(stdout)
-    except (json.JSONDecodeError, TypeError) as error:
-        evidence["parse_errors"].append(f"Claude stdout is not JSON: {error}")
-        return evidence
-    if not isinstance(payload, dict):
-        evidence["parse_errors"].append("Claude stdout JSON must be an object")
-        return evidence
+def _record_claude_result(
+    payload: dict[str, Any],
+    evidence: dict[str, Any],
+) -> None:
     if isinstance(payload.get("result"), str):
         evidence["final_response"] = payload["result"]
     permission_denials = payload.get("permission_denials")
@@ -49,20 +38,122 @@ def _claude_evidence(stdout: str) -> dict[str, Any]:
             evidence["parse_errors"].append(
                 "Claude permission_denials must be an array"
             )
-    evidence["metadata"] = {
-        key: payload.get(key)
-        for key in (
-            "subtype",
-            "is_error",
-            "num_turns",
-            "stop_reason",
-            "terminal_reason",
-            "total_cost_usd",
-            "usage",
-            "modelUsage",
-        )
-        if key in payload
+    evidence["metadata"].update(
+        {
+            key: payload.get(key)
+            for key in (
+                "subtype",
+                "is_error",
+                "num_turns",
+                "stop_reason",
+                "terminal_reason",
+                "total_cost_usd",
+                "usage",
+                "modelUsage",
+            )
+            if key in payload
+        }
+    )
+
+
+def _claude_message_blocks(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    message = payload.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, list):
+        return []
+    return [block for block in content if isinstance(block, dict)]
+
+
+def _claude_evidence(stdout: str) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "final_response": "",
+        "events": [],
+        "metadata": {},
+        "parse_errors": [],
     }
+    try:
+        payload = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        payload = None
+    if isinstance(payload, dict):
+        _record_claude_result(payload, evidence)
+        return evidence
+    if payload is not None:
+        evidence["parse_errors"].append(
+            "Claude stdout JSON must be an object"
+        )
+        return evidence
+
+    event_count = 0
+    for line_number, line in enumerate(stdout.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as error:
+            evidence["parse_errors"].append(
+                f"Claude stdout line {line_number} is not JSON: {error}"
+            )
+            continue
+        if not isinstance(event, dict):
+            evidence["parse_errors"].append(
+                f"Claude stdout line {line_number} must be an object"
+            )
+            continue
+        event_count += 1
+        event_type = event.get("type")
+        if event_type == "result":
+            _record_claude_result(event, evidence)
+            continue
+        if event_type == "assistant":
+            for block in _claude_message_blocks(event):
+                block_type = block.get("type")
+                if block_type == "text" and isinstance(
+                    block.get("text"),
+                    str,
+                ):
+                    evidence["events"].append(
+                        {
+                            "type": "agent_message",
+                            "text": block["text"],
+                        }
+                    )
+                elif block_type == "tool_use":
+                    evidence["events"].append(
+                        {
+                            "type": "tool_use",
+                            "id": block.get("id"),
+                            "name": block.get("name"),
+                            "input": block.get("input"),
+                        }
+                    )
+            continue
+        if event_type == "user":
+            for block in _claude_message_blocks(event):
+                if block.get("type") == "tool_result":
+                    evidence["events"].append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.get("tool_use_id"),
+                            "content": block.get("content"),
+                            "is_error": block.get("is_error"),
+                        }
+                    )
+            continue
+        if event_type == "system":
+            evidence["metadata"]["system_subtype"] = event.get("subtype")
+            continue
+        evidence["events"].append(
+            {
+                "type": str(event_type or "unknown"),
+                "details": event,
+            }
+        )
+    evidence["metadata"]["raw_event_count"] = event_count
+    if event_count == 0 and not evidence["parse_errors"]:
+        evidence["parse_errors"].append("Claude stdout contains no JSON events")
     return evidence
 
 

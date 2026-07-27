@@ -769,7 +769,8 @@ def build_command(
             "-p",
             evaluation_prompt,
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
             "--no-session-persistence",
         ]
         if baseline:
@@ -793,11 +794,11 @@ def build_command(
     sandbox = "read-only" if safety == "read-only" else "workspace-write"
     command = [
         "codex",
+        "--ask-for-approval",
+        "untrusted",
         "exec",
         "--ephemeral",
         "--json",
-        "--ignore-user-config",
-        "--ignore-rules",
         "--skip-git-repo-check",
         "--sandbox",
         sandbox,
@@ -938,11 +939,20 @@ def isolated_target_environment(
     target: str,
     *,
     allow_ephemeral_auth_copy: bool,
+    allowed_commands: Iterable[str] = (),
 ):
     """Isolate user Skills while copying only auth into an OS temp directory."""
 
     if target not in TARGETS:
         raise ValueError(f"unsupported evaluator target: {target}")
+    declared_allowed_commands = tuple(allowed_commands)
+    known_commands = set(RUNTIME_TOOLS) | set(EXTERNAL_TOOLS)
+    if (
+        len(declared_allowed_commands) != len(set(declared_allowed_commands))
+        or any(name not in known_commands for name in declared_allowed_commands)
+        or (target != "codex" and declared_allowed_commands)
+    ):
+        raise ValueError("allowed commands are invalid")
     if not allow_ephemeral_auth_copy:
         raise PermissionError(
             "Model runs require --allow-ephemeral-auth-copy so user-wide "
@@ -962,6 +972,11 @@ def isolated_target_environment(
                     source_env.get("CODEX_HOME", Path.home() / ".codex")
                 )
                 _copy_auth_file(source_home / "auth.json", isolated / "auth.json")
+            _write_isolated_codex_config(source_env, isolated)
+            _write_isolated_codex_rules(
+                isolated,
+                declared_allowed_commands,
+            )
         else:
             env["CLAUDE_CONFIG_DIR"] = str(isolated)
             if not env.get("ANTHROPIC_API_KEY"):
@@ -973,6 +988,85 @@ def isolated_target_environment(
                     isolated / ".credentials.json",
                 )
         yield env
+
+
+def _write_isolated_codex_config(
+    source_env: dict[str, str],
+    destination: Path,
+) -> None:
+    """Disable every discoverable user Skill in the clean evaluator profile."""
+
+    roots: set[Path] = set()
+    codex_home = source_env.get("CODEX_HOME")
+    if codex_home:
+        roots.add(Path(codex_home) / "skills")
+    for key in ("HOME", "USERPROFILE"):
+        value = source_env.get(key)
+        if value:
+            home = Path(value)
+            roots.add(home / ".codex" / "skills")
+            roots.add(home / ".agents" / "skills")
+    host_home = Path.home()
+    roots.add(host_home / ".codex" / "skills")
+    roots.add(host_home / ".agents" / "skills")
+
+    skill_files: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for child in root.iterdir():
+            if child.name.startswith("."):
+                continue
+            skill_file = child / "SKILL.md"
+            if skill_file.is_file():
+                skill_files.add(skill_file.resolve())
+
+    lines: list[str] = []
+    for skill_file in sorted(
+        skill_files,
+        key=lambda item: item.as_posix().casefold(),
+    ):
+        lines.extend(
+            [
+                "[[skills.config]]",
+                f"path = {json.dumps(skill_file.as_posix())}",
+                "enabled = false",
+                "",
+            ]
+        )
+    (destination / "config.toml").write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )
+
+
+def _write_isolated_codex_rules(
+    destination: Path,
+    allowed_commands: Iterable[str],
+) -> None:
+    """Allow only evaluator-declared guarded launchers outside the sandbox."""
+
+    rules_root = destination / "rules"
+    rules_root.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    for name in sorted(allowed_commands):
+        lines.extend(
+            [
+                "prefix_rule(",
+                f"    pattern = [{json.dumps(name)}],",
+                '    decision = "allow",',
+                (
+                    '    justification = "Evaluator-declared guarded '
+                    'runtime launcher",'
+                ),
+                ")",
+                "",
+            ]
+        )
+    (rules_root / "default.rules").write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )
 
 
 def _copy_auth_file(source: Path, destination: Path) -> None:

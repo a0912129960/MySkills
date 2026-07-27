@@ -1029,6 +1029,20 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             claude_home = root / "claude"
             (codex_home / "skills").mkdir(parents=True)
             (claude_home / "skills").mkdir(parents=True)
+            codex_user_skill = codex_home / "skills" / "user-one"
+            codex_user_skill.mkdir()
+            (codex_user_skill / "SKILL.md").write_text(
+                "---\nname: user-one\ndescription: User Skill.\n---\n",
+                encoding="utf-8",
+            )
+            agents_user_skill = (
+                root / "real-home" / ".agents" / "skills" / "user-two"
+            )
+            agents_user_skill.mkdir(parents=True)
+            (agents_user_skill / "SKILL.md").write_text(
+                "---\nname: user-two\ndescription: User Skill.\n---\n",
+                encoding="utf-8",
+            )
             (codex_home / "auth.json").write_text(
                 '{"fixture": true}',
                 encoding="utf-8",
@@ -1062,10 +1076,39 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 with runners.isolated_target_environment(
                     "codex",
                     allow_ephemeral_auth_copy=True,
+                    allowed_commands=["qmd", "obsidian-wiki"],
                 ) as codex_env:
                     isolated_codex = Path(codex_env["CODEX_HOME"])
                     self.assertTrue((isolated_codex / "auth.json").is_file())
-                    self.assertFalse((isolated_codex / "config.toml").exists())
+                    isolated_config = (
+                        isolated_codex / "config.toml"
+                    ).read_text(encoding="utf-8")
+                    self.assertIn(
+                        codex_user_skill.as_posix() + "/SKILL.md",
+                        isolated_config,
+                    )
+                    self.assertIn(
+                        agents_user_skill.as_posix() + "/SKILL.md",
+                        isolated_config,
+                    )
+                    self.assertEqual(
+                        isolated_config.count("enabled = false"),
+                        2,
+                    )
+                    self.assertNotIn("fixture = true", isolated_config)
+                    isolated_rules = (
+                        isolated_codex / "rules" / "default.rules"
+                    ).read_text(encoding="utf-8")
+                    self.assertIn(
+                        'pattern = ["obsidian-wiki"]',
+                        isolated_rules,
+                    )
+                    self.assertIn('pattern = ["qmd"]', isolated_rules)
+                    self.assertEqual(
+                        isolated_rules.count('decision = "allow"'),
+                        2,
+                    )
+                    self.assertNotIn(codex_home.as_posix(), isolated_rules)
                     self.assertFalse((isolated_codex / "skills").exists())
                     self.assertEqual(
                         codex_env["USERPROFILE"],
@@ -1095,6 +1138,79 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     )
                     self.assertEqual(claude_env["HOME"], str(isolated_claude))
                 self.assertFalse(isolated_claude.exists())
+
+    @unittest.skipUnless(os.name == "nt", "Codex execpolicy CLI contract")
+    def test_codex_runtime_rule_allows_only_the_guarded_launcher_name(
+        self,
+    ) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_execpolicy",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with patch.dict(
+                os.environ,
+                {"OPENAI_API_KEY": "fixture"},
+                clear=False,
+            ):
+                with runners.isolated_target_environment(
+                    "codex",
+                    allow_ephemeral_auth_copy=True,
+                    allowed_commands=["qmd"],
+                ) as env:
+                    rules = Path(env["CODEX_HOME"]) / "rules" / "default.rules"
+                    allowed = runners.run_command(
+                        [
+                            "codex",
+                            "execpolicy",
+                            "check",
+                            "--rules",
+                            str(rules),
+                            "--",
+                            "qmd",
+                            "search",
+                            "fixture",
+                        ],
+                        cwd=root,
+                        env=env,
+                        timeout_seconds=30,
+                    )
+                    bypass = runners.run_command(
+                        [
+                            "codex",
+                            "execpolicy",
+                            "check",
+                            "--rules",
+                            str(rules),
+                            "--",
+                            (
+                                "C:\\WINDOWS\\System32\\WindowsPowerShell"
+                                "\\v1.0\\powershell.exe"
+                            ),
+                            "-NoLogo",
+                            "-NoProfile",
+                            "-NonInteractive",
+                            "-File",
+                            "C:\\host\\qmd.ps1",
+                            "search",
+                            "fixture",
+                        ],
+                        cwd=root,
+                        env=env,
+                        timeout_seconds=30,
+                    )
+
+            self.assertEqual(allowed["returncode"], 0, allowed["stderr"])
+            self.assertEqual(bypass["returncode"], 0, bypass["stderr"])
+            self.assertEqual(
+                json.loads(allowed["stdout"])["decision"],
+                "allow",
+            )
+            self.assertEqual(
+                json.loads(bypass["stdout"])["matchedRules"],
+                [],
+            )
 
     def test_attestation_digest_matches_installer_and_rejects_stale_content(
         self,
@@ -1325,9 +1441,22 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         )
 
         self.assertEqual(claude[0:2], ["claude", "-p"])
-        self.assertIn("--output-format", claude)
-        self.assertEqual(codex[0:3], ["codex", "exec", "--ephemeral"])
+        self.assertEqual(
+            claude[claude.index("--output-format") + 1],
+            "stream-json",
+        )
+        self.assertIn("--verbose", claude)
+        self.assertEqual(
+            codex[0:4],
+            ["codex", "--ask-for-approval", "untrusted", "exec"],
+        )
         self.assertIn("--json", codex)
+        self.assertEqual(
+            codex[codex.index("--ask-for-approval") + 1],
+            "untrusted",
+        )
+        self.assertNotIn("--ignore-rules", codex)
+        self.assertNotIn("--ignore-user-config", codex)
         claude_trigger = runners.build_command(
             "claude",
             "Natural trigger prompt.",
@@ -2183,6 +2312,88 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             malformed_claude["parse_errors"],
             ["Claude permission_denials must be an array"],
         )
+        claude_stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Searching the fixture.",
+                                },
+                                {
+                                    "type": "tool_use",
+                                    "id": "tool-1",
+                                    "name": "Bash",
+                                    "input": {
+                                        "command": (
+                                            'qmd search "retry policy"'
+                                        )
+                                    },
+                                },
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "tool-1",
+                                    "content": "qmd://evaluation/retry-policy.md",
+                                    "is_error": False,
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "Claude stream final answer",
+                        "num_turns": 2,
+                        "usage": {"output_tokens": 12},
+                        "permission_denials": [],
+                    }
+                ),
+            ]
+        )
+        parsed_claude = aggregate._claude_evidence(claude_stream)
+        self.assertEqual(
+            parsed_claude["final_response"],
+            "Claude stream final answer",
+        )
+        self.assertEqual(
+            parsed_claude["events"],
+            [
+                {
+                    "type": "agent_message",
+                    "text": "Searching the fixture.",
+                },
+                {
+                    "type": "tool_use",
+                    "id": "tool-1",
+                    "name": "Bash",
+                    "input": {
+                        "command": 'qmd search "retry policy"'
+                    },
+                },
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tool-1",
+                    "content": "qmd://evaluation/retry-policy.md",
+                    "is_error": False,
+                },
+            ],
+        )
+        self.assertEqual(parsed_claude["parse_errors"], [])
 
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
@@ -2200,19 +2411,61 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     )
                     run_dir.mkdir(parents=True)
                     if target == "claude":
-                        stdout = json.dumps(
-                            {
-                                "type": "result",
-                                "subtype": "success",
-                                "is_error": False,
-                                "num_turns": 2,
-                                "result": "Claude final answer <unsafe>",
-                                "stop_reason": "end_turn",
-                                "total_cost_usd": 0.01,
-                                "usage": {"output_tokens": 12},
-                                "permission_denials": [],
-                                "terminal_reason": "completed",
-                            }
+                        stdout = "\n".join(
+                            [
+                                json.dumps(
+                                    {
+                                        "type": "assistant",
+                                        "message": {
+                                            "content": [
+                                                {
+                                                    "type": "tool_use",
+                                                    "id": "tool-qmd",
+                                                    "name": "Bash",
+                                                    "input": {
+                                                        "command": (
+                                                            "qmd search fixture"
+                                                        )
+                                                    },
+                                                }
+                                            ]
+                                        },
+                                    }
+                                ),
+                                json.dumps(
+                                    {
+                                        "type": "user",
+                                        "message": {
+                                            "content": [
+                                                {
+                                                    "type": "tool_result",
+                                                    "tool_use_id": "tool-qmd",
+                                                    "content": (
+                                                        "fixture qmd evidence"
+                                                    ),
+                                                    "is_error": False,
+                                                }
+                                            ]
+                                        },
+                                    }
+                                ),
+                                json.dumps(
+                                    {
+                                        "type": "result",
+                                        "subtype": "success",
+                                        "is_error": False,
+                                        "num_turns": 2,
+                                        "result": (
+                                            "Claude final answer <unsafe>"
+                                        ),
+                                        "stop_reason": "end_turn",
+                                        "total_cost_usd": 0.01,
+                                        "usage": {"output_tokens": 12},
+                                        "permission_denials": [],
+                                        "terminal_reason": "completed",
+                                    }
+                                ),
+                            ]
                         )
                     else:
                         stdout = "\n".join(
@@ -2410,6 +2663,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("example", html)
             self.assertIn("Use fixture/input.txt to answer.", html)
             self.assertIn("Claude final answer &lt;unsafe&gt;", html)
+            self.assertIn("Tool</strong>: Bash", html)
+            self.assertIn("qmd search fixture", html)
+            self.assertIn("fixture qmd evidence", html)
             self.assertIn("Codex final answer", html)
             self.assertIn("Get-Content fixture/input.txt", html)
             self.assertIn("With Skill", html)

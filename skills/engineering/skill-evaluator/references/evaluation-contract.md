@@ -50,6 +50,16 @@ rejects command-line index overrides. The runner validates the executable
 against the centrally declared minimum version and records identity plus setup
 results in raw evidence. QMD never reads the user's index.
 
+Each Codex run uses an ephemeral, evaluator-owned profile. Its generated
+`config.toml` disables every discovered user Skill but not the Skill staged
+inside the workspace. Evaluator-owned exec-policy rules allow only case-declared
+guarded launcher names, and Codex uses `untrusted` approval. Absolute host
+executables and undeclared commands therefore remain unmatched and are rejected
+by the non-interactive run instead of bypassing the guarded launcher; user
+exec-policy rules are not copied into the ephemeral profile.
+Claude emits verbose stream JSON; aggregation retains assistant text, tool use,
+tool results, the final response, metadata, and parse warnings for human review.
+
 Every run plan records the current primary `skill_digest` and the deterministic
 `companion_skill_digests`. Draft audit rebuilds the current plan and rejects raw
 evidence when any staged Skill content has changed.

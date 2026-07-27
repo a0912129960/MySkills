@@ -132,6 +132,22 @@ def _render_events(events: list[dict[str, Any]]) -> str:
             )
         elif event.get("type") == "agent_message":
             body = f"<pre>{_escape(event.get('text'))}</pre>"
+        elif event.get("type") == "tool_use":
+            body = (
+                f"<p><strong>Tool</strong>: "
+                f"{_escape(event.get('name'))}</p>"
+                f"<p><strong>Input</strong></p>"
+                f"<pre>{_json_text(event.get('input'))}</pre>"
+            )
+        elif event.get("type") == "tool_result":
+            body = (
+                f"<p><strong>Tool use ID</strong>: "
+                f"{_escape(event.get('tool_use_id'))}</p>"
+                f"<p><strong>Error</strong>: "
+                f"{_escape(event.get('is_error'))}</p>"
+                f"<p><strong>Output</strong></p>"
+                f"<pre>{_json_text(event.get('content'))}</pre>"
+            )
         elif event.get("type") == "error":
             body = f"<pre>{_escape(event.get('message'))}</pre>"
         else:

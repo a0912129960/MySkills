@@ -55,9 +55,16 @@ current directory digest of every Managed Skill. Raw model output stays under
    ```
 
    The runner copies only the target CLI authentication file into an OS
-   temporary directory, loads no user settings or user-wide Skills, and removes
-   that directory after each call. Prompts, commands, and results are written
-   under the ignored batch workspace; credentials are never written there.
+   temporary directory and removes that directory after each call. For Codex it
+   creates a clean `config.toml` that disables every discovered user Skill
+   while leaving the staged workspace Skill visible. The profile also contains
+   evaluator-owned exec-policy rules that allow only the guarded launcher names
+   declared by the case. Codex uses `untrusted` approval, so an absolute host
+   executable or any undeclared command remains unmatched and is rejected by
+   the non-interactive run instead of bypassing the guarded launcher. No user
+   settings or user exec-policy rules are copied. Prompts, commands, and
+   results are written under the ignored batch workspace; credentials are
+   never written there.
 
 3. Grade the raw results, compare required cases with a no-Skill or recorded
    previous-version baseline, and review the offline report. Claude evidence
@@ -85,9 +92,11 @@ current directory digest of every Managed Skill. Raw model output stays under
    and Git-backed fixtures, canonical Skill and baseline identities, target
    identity and process status, external-runtime identity/setup evidence,
    normalized final response, structured model/tool trace, raw streams, and
-   current grading. It places With-Skill and Baseline runs side by side for each
-   target. A process pass is not a behavior pass; the human records a specific
-   reason for every assertion in the linked `grading.json`.
+   current grading. Claude runs use verbose stream JSON so Bash/Read tool use
+   and tool results remain reviewable rather than being collapsed into only the
+   final answer. The report places With-Skill and Baseline runs side by side for
+   each target. A process pass is not a behavior pass; the human records a
+   specific reason for every assertion in the linked `grading.json`.
 
 4. After completing every grading template, audit the reviewed evidence and
    create a pending draft:

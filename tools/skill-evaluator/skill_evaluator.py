@@ -52,7 +52,12 @@ def smoke_contract() -> dict[str, Any]:
         claude = runners.build_command("claude", "Smoke test.", fixture)
         codex = runners.build_command("codex", "Smoke test.", fixture)
         checks["claude_command"] = claude[:2] == ["claude", "-p"]
-        checks["codex_command"] = codex[:3] == ["codex", "exec", "--ephemeral"]
+        checks["codex_command"] = codex[:4] == [
+            "codex",
+            "--ask-for-approval",
+            "untrusted",
+            "exec",
+        ]
 
         workspace = root / "workspace"
         run_dir = (
@@ -417,6 +422,14 @@ def main(argv: list[str] | None = None) -> int:
             with runners.isolated_target_environment(
                 item["target"],
                 allow_ephemeral_auth_copy=True,
+                allowed_commands=(
+                    [
+                        *item["runtime_tools"],
+                        *item["external_tools"],
+                    ]
+                    if item["target"] == "codex"
+                    else ()
+                ),
             ) as env:
                 if item["runtime_tools"] or item["external_tools"]:
                     preparation = runners.prepare_runtime_environment(
