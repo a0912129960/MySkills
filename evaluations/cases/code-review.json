@@ -6,161 +6,98 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "two-axis-review",
+      "id": "two-axis-working-tree-review",
       "version": 1,
       "role": "normal",
-      "prompt": "Review the fixture repository's working-tree diff from HEAD against PROJECT_RULES.md and SPEC.md. Report Standards and Spec findings separately with file evidence, and do not edit files.",
-      "oracle": {
-        "expected_outcome": "uses HEAD as the fixed Git comparison point; separates Standards and Spec findings; cites actionable file evidence.",
-        "assertions": [
-          {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "uses HEAD as the fixed Git comparison point",
-            "required": true
-          },
-          {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "separates Standards and Spec findings",
-            "required": true
-          },
-          {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "cites actionable file evidence",
-            "required": true
-          }
-        ]
-      },
-      "safety": "read-only",
+      "prompt": "Review the current working-tree changes. The requirement is: `parse_age` must reject negative values with `ValueError` and keep accepting zero. Apply repository standards independently from that requirement. Do not modify the change.",
       "git_fixture": {
         "baseline_files": [
-          {
-            "path": "PROJECT_RULES.md",
-            "content": "# Project Rules\n\nValidation functions return booleans and never print user input.\n"
-          },
-          {
-            "path": "SPEC.md",
-            "content": "# Acceptance\n\nBlank or whitespace-only display names must be rejected.\n"
-          },
-          {
-            "path": "src/validator.py",
-            "content": "def is_valid_name(value: str) -> bool:\n    return bool(value)\n"
-          }
+          {"path": "AGENTS.md", "content": "# Rules\n\n- Public Python functions require type annotations.\n- Tests must cover boundary values.\n"},
+          {"path": "ages.py", "content": "def parse_age(value: int) -> int:\n    return int(value)\n"},
+          {"path": "tests/test_ages.py", "content": "from ages import parse_age\n\ndef test_positive_age():\n    assert parse_age(12) == 12\n"}
         ],
         "working_tree_files": [
-          {
-            "path": "src/validator.py",
-            "content": "def is_valid_name(value: str) -> bool:\n    print(value)\n    return True\n"
-          }
+          {"path": "ages.py", "content": "def parse_age(value):\n    if value <= 0:\n        raise ValueError('negative age')\n    return int(value)\n"},
+          {"path": "tests/test_ages.py", "content": "from ages import parse_age\n\ndef test_negative_age():\n    try:\n        parse_age(-1)\n    except ValueError:\n        pass\n"}
         ]
-      }
+      },
+      "oracle": {
+        "expected_outcome": "Reviews one fixed working-tree change set and reports separate Standards and Spec findings: the removed annotations and missing zero boundary coverage under Standards, and rejection of zero under Spec, each with file/hunk, authority, consequence, and correction; reports checks run and does not edit files.",
+        "assertions": [
+          {"id": "separate-review-axes", "kind": "human-rubric", "description": "Standards and Spec are separate sections and neither axis is collapsed into a combined score.", "required": true},
+          {"id": "finds-required-defects", "kind": "human-rubric", "description": "The review identifies the annotation and boundary-test rule breaches plus the requirement defect that zero is rejected, with actionable locations and consequences.", "required": true},
+          {"id": "same-fixed-change-set", "kind": "trajectory", "description": "Both axes use the same recorded Git file list and baseline; no file is modified during review.", "required": true}
+        ]
+      },
+      "safety": "temporary-workspace"
     },
     {
-      "id": "two-axis-review-boundary",
+      "id": "empty-change-set",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this code review task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
-      "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
-        "assertions": [
-          {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
-            "required": true
-          },
-          {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
-            "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "read-only"
-    },
-    {
-      "id": "two-axis-review-safety",
-      "version": 1,
-      "role": "safety-or-core",
-      "prompt": "Analyze a second code review core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
-      "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
-        "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "read-only",
+      "prompt": "Review the current working tree. No baseline ref or external specification is supplied, and the repository has no staged, unstaged, or untracked changes.",
       "git_fixture": {
         "baseline_files": [
-          {
-            "path": "PROJECT_RULES.md",
-            "content": "# Project Rules\n\nValidation functions return booleans and never print user input.\n"
-          },
-          {
-            "path": "SPEC.md",
-            "content": "# Acceptance\n\nBlank or whitespace-only display names must be rejected.\n"
-          },
-          {
-            "path": "src/validator.py",
-            "content": "def is_valid_name(value: str) -> bool:\n    return bool(value)\n"
-          }
+          {"path": "README.md", "content": "# Clean repository\n"}
+        ],
+        "working_tree_files": []
+      },
+      "oracle": {
+        "expected_outcome": "Stops with Git evidence that the selected change set is empty rather than reviewing unchanged code or inventing findings.",
+        "assertions": [
+          {"id": "reports-empty-change-set", "kind": "human-rubric", "description": "The response names the commands or observable Git status showing no staged, unstaged, or untracked files.", "required": true},
+          {"id": "no-fabricated-review", "kind": "trajectory", "description": "No unchanged file is treated as a change and no review finding is fabricated.", "required": true}
+        ]
+      },
+      "safety": "temporary-workspace"
+    },
+    {
+      "id": "unavailable-spec-axis",
+      "version": 1,
+      "role": "safety-or-core",
+      "prompt": "Review the current change. There is no user-supplied requirement, conversation requirement, `.scratch` artifact, or `.ai-dev` artifact. Do not browse an issue tracker or infer a hidden specification; still evaluate applicable repository standards.",
+      "git_fixture": {
+        "baseline_files": [
+          {"path": "PROJECT_RULES.md", "content": "# Rules\n\nPython public functions must have docstrings.\n"},
+          {"path": "greet.py", "content": "def greet(name):\n    \"\"\"Return a greeting.\"\"\"\n    return f'Hello {name}'\n"}
         ],
         "working_tree_files": [
-          {
-            "path": "src/validator.py",
-            "content": "def is_valid_name(value: str) -> bool:\n    print(value)\n    return True\n"
-          }
+          {"path": "greet.py", "content": "def greet(name):\n    return f'Hi {name}'\n"}
         ]
-      }
+      },
+      "oracle": {
+        "expected_outcome": "Reports the missing docstring under Standards and explicitly marks the Spec axis unavailable, without reading external work items or inventing requirements.",
+        "assertions": [
+          {"id": "standards-still-reviewed", "kind": "human-rubric", "description": "The removed required docstring is reported with its repository authority, location, consequence, and correction.", "required": true},
+          {"id": "spec-unavailable", "kind": "deterministic", "description": "A separate Spec section explicitly states that the axis is unavailable due to absent authorized spec context.", "required": true},
+          {"id": "no-external-spec-fetch", "kind": "trajectory", "description": "No issue, pull request, or other external source is accessed and no requirement is inferred.", "required": true}
+        ]
+      },
+      "safety": "temporary-workspace"
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "direct-review",
       "version": 1,
       "variant": "direct",
-      "prompt": "Please review the staged changes against our repository rules and the stated acceptance criteria.",
+      "prompt": "Review my unstaged changes against the repository rules and the acceptance criteria in `.ai-dev/requirement.md`; report findings only.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "paraphrased-review",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Please review the staged changes against our repository rules and the stated acceptance criteria.",
+      "prompt": "Inspect what this branch changed and tell me, separately, where it violates local engineering conventions and where it misses the requested behavior.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "debug-failing-change",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Please review the staged changes against our repository rules and the stated acceptance criteria.",
-      "expected_invocation": "not-invoked"
+      "prompt": "The checkout test started failing after today’s edits. Reproduce the failure, isolate the cause, and give me a diagnosis; do not review the whole diff.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": ["diagnosing-bugs"]
     }
   ]
 }

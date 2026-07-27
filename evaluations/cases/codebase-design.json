@@ -6,91 +6,44 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "deep-module-seam",
+      "id": "deepen-checkout-cluster",
       "version": 1,
       "role": "normal",
-      "prompt": "Review a proposed module whose callers must coordinate parsing, retries, caching, and logging. Recommend a deeper interface and identify the information-hiding boundary.",
+      "prompt": "Design a deeper module for this checkout cluster. Three callers each validate amount and currency, calculate fees, invoke the payment provider, and translate provider errors. Propose the interface and where its seam should live so callers and tests learn less. The provider is external and needs both production and test adapters.",
       "oracle": {
-        "expected_outcome": "identifies shallow coordination; proposes a smaller deep interface; states dependency direction and test seam.",
+        "expected_outcome": "Proposes a small checkout/payment interface that hides validation, fee calculation, provider invocation, and error translation; places a seam owned by the deep module; identifies production and test adapters for the true external dependency; and explains leverage, locality, and testing through the interface.",
         "assertions": [
-          {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "identifies shallow coordination",
-            "required": true
-          },
-          {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "proposes a smaller deep interface",
-            "required": true
-          },
-          {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "states dependency direction and test seam",
-            "required": true
-          }
+          {"id": "deep-interface", "kind": "human-rubric", "description": "The proposed interface is smaller than the caller knowledge it replaces and includes required invariants and error behavior, not merely a type signature.", "required": true},
+          {"id": "real-seam-and-adapters", "kind": "human-rubric", "description": "The seam placement and production/test adapters follow the external-dependency guidance without exposing internal seams to callers.", "required": true},
+          {"id": "uses-canonical-vocabulary", "kind": "deterministic", "description": "The design uses `module`, `interface`, `seam`, `adapter`, `leverage`, and `locality` for the relevant concepts and does not substitute `boundary` for seam.", "required": true}
         ]
       },
       "safety": "read-only"
     },
     {
-      "id": "deep-module-seam-boundary",
+      "id": "reject-hypothetical-seam",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this codebase design task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Should I introduce an interface and adapter around this pure function solely so I can mock it? There is one implementation, no alternate behavior, and tests can call the pure function directly. Evaluate the proposed seam using deep-module principles.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "Rejects the speculative seam because only one adapter and no variation exist, recommends testing the pure module through its existing interface, and explains that extra indirection would not add depth.",
         "assertions": [
-          {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
-            "required": true
-          },
-          {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
-            "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
+          {"id": "one-adapter-rule", "kind": "human-rubric", "description": "The response applies the rule that one adapter makes the proposed seam hypothetical and identifies no confirmed variation.", "required": true},
+          {"id": "avoids-shallow-wrapper", "kind": "human-rubric", "description": "It does not recommend a pass-through wrapper and keeps the pure function as the test surface.", "required": true}
         ]
       },
       "safety": "read-only"
     },
     {
-      "id": "deep-module-seam-safety",
+      "id": "replace-internal-tests",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Analyze a second codebase design core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
+      "prompt": "We are merging four shallow formatting helpers into one report module. Explain how to redesign the test surface. Existing tests assert each helper’s private intermediate strings, while callers only care about the final rendered report.",
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "Makes the report module interface the test surface, replaces rather than layers private-helper tests, and specifies observable final-report tests that survive implementation refactors.",
         "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
-            "required": true
-          }
+          {"id": "interface-is-test-surface", "kind": "human-rubric", "description": "The proposed tests exercise caller-visible report behavior through the module interface and avoid private intermediate state.", "required": true},
+          {"id": "replace-not-layer", "kind": "human-rubric", "description": "The response explicitly recommends removing superseded shallow-helper tests once equivalent interface-level coverage exists.", "required": true}
         ]
       },
       "safety": "read-only"
@@ -98,25 +51,26 @@
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "direct-interface-design",
       "version": 1,
       "variant": "direct",
-      "prompt": "Where should I place the seam so this module becomes easier to test and callers stop coordinating five steps?",
+      "prompt": "Design a deep module interface for order pricing and decide where the seam belongs so callers stop knowing discount sequencing.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "paraphrased-deepening",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Where should I place the seam so this module becomes easier to test and callers stop coordinating five steps?",
+      "prompt": "These callers all coordinate the same validation, lookup, and fallback steps. Reshape the code so that knowledge lives behind one small testable surface.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "domain-language-boundary",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Where should I place the seam so this module becomes easier to test and callers stop coordinating five steps?",
-      "expected_invocation": "not-invoked"
+      "prompt": "Our glossary uses `Account`, `Customer`, and `Subscriber` interchangeably. Help us choose canonical domain terms and update `CONTEXT.md`; no module interface is being designed.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": ["domain-modeling"]
     }
   ]
 }

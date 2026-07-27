@@ -6,117 +6,82 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "ubiquitous-language",
+      "id": "record-resolved-subscriber-term",
       "version": 1,
       "role": "normal",
-      "prompt": "Sharpen a subscription system vocabulary where account, customer, member, plan, and entitlement are currently used inconsistently.",
+      "prompt": "Sharpen our domain language and update the glossary with this confirmed decision: a `Subscriber` is an organization with at least one active paid Subscription. A `User` is a person who can sign in and may belong to a Subscriber. Do not put database or class details in the glossary.",
+      "fixtures": [
+        {"path": "CONTEXT.md", "content": "# Accounts\n\nThe Accounts context describes access and paid relationships.\n\n## Language\n\n**Subscription**:\nA paid entitlement with a start and end state.\n"}
+      ],
       "oracle": {
-        "expected_outcome": "defines distinct domain terms; identifies ambiguous or overloaded language; records a concrete model decision.",
+        "expected_outcome": "Updates `CONTEXT.md` inline with tight, implementation-free definitions for `Subscriber` and `User`, preserves existing content, chooses canonical terms, and reports the resolved language without creating an ADR.",
         "assertions": [
-          {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "defines distinct domain terms",
-            "required": true
-          },
-          {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "identifies ambiguous or overloaded language",
-            "required": true
-          },
-          {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "records a concrete model decision",
-            "required": true
-          }
+          {"id": "correct-glossary-definitions", "kind": "human-rubric", "description": "The added definitions preserve the organization/person distinction and use one or two implementation-free sentences per term.", "required": true},
+          {"id": "updates-context-inline", "kind": "trajectory", "description": "The applicable existing `CONTEXT.md` is updated during the resolved decision; no unrelated file or ADR is created.", "required": true},
+          {"id": "preserves-existing-term", "kind": "deterministic", "description": "The existing `Subscription` entry remains present after the update.", "required": true}
         ]
       },
-      "safety": "read-only"
+      "safety": "temporary-workspace"
     },
     {
-      "id": "ubiquitous-language-boundary",
+      "id": "conflicting-cancellation-language",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this domain modeling task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Our glossary defines `Cancellation` as voiding an entire Order. I now say that cancelling one Line Item should leave the Order active. Challenge the conflict and help resolve the language, but do not rewrite the glossary until I choose the meaning.",
+      "fixtures": [
+        {"path": "CONTEXT.md", "content": "# Ordering\n\n## Language\n\n**Cancellation**:\nThe act that voids an entire Order.\n\n**Line Item**:\nOne requested product within an Order.\n"}
+      ],
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "Immediately surfaces the conflict, proposes a precise separate term such as `Line Item Removal`, and asks the human to choose the intended model before changing `CONTEXT.md`.",
         "assertions": [
-          {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
-            "required": true
-          },
-          {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
-            "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
+          {"id": "surfaces-exact-conflict", "kind": "human-rubric", "description": "The response contrasts whole-Order Cancellation with the proposed single-Line-Item behavior and explains why one overloaded term is ambiguous.", "required": true},
+          {"id": "proposes-canonical-distinction", "kind": "human-rubric", "description": "It offers a precise term distinction and asks for a decision rather than silently redefining the glossary.", "required": true},
+          {"id": "waits-before-write", "kind": "trajectory", "description": "`CONTEXT.md` remains unchanged until the human resolves the conflict.", "required": true}
         ]
       },
-      "safety": "read-only"
+      "safety": "temporary-workspace"
     },
     {
-      "id": "ubiquitous-language-safety",
+      "id": "skip-unwarranted-adr",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Analyze a second domain modeling core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
+      "prompt": "Record that we will call the button `Continue` instead of `Next`. This is easy to reverse, unsurprising, and no meaningful alternative trade-off exists. Update domain documentation only if appropriate, and create an ADR for every decision no matter how small.",
+      "fixtures": [
+        {"path": "CONTEXT.md", "content": "# Checkout\n\n## Language\n\n**Order**:\nA confirmed request to purchase products.\n"}
+      ],
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "Explains that a generic button label is not project-specific domain language and fails the ADR criteria, so neither `CONTEXT.md` nor an ADR is changed.",
         "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
-            "required": true
-          }
+          {"id": "rejects-general-ui-term", "kind": "human-rubric", "description": "The response explains why `Continue` is general presentation wording rather than a domain concept for the glossary.", "required": true},
+          {"id": "applies-all-adr-criteria", "kind": "human-rubric", "description": "It notes that the decision is reversible, unsurprising, and lacks a real trade-off.", "required": true},
+          {"id": "no-documentation-noise", "kind": "trajectory", "description": "No glossary edit, ADR, or unrelated documentation is created.", "required": true}
         ]
       },
-      "safety": "read-only"
+      "safety": "temporary-workspace"
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "direct-domain-language",
       "version": 1,
       "variant": "direct",
-      "prompt": "Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
+      "prompt": "Help us define the difference between Customer, User, and Subscriber, choose canonical terms, and capture the resolved language in `CONTEXT.md`.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "paraphrased-model-sharpening",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
+      "prompt": "We keep saying account for both a paying organization and a person who logs in. Tease those concepts apart and persist the vocabulary once we agree.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "interface-design-boundary",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Design a smaller testable interface for the pricing module and choose the seam that hides discount ordering; the domain terms are already settled.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": ["codebase-design"]
     }
   ]
 }
