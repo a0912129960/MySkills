@@ -198,7 +198,7 @@
       "required": ["assertion_id", "status", "evidence"],
       "properties": {
         "assertion_id": {"$ref": "#/$defs/kebab"},
-        "status": {"$ref": "#/$defs/resultStatus"},
+        "status": {"enum": ["pass", "fail", "invalid"]},
         "evidence": {"type": "string", "minLength": 1}
       }
     },

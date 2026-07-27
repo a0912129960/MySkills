@@ -54,6 +54,7 @@ CASE_FIELDS = {
     "failure",
 }
 RESULT_STATUSES = {"pass", "fail", "invalid", "human-review-required"}
+ASSERTION_RESULT_STATUSES = ("pass", "fail", "invalid")
 
 
 def read_record_document(record_path: Path | str) -> dict[str, Any]:
@@ -191,11 +192,40 @@ def render_summary(document: dict[str, Any]) -> str:
             "",
         ]
     )
-    if document["warnings"]:
-        lines.extend(f"- {warning}" for warning in document["warnings"])
+    warnings = [
+        *document["warnings"],
+        *_optional_assertion_warnings(document),
+    ]
+    if warnings:
+        lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
     return "\n".join(lines) + "\n"
+
+
+def _optional_assertion_warnings(
+    document: dict[str, Any],
+) -> list[str]:
+    warnings: list[str] = []
+    for target_name in TARGETS:
+        for case in document["targets"][target_name]["cases"]:
+            assertions = {
+                assertion["id"]: assertion
+                for assertion in case["expected"]["assertions"]
+            }
+            for result in case["assertion_results"]:
+                assertion = assertions.get(result["assertion_id"])
+                if (
+                    assertion is not None
+                    and assertion["required"] is False
+                    and result["status"] != "pass"
+                ):
+                    warnings.append(
+                        f"{target_name}/{case['case_id']}: optional assertion "
+                        f"{result['assertion_id']} is {result['status']} — "
+                        f"{_brief(result['evidence'])}"
+                    )
+    return warnings
 
 
 def load_record(
@@ -531,8 +561,10 @@ def _validate_case(prefix: str, value: object) -> list[str]:
             else:
                 result_ids.add(assertion_id)
                 result_statuses[assertion_id] = result.get("status")
-            if result.get("status") not in RESULT_STATUSES:
-                errors.append(f"{result_prefix}.status is invalid")
+            if result.get("status") not in ASSERTION_RESULT_STATUSES:
+                errors.append(
+                    f"{result_prefix}.assertion status is invalid"
+                )
             if not _nonempty(result.get("evidence")):
                 errors.append(f"{result_prefix}.evidence is required")
     if assertion_ids and result_ids != assertion_ids:

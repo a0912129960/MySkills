@@ -192,8 +192,22 @@ class EvaluationRecordContractTests(unittest.TestCase):
                 }
             )
         self.assertEqual(records.validate_record_document(record), [])
+        summary = records.render_summary(record)
+        self.assertIn("optional-style", summary)
+        self.assertIn("optional assertion", summary.lower())
 
         for target in record["targets"].values():
+            target["cases"][0]["assertion_results"][1][
+                "status"
+            ] = "human-review-required"
+        errors = records.validate_record_document(record)
+        self.assertTrue(
+            any("assertion status is invalid" in error for error in errors),
+            errors,
+        )
+
+        for target in record["targets"].values():
+            target["cases"][0]["assertion_results"][1]["status"] = "fail"
             target["cases"][0]["assertion_results"][0]["status"] = "fail"
         errors = records.validate_record_document(record)
         self.assertTrue(
