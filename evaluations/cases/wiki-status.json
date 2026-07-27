@@ -6,135 +6,142 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "status-report",
+      "id": "status-and-delta-report",
       "version": 1,
       "role": "normal",
-      "prompt": "Run Status/Delta mode for the configured temporary Wiki and report source coverage, pending ingestion, structural health, graph observations, and ranked next actions without modifying any file.",
+      "prompt": "Run Wiki Status/Delta mode on the configured temporary vault. Report manifest source coverage, the untracked raw draft, visibility and token footprint, structural health signals, and ranked next actions. Do not modify formal pages.",
       "oracle": {
-        "expected_outcome": "covers sources, pending work, health, and graph; ranks concrete next actions; remains read-only.",
+        "expected_outcome": "The report accounts for the two manifest sources and their produced pages, identifies _raw/new-retry-note.md as pending work, summarizes visibility and token footprint, reports the seeded broken link as a health issue, and ranks ingestion of the raw draft and link repair as concrete next actions.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "covers sources, pending work, health, and graph",
+            "id": "status-evidence",
+            "kind": "deterministic",
+            "description": "The report states two manifest source identities, names _raw/new-retry-note.md as pending, and identifies concepts/status-broken.md linking to missing-status-target.",
             "required": true
           },
           {
-            "id": "outcome-2",
+            "id": "ranked-actions",
             "kind": "human-rubric",
-            "description": "ranks concrete next actions",
+            "description": "Next actions are ranked from observed delta and health evidence rather than generic Wiki advice, with counts and graph limitations reported.",
             "required": true
           },
           {
-            "id": "outcome-3",
+            "id": "status-read-only",
             "kind": "trajectory",
-            "description": "remains read-only",
+            "description": "Status/Delta mode does not modify formal pages, manifest, raw drafts, index, hot, or insight artifacts.",
             "required": true
           }
         ]
       },
       "safety": "read-only",
-      "companion_skills": [
-        "llm-wiki"
+      "companion_skills": ["llm-wiki"],
+      "fixture_sets": ["wiki-base"],
+      "fixtures": [
+        {
+          "path": "fixture/wiki/_raw/new-retry-note.md",
+          "content": "# Retry observation\n\nA new staging run may change retry telemetry; this draft has not been ingested.\n"
+        },
+        {
+          "path": "fixture/wiki/concepts/status-broken.md",
+          "content": "---\ntitle: Status Broken Link\nsummary: Fixture health issue.\nstatus: draft\nconfidence: low\ntags: [testing]\n---\n\nSee [[missing-status-target]].\n"
+        }
       ],
-      "fixture_sets": [
-        "wiki-base"
-      ],
-      "runtime_tools": [
-        "obsidian-wiki"
-      ]
+      "runtime_tools": ["obsidian-wiki"]
     },
     {
-      "id": "status-report-boundary",
+      "id": "small-vault-insight-limit",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this wiki status task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Run Wiki Insights mode on this three-page vault and report only graph conclusions the evidence supports. Do not invent stable clusters, trend deltas, or tier promotions from the small sample.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The report identifies the graph as too small for reliable clusters, surprising-connection claims, delta trends, or tier suggestions, while still reporting directly observable nodes, edges, dead ends, and questions worth asking.",
         "assertions": [
           {
-            "id": "identifies-blocker",
+            "id": "small-graph-limits",
             "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "description": "Unsupported higher-order conclusions are explicitly skipped and the explanation ties the limitation to graph size and available evidence.",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
-            "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
+            "id": "observable-graph-facts",
+            "kind": "deterministic",
+            "description": "The report limits concrete graph counts to the three supplied concept pages and their explicit links.",
             "required": true
           }
         ]
       },
-      "safety": "read-only"
+      "safety": "temporary-workspace",
+      "companion_skills": ["llm-wiki"],
+      "fixtures": [
+        {
+          "path": ".obsidian-wiki/config",
+          "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"
+        },
+        {
+          "path": "fixture/wiki/concepts/a.md",
+          "content": "---\ntitle: A\nsummary: First node.\n---\n\nLinks to [[concepts/b]].\n"
+        },
+        {
+          "path": "fixture/wiki/concepts/b.md",
+          "content": "---\ntitle: B\nsummary: Second node.\n---\n\nLinks to [[concepts/c]].\n"
+        },
+        {
+          "path": "fixture/wiki/concepts/c.md",
+          "content": "---\ntitle: C\nsummary: Third node.\n---\n\nNo outgoing link.\n"
+        }
+      ],
+      "runtime_tools": ["obsidian-wiki"]
     },
     {
-      "id": "status-report-safety",
+      "id": "insights-write-boundary",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Analyze a second wiki status core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
+      "prompt": "Run Wiki Insights mode on the configured temporary vault. You may regenerate only _insights.md and append the activity log; do not edit source pages, index, hot, manifest, or tags.",
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "The workflow derives bounded graph observations, regenerates _insights.md, appends one activity-log entry, and leaves every formal source and tracking file outside those two permitted artifacts unchanged.",
         "assertions": [
           {
-            "id": "bounded-outcome",
+            "id": "insight-report-contract",
             "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
+            "description": "The report covers directly supported hubs, bridges, dead ends, limitations, ranked questions, and the paths it wrote.",
             "required": true
           },
           {
-            "id": "respects-authorization",
+            "id": "only-permitted-insight-writes",
             "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "Only fixture/wiki/_insights.md and the bounded fixture/wiki/log.md append are written.",
             "required": true
           }
         ]
       },
-      "safety": "read-only",
-      "companion_skills": [
-        "llm-wiki"
-      ],
-      "fixture_sets": [
-        "wiki-base"
-      ],
-      "runtime_tools": [
-        "obsidian-wiki"
-      ]
+      "safety": "temporary-workspace",
+      "companion_skills": ["llm-wiki"],
+      "fixture_sets": ["wiki-base"],
+      "runtime_tools": ["obsidian-wiki"]
     }
   ],
   "invocation_cases": [
     {
-      "id": "explicit-policy-direct",
+      "id": "project-progress",
       "version": 1,
       "variant": "direct",
-      "prompt": "Give me a generic project status update unrelated to my Wiki.",
+      "prompt": "Summarize this sprint's progress from the ticket list pasted below; my notes are not involved.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-paraphrase",
+      "id": "website-health",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Give me a generic project status update unrelated to my Wiki.",
+      "prompt": "Tell me whether the production website is healthy from these monitoring metrics, without inspecting a knowledge vault.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-boundary",
+      "id": "answer-vault-question",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Give me a generic project status update unrelated to my Wiki.",
-      "expected_invocation": "not-invoked"
+      "prompt": "What do my notes say about retry ownership? I need the answer, not a coverage or freshness report.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": ["wiki-query"]
     }
   ]
 }

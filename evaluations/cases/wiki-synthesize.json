@@ -6,135 +6,137 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "cross-cutting-page",
+      "id": "retry-idempotency-synthesis",
       "version": 1,
       "role": "normal",
-      "prompt": "From the configured temporary Wiki, find the strongest evidence-backed cross-cutting connection and create one bounded synthesis page with source backlinks, citations, uncertainty, and the strongest objection.",
+      "prompt": "Find and create the highest-value bounded synthesis supported by the configured Wiki's retry, idempotency, and import-boundary pages. Include source citations, distinguish evidence from inference, state ambiguity and the strongest objection, and add backlinks to every contributing page.",
       "oracle": {
-        "expected_outcome": "selects an evidence-backed cross-cutting connection; cites contributing pages and adds backlinks; records objections and uncertainty.",
+        "expected_outcome": "One nonredundant synthesis explains that safe retry depends on both adapter placement and idempotent persistence, cites all three contributing pages, labels the cross-page dependency as inference, notes uncertainty about write idempotency, gives the strongest objection, adds source backlinks, and completes maintenance.",
         "assertions": [
           {
-            "id": "outcome-1",
+            "id": "cross-cutting-synthesis",
             "kind": "human-rubric",
-            "description": "selects an evidence-backed cross-cutting connection",
+            "description": "The new page creates a useful cross-cutting claim beyond summarizing one source and clearly separates cited evidence, inference, ambiguity, and objection.",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "cites contributing pages and adds backlinks",
+            "id": "three-source-backlinks",
+            "kind": "deterministic",
+            "description": "The synthesis cites retry-policy.md, service-boundary.md, and idempotency.md, and each source page gains a backlink to the synthesis.",
             "required": true
           },
           {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "records objections and uncertainty",
+            "id": "complete-synthesis-transaction",
+            "kind": "trajectory",
+            "description": "The synthesis and backlink writes are followed by applicable index, hot, log, QMD, and health maintenance inside the fixture vault.",
             "required": true
           }
         ]
       },
       "safety": "temporary-workspace",
-      "companion_skills": [
-        "llm-wiki"
+      "companion_skills": ["llm-wiki"],
+      "fixture_sets": ["wiki-base"],
+      "fixtures": [
+        {
+          "path": "fixture/wiki/concepts/idempotency.md",
+          "content": "---\ntitle: Idempotent Persistence\nsummary: Repeated import writes require a stable idempotency key.\nstatus: active\nconfidence: high\nrelationships:\n  relates-to: [retry-policy, service-boundary]\n---\n\nThe import persistence adapter accepts an idempotency key so repeated network attempts do not create duplicate bookmarks. Whether every write path supplies the key is not documented.\n"
+        }
       ],
-      "fixture_sets": [
-        "wiki-base"
-      ],
-      "runtime_tools": [
-        "obsidian-wiki"
-      ]
+      "runtime_tools": ["obsidian-wiki"]
     },
     {
-      "id": "cross-cutting-page-boundary",
+      "id": "topic-similarity-only",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this wiki synthesize task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Look for a synthesis opportunity between concepts/retry-policy.md and references/meeting-cadence.md. Create nothing unless repeated co-occurrence, typed graph evidence, or a supported cross-cutting claim exists.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The candidate is rejected as weak topic-level coincidence with no co-occurrence or typed relationship, the reason and low value are reported, and no synthesis page or backlink is written.",
         "assertions": [
           {
-            "id": "identifies-blocker",
+            "id": "weak-candidate-rejected",
             "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "description": "The report explains the absence of graph or source evidence instead of inventing a relationship between retries and meeting cadence.",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
+            "id": "no-weak-synthesis-write",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "temporary-workspace"
-    },
-    {
-      "id": "cross-cutting-page-safety",
-      "version": 1,
-      "role": "safety-or-core",
-      "prompt": "Perform a second wiki synthesize core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
-      "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
-        "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "No synthesis page, source backlink, or maintenance write occurs for the rejected candidate.",
             "required": true
           }
         ]
       },
       "safety": "temporary-workspace",
-      "companion_skills": [
-        "llm-wiki"
+      "companion_skills": ["llm-wiki"],
+      "fixture_sets": ["wiki-base"],
+      "fixtures": [
+        {
+          "path": "fixture/wiki/references/meeting-cadence.md",
+          "content": "---\ntitle: Meeting Cadence\nsummary: Teams hold planning meetings every two weeks.\nstatus: active\nconfidence: medium\n---\n\nThe platform team meets every second Tuesday. This page has no retry links or shared source provenance.\n"
+        }
       ],
-      "fixture_sets": [
-        "wiki-base"
+      "runtime_tools": ["obsidian-wiki"]
+    },
+    {
+      "id": "existing-synthesis-not-restated",
+      "version": 1,
+      "role": "safety-or-core",
+      "prompt": "Synthesize the relationship between retry placement and idempotent persistence. An existing synthesis already covers that exact claim; do not create a restatement merely to satisfy the request.",
+      "oracle": {
+        "expected_outcome": "The workflow detects the existing synthesis as the same identity, reports the candidate as redundant, and creates no second page or duplicate backlinks.",
+        "assertions": [
+          {
+            "id": "redundancy-detected",
+            "kind": "deterministic",
+            "description": "The report names syntheses/safe-retry.md as the existing coverage and classifies the candidate as redundant.",
+            "required": true
+          },
+          {
+            "id": "no-duplicate-synthesis",
+            "kind": "trajectory",
+            "description": "No new synthesis, duplicate backlink, index entry, or maintenance write is created for the redundant candidate.",
+            "required": true
+          }
+        ]
+      },
+      "safety": "temporary-workspace",
+      "companion_skills": ["llm-wiki"],
+      "fixture_sets": ["wiki-base"],
+      "fixtures": [
+        {
+          "path": "fixture/wiki/concepts/idempotency.md",
+          "content": "---\ntitle: Idempotent Persistence\nsummary: Repeated writes require a stable idempotency key.\nstatus: active\nconfidence: high\n---\n\nIdempotency prevents duplicate effects across retry attempts. See [[syntheses/safe-retry]].\n"
+        },
+        {
+          "path": "fixture/wiki/syntheses/safe-retry.md",
+          "content": "---\ntitle: Safe Retry Requires Idempotent Persistence\nsummary: Adapter retry is safe only when repeated persistence has idempotent effects.\nstatus: active\nconfidence: medium\nsources: [concepts/retry-policy.md, concepts/service-boundary.md, concepts/idempotency.md]\n---\n\nThe network adapter can retry transient failures safely only when persistence is idempotent. This is an inference across the three source pages.\n"
+        }
       ],
-      "runtime_tools": [
-        "obsidian-wiki"
-      ]
+      "runtime_tools": ["obsidian-wiki"]
     }
   ],
   "invocation_cases": [
     {
-      "id": "explicit-policy-direct",
+      "id": "summarize-one-note",
       "version": 1,
       "variant": "direct",
-      "prompt": "Summarize one existing note without creating a synthesis page.",
+      "prompt": "Summarize this single pasted note in five bullets without searching for connections or saving anything.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-paraphrase",
+      "id": "brainstorm-analogy",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Summarize one existing note without creating a synthesis page.",
+      "prompt": "Brainstorm an analogy between retry logic and traffic control from general knowledge; do not use my vault.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-boundary",
+      "id": "retrieve-existing-connection",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Summarize one existing note without creating a synthesis page.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Tell me whether my existing notes already mention a connection between retries and idempotency; answer with citations and create no new page.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": ["wiki-query"]
     }
   ]
 }
