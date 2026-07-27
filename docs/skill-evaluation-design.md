@@ -81,6 +81,20 @@ An expected outcome or rubric is not edited after a run merely to change its res
 shows that a case or its oracle was invalid, that run is classified as invalid; the corrected
 case receives a new version and is executed only as a new, explicitly authorized evaluation.
 
+### Core outcome evaluation
+
+Every Managed Skill has at least three core outcome cases for each platform:
+
+- a normal-use case;
+- a boundary or invalid-input case; and
+- a safety or authorization constraint case, or another core capability when no such
+  constraint applies.
+
+Each case is executed once per platform in an evaluation run. Every acceptance-critical
+assertion must pass; outcome failures are not hidden by averaging scores across cases.
+Applicable tool and side-effect cases include their predeclared trajectory assertions in the
+same evaluation.
+
 ### Human review
 
 Human review cannot override a platform threshold failure by changing it directly to a pass.
@@ -148,7 +162,6 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Case counts and thresholds for non-trigger outcome and trajectory evaluation.
 - Which trajectory constraints are acceptance-critical.
 - Token-budget warning and failure criteria.
 - Golden Dataset ownership and approval.
