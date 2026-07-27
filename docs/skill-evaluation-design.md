@@ -57,12 +57,26 @@ review and does not receive an automatic pass. A completed platform suite is not
 automatically retried to seek a better score. Any later rerun is a new, explicitly authorized
 evaluation.
 
+### Human review
+
+Human review cannot override a platform threshold failure by changing it directly to a pass.
+The reviewer determines why the evaluation did not prove conformance and records the required
+corrective action. If the evaluation itself is invalid, its result is invalidated rather than
+passed; evaluation after a correction is a new, explicitly authorized run.
+
+### Evaluation evidence
+
+Every evaluation records both the test process and its result. The retained evidence must let
+a reviewer determine what was tested, what happened during the run, what result was produced,
+and why the evaluator classified it as a pass, failure, or invalid result. A bare result value
+or a `PENDING HUMAN REVIEW` marker without reviewable process evidence is insufficient.
+
 ## Unresolved decisions
 
 The following items remain under discussion and are not yet acceptance rules:
 
-- Whether human review may override a one-platform threshold failure and, if so, what evidence
-  and conclusion it must record.
+- The required evidence fields, redaction rules, and retention policy for recorded test
+  processes.
 - Case counts, sampling protocol, and platform-specific thresholds.
 - The result oracle for objective and subjective outcomes.
 - Which trajectory constraints are acceptance-critical.
