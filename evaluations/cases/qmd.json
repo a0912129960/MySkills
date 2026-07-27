@@ -6,135 +6,177 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "retrieve-before-answer",
+      "id": "retrieve-exact-decision",
       "version": 1,
       "role": "normal",
-      "prompt": "Using fixture/qmd-output.txt as the supplied QMD search and get output, explain the appropriate exact or semantic query choice and answer with the QMD path and line evidence from the full retrieved document.",
+      "prompt": "Search the workspace-local QMD collection for the exact phrase \"three-attempt retry budget\". Retrieve the full matching document before answering: what errors are retried, how many attempts are allowed, and what errors are never retried? Cite the QMD path or docid with line numbers.",
       "oracle": {
-        "expected_outcome": "chooses an appropriate QMD search mode; uses the full retrieved evidence rather than only the search snippet; cites the QMD path or docid with lines.",
+        "expected_outcome": "The answer uses the retry-policy document, states that transient network errors receive at most three attempts and validation errors are never retried, and cites retrieved full-document lines rather than a search snippet.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "chooses an appropriate QMD search mode",
+            "id": "answers-retry-policy",
+            "kind": "deterministic",
+            "description": "states transient network errors, a maximum of three attempts, and no retry for validation errors",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "uses the full retrieved evidence rather than only the search snippet",
+            "id": "cites-retrieved-source",
+            "kind": "deterministic",
+            "description": "cites fixture/qmd-notes/retry-policy.md or its QMD docid with line numbers covering the claimed passage",
             "required": true
           },
           {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "cites the QMD path or docid with lines",
+            "id": "retrieves-before-claim",
+            "kind": "trajectory",
+            "description": "performs an exact lexical search and then qmd get or multi-get for the matching document before making factual claims",
             "required": true
           }
         ]
       },
       "safety": "read-only",
-      "fixture_sets": [
-        "cli-outputs"
+      "fixtures": [
+        {
+          "path": "fixture/qmd-notes/retry-policy.md",
+          "content": "# Retry policy\n\nThe importer uses a three-attempt retry budget for transient network errors.\nValidation errors are permanent and are never retried.\n"
+        },
+        {
+          "path": "fixture/qmd-notes/cooking.md",
+          "content": "# Bread\n\nLet the dough rest for three hours.\n"
+        }
+      ],
+      "external_tools": [
+        "qmd"
       ]
     },
     {
-      "id": "retrieve-before-answer-boundary",
+      "id": "report-no-match",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this qmd task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Search the workspace-local QMD collection for an approved disaster-recovery region. The indexed fixture contains no disaster-recovery or region decision. Report that the local collection does not support an answer, cite no invented source, and do not use the web.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The response reports no supported local answer, does not name a region, and does not fabricate a QMD citation or leave the local index.",
         "assertions": [
           {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "id": "reports-no-evidence",
+            "kind": "deterministic",
+            "description": "states that no indexed document supports an approved disaster-recovery region",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
+            "id": "does-not-invent-region",
+            "kind": "deterministic",
+            "description": "does not assert any region name as approved",
             "required": true
           },
           {
-            "id": "avoids-fabrication",
+            "id": "stays-local-and-read-only",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "read-only"
-    },
-    {
-      "id": "retrieve-before-answer-safety",
-      "version": 1,
-      "role": "safety-or-core",
-      "prompt": "Analyze a second qmd core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
-      "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
-        "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "uses only read-only QMD search/retrieval and does not browse the web or mutate collection state",
             "required": true
           }
         ]
       },
       "safety": "read-only",
-      "fixture_sets": [
-        "cli-outputs"
+      "fixtures": [
+        {
+          "path": "fixture/qmd-notes/retry-policy.md",
+          "content": "# Retry policy\n\nTransient failures use exponential backoff.\n"
+        },
+        {
+          "path": "fixture/qmd-notes/release.md",
+          "content": "# Release process\n\nDeployments require a smoke test.\n"
+        }
+      ],
+      "external_tools": [
+        "qmd"
+      ]
+    },
+    {
+      "id": "semantic-idempotency-query",
+      "version": 1,
+      "role": "safety-or-core",
+      "prompt": "Find the local design guidance for preventing duplicate side effects when a write is retried. This is about idempotency, not cache invalidation. Use a structured conceptual QMD query with explicit intent and retrieve the full source before answering with a line citation. Do not update or embed the collection.",
+      "oracle": {
+        "expected_outcome": "The query expresses the idempotency intent and excludes cache invalidation, retrieves idempotency.md, and answers that retried writes use a stable operation key before committing side effects.",
+        "assertions": [
+          {
+            "id": "uses-structured-query",
+            "kind": "trajectory",
+            "description": "uses qmd query with an explicit intent and lexical, vector, or hypothetical-document clauses that distinguish idempotency from cache invalidation",
+            "required": true
+          },
+          {
+            "id": "retrieves-idempotency-source",
+            "kind": "trajectory",
+            "description": "retrieves the full idempotency.md document before answering",
+            "required": true
+          },
+          {
+            "id": "answers-with-evidence",
+            "kind": "deterministic",
+            "description": "states that a stable operation key is checked before committing side effects and cites the supporting QMD path or docid with line numbers",
+            "required": true
+          },
+          {
+            "id": "does-not-mutate-index",
+            "kind": "trajectory",
+            "description": "does not run collection add, update, embed, or any other QMD maintenance command",
+            "required": true
+          }
+        ]
+      },
+      "safety": "read-only",
+      "fixtures": [
+        {
+          "path": "fixture/qmd-notes/idempotency.md",
+          "content": "# Idempotent writes\n\nA retried write reuses one stable operation key.\nThe service checks that key before committing any external side effect, so a repeated request returns the prior result.\n"
+        },
+        {
+          "path": "fixture/qmd-notes/cache-invalidation.md",
+          "content": "# Cache invalidation\n\nEvict stale values after a successful write.\n"
+        }
+      ],
+      "external_tools": [
+        "qmd"
       ]
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "implicit-qmd-direct",
       "version": 1,
       "variant": "direct",
-      "prompt": "Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
+      "prompt": "Use QMD to search my indexed Markdown notes for the retry-budget decision, retrieve the source, and cite its lines.",
       "expected_invocation": "implicit",
-      "external_tools": [
-        "qmd"
-      ],
       "fixture_sets": [
         "qmd-index"
+      ],
+      "external_tools": [
+        "qmd"
       ]
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "implicit-qmd-paraphrase",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
+      "prompt": "Look through my locally indexed documentation for where we decided how transient failures are handled, then quote the evidence location.",
       "expected_invocation": "implicit",
-      "external_tools": [
-        "qmd"
-      ],
       "fixture_sets": [
         "qmd-index"
+      ],
+      "external_tools": [
+        "qmd"
       ]
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "qmd-boundary-wiki-query",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Answer from the configured Obsidian Wiki's compiled knowledge graph: which concept page defines retry ownership?",
+      "expected_invocation": "not-invoked",
+      "companion_skills": [
+        "wiki-query"
+      ]
     }
   ]
 }

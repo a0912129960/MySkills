@@ -6,29 +6,35 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "obsidian-note",
+      "id": "create-release-note",
       "version": 1,
       "role": "normal",
-      "prompt": "Create fixture/feature-note.md as Obsidian Markdown containing valid properties, wikilinks, an image embed, a callout, tags, a block ID, and a comment.",
+      "prompt": "Create notes/release.md as Obsidian Flavored Markdown. Add YAML properties for title \"Release Plan\", date 2026-07-27, tags project/release and visibility/internal, and alias \"Launch Plan\". Include a [[Deployment Checklist|checklist]] wikilink, embed assets/diagram.png at width 400, add a collapsed warning callout titled \"Rollback\", preserve a final paragraph with block ID ^approval, and include an Obsidian comment containing \"draft-owner\".",
       "oracle": {
-        "expected_outcome": "uses valid Obsidian-specific Markdown syntax at the requested path; keeps properties parseable; includes every requested construct.",
+        "expected_outcome": "The note has parseable top-of-file YAML with the requested typed values and valid Obsidian syntax for the wikilink, image embed, collapsed titled callout, block ID, and comment.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "uses valid Obsidian-specific Markdown syntax at the requested path",
+            "id": "valid-frontmatter",
+            "kind": "deterministic",
+            "description": "frontmatter parses and contains the requested title, date, two tags, and alias",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "keeps properties parseable",
+            "id": "valid-link-and-embed",
+            "kind": "deterministic",
+            "description": "the note contains [[Deployment Checklist|checklist]] and ![[assets/diagram.png|400]] without converting either target to a filesystem path",
             "required": true
           },
           {
-            "id": "outcome-3",
-            "kind": "human-rubric",
-            "description": "includes every requested construct",
+            "id": "valid-callout",
+            "kind": "deterministic",
+            "description": "the note contains a collapsed warning callout with title Rollback and quoted body content",
+            "required": true
+          },
+          {
+            "id": "preserves-special-elements",
+            "kind": "deterministic",
+            "description": "the note contains block ID ^approval and an Obsidian comment containing draft-owner",
             "required": true
           }
         ]
@@ -38,63 +44,37 @@
         {
           "path": "assets/diagram.png",
           "content": "synthetic-image-placeholder\n"
+        },
+        {
+          "path": "Deployment Checklist.md",
+          "content": "# Deployment Checklist\n"
         }
       ]
     },
     {
-      "id": "obsidian-note-boundary",
+      "id": "reject-malformed-frontmatter",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this obsidian markdown task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Add status: active to the YAML properties in notes/broken.md. The opening frontmatter has no closing delimiter, so it is ambiguous where properties end and note content begins. Report that structural blocker and leave the note unchanged rather than guessing a repair.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The response identifies the missing closing YAML delimiter, does not claim the properties parse, and preserves the note byte-for-byte.",
         "assertions": [
           {
-            "id": "identifies-blocker",
+            "id": "identifies-frontmatter-error",
+            "kind": "deterministic",
+            "description": "reports that the initial YAML frontmatter lacks a closing delimiter",
+            "required": true
+          },
+          {
+            "id": "avoids-guessed-boundary",
             "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "description": "does not choose an arbitrary line as the end of frontmatter",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
-            "required": true
-          },
-          {
-            "id": "avoids-fabrication",
+            "id": "preserves-broken-note",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "temporary-workspace"
-    },
-    {
-      "id": "obsidian-note-safety",
-      "version": 1,
-      "role": "safety-or-core",
-      "prompt": "Perform a second obsidian markdown core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
-      "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
-        "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "does not modify notes/broken.md after detecting the ambiguity",
             "required": true
           }
         ]
@@ -102,33 +82,82 @@
       "safety": "temporary-workspace",
       "fixtures": [
         {
-          "path": "assets/diagram.png",
-          "content": "synthetic-image-placeholder\n"
+          "path": "notes/broken.md",
+          "content": "---\ntitle: Broken Note\ntags:\n  - project\n# This may be content or malformed YAML\nBody text follows.\n"
+        }
+      ]
+    },
+    {
+      "id": "preserve-existing-extensions",
+      "version": 1,
+      "role": "safety-or-core",
+      "prompt": "Edit notes/existing.md by adding a success callout titled \"Verified\" after the checklist paragraph. Preserve the unknown frontmatter key review-owner, the existing [[Runbook#Rollback|rollback guide]] wikilink, the ^checklist block ID, the %% keep-this %% comment, and the ordinary Markdown table exactly.",
+      "oracle": {
+        "expected_outcome": "A valid success callout is added in the requested location while all named existing properties and Markdown/Obsidian constructs remain unchanged.",
+        "assertions": [
+          {
+            "id": "adds-success-callout",
+            "kind": "deterministic",
+            "description": "the edited note contains a > [!success] Verified callout after the checklist paragraph",
+            "required": true
+          },
+          {
+            "id": "preserves-obsidian-elements",
+            "kind": "deterministic",
+            "description": "the wikilink, ^checklist block ID, and %% keep-this %% comment are unchanged",
+            "required": true
+          },
+          {
+            "id": "preserves-frontmatter-and-table",
+            "kind": "deterministic",
+            "description": "review-owner remains dana and the existing Markdown table is unchanged",
+            "required": true
+          },
+          {
+            "id": "limits-note-edit",
+            "kind": "trajectory",
+            "description": "modifies only notes/existing.md and does not rewrite unrelated content",
+            "required": true
+          }
+        ]
+      },
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": "notes/existing.md",
+          "content": "---\ntitle: Existing\nreview-owner: dana\ntags:\n  - project\n---\n\n# Existing\n\nUse the [[Runbook#Rollback|rollback guide]] before release. ^checklist\n\n%% keep-this %%\n\n| Check | Owner |\n| --- | --- |\n| Smoke test | QA |\n"
+        },
+        {
+          "path": "Runbook.md",
+          "content": "# Runbook\n\n## Rollback\n"
         }
       ]
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "implicit-markdown-direct",
       "version": 1,
       "variant": "direct",
-      "prompt": "Format this as an Obsidian note with properties, wikilinks, callouts, embeds, and block references.",
+      "prompt": "Format this as an Obsidian note with YAML properties, wikilinks, an embedded image, and a warning callout.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "implicit-markdown-paraphrase",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Format this as an Obsidian note with properties, wikilinks, callouts, embeds, and block references.",
+      "prompt": "Edit my vault note so the project reference is an internal link, the diagram renders inline, and the alert uses Obsidian's highlighted block syntax.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "markdown-boundary-canvas",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Format this as an Obsidian note with properties, wikilinks, callouts, embeds, and block references.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Build a spatial .canvas board of these notes with draggable cards and arrow connections; do not create a Markdown note.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": [
+        "json-canvas"
+      ]
     }
   ]
 }

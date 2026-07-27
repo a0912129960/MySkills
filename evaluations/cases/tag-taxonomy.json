@@ -6,108 +6,171 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "tag-audit",
+      "id": "audit-classifies-tags",
       "version": 1,
       "role": "normal",
-      "prompt": "Audit tags in the configured temporary Wiki fixture against tag-taxonomy.md, report aliases, reserved tags, and unknown tags, and describe bounded normalization without applying changes.",
+      "prompt": "Audit the configured fixture Wiki against tag-taxonomy.md without applying changes. Report canonical tags, the resilience alias, the unknown bespoke tag, the reserved visibility tag, and the untagged page, with page-level findings.",
       "oracle": {
-        "expected_outcome": "uses the fixture's canonical vocabulary; distinguishes aliases, reserved tags, and unknown tags; remains read-only and does not invent broad taxonomy changes.",
+        "expected_outcome": "The audit classifies architecture and reliability as canonical, resilience as an alias to reliability, bespoke as unknown, visibility/internal as reserved, and notes/untagged.md as untagged, while leaving all files unchanged.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "uses the fixture's canonical vocabulary",
+            "id": "classifies-known-tags",
+            "kind": "deterministic",
+            "description": "reports architecture and reliability as canonical and resilience as an alias to reliability",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "distinguishes aliases, reserved tags, and unknown tags",
+            "id": "classifies-exceptions",
+            "kind": "deterministic",
+            "description": "reports bespoke as unknown and visibility/internal as reserved",
             "required": true
           },
           {
-            "id": "outcome-3",
+            "id": "finds-untagged-page",
+            "kind": "deterministic",
+            "description": "reports notes/untagged.md as untagged",
+            "required": true
+          },
+          {
+            "id": "audit-is-read-only",
             "kind": "trajectory",
-            "description": "remains read-only and does not invent broad taxonomy changes",
+            "description": "does not change the taxonomy or any page during audit mode",
             "required": true
           }
         ]
       },
       "safety": "read-only",
-      "companion_skills": [
-        "llm-wiki"
-      ],
-      "fixture_sets": [
-        "wiki-base"
+      "fixtures": [
+        {
+          "path": ".obsidian-wiki/config",
+          "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"
+        },
+        {
+          "path": "fixture/wiki/tag-taxonomy.md",
+          "content": "# Tag Taxonomy\n\nCanonical: `architecture`, `reliability`, `testing`\nAliases: `resilience` -> `reliability`\nReserved: `visibility/internal`, `visibility/public`, `visibility/pii`\n"
+        },
+        {
+          "path": "fixture/wiki/notes/service.md",
+          "content": "---\ntitle: Service\ntags: [architecture, resilience, bespoke, visibility/internal]\nowner: platform\n---\n\n# Service\n"
+        },
+        {
+          "path": "fixture/wiki/notes/retry.md",
+          "content": "---\ntitle: Retry\ntags: [reliability]\n---\n\n# Retry\n"
+        },
+        {
+          "path": "fixture/wiki/notes/untagged.md",
+          "content": "---\ntitle: Untagged\n---\n\n# Untagged\n"
+        }
       ],
       "runtime_tools": [
         "obsidian-wiki"
       ]
     },
     {
-      "id": "tag-audit-boundary",
+      "id": "unknown-tag-needs-decision",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this tag taxonomy task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Normalize tags in the configured fixture Wiki. A page uses the unknown tag latency-critical, and the taxonomy defines no alias or canonical replacement for it. Ask for the source workflow's decision and make no change to either the page or taxonomy.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The workflow identifies latency-critical as unknown, explains that replacement or taxonomy expansion requires a user decision, and leaves the files unchanged.",
         "assertions": [
           {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "id": "identifies-unknown-tag",
+            "kind": "deterministic",
+            "description": "reports latency-critical as absent from canonical, alias, and reserved vocabulary",
             "required": true
           },
           {
-            "id": "requests-needed-input",
+            "id": "requests-taxonomy-decision",
             "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
+            "description": "asks whether to map, retain, or add the tag without inventing a canonical identity",
             "required": true
           },
           {
-            "id": "avoids-fabrication",
+            "id": "does-not-normalize-unknown",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
+            "description": "does not edit the page or taxonomy before receiving the required decision",
             "required": true
           }
         ]
       },
-      "safety": "read-only"
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": ".obsidian-wiki/config",
+          "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"
+        },
+        {
+          "path": "fixture/wiki/tag-taxonomy.md",
+          "content": "# Tag Taxonomy\n\nCanonical: `architecture`, `reliability`\nAliases: `resilience` -> `reliability`\nReserved: `visibility/internal`\n"
+        },
+        {
+          "path": "fixture/wiki/notes/latency.md",
+          "content": "---\ntitle: Latency\ntags: [latency-critical]\n---\n\n# Latency\n"
+        }
+      ],
+      "runtime_tools": [
+        "obsidian-wiki"
+      ]
     },
     {
-      "id": "tag-audit-safety",
+      "id": "normalize-known-alias",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Analyze a second tag taxonomy core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
+      "prompt": "Normalize the configured fixture Wiki's known aliases. Replace resilience with reliability on notes/service.md, preserve the reserved visibility/internal tag and the unrelated owner property, leave tag-taxonomy.md unchanged, and complete applicable post-write maintenance.",
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "The page has reliability and visibility/internal exactly once, no resilience tag, and its owner property and body are preserved; the taxonomy is unchanged and the report lists the bounded change.",
         "assertions": [
           {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
+            "id": "replaces-alias",
+            "kind": "deterministic",
+            "description": "notes/service.md contains reliability and no resilience tag",
             "required": true
           },
           {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
+            "id": "preserves-reserved-and-owner",
+            "kind": "deterministic",
+            "description": "visibility/internal and owner platform remain unchanged",
             "required": true
           },
           {
-            "id": "preserves-unrelated-state",
+            "id": "bounds-write",
             "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "changes only the target page and applicable maintenance artifacts, not tag-taxonomy.md or unrelated pages",
             "required": true
           }
         ]
       },
-      "safety": "read-only",
-      "companion_skills": [
-        "llm-wiki"
-      ],
-      "fixture_sets": [
-        "wiki-base"
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": ".obsidian-wiki/config",
+          "content": "OBSIDIAN_VAULT_PATH=\"{{WORKSPACE}}/fixture/wiki\"\n"
+        },
+        {
+          "path": "fixture/wiki/tag-taxonomy.md",
+          "content": "# Tag Taxonomy\n\nCanonical: `architecture`, `reliability`\nAliases: `resilience` -> `reliability`\nReserved: `visibility/internal`\n"
+        },
+        {
+          "path": "fixture/wiki/index.md",
+          "content": "# Wiki Index\n\n- [[notes/service]]\n"
+        },
+        {
+          "path": "fixture/wiki/hot.md",
+          "content": "# Hot\n"
+        },
+        {
+          "path": "fixture/wiki/log.md",
+          "content": "# Activity Log\n"
+        },
+        {
+          "path": "fixture/wiki/notes/service.md",
+          "content": "---\ntitle: Service\ntags: [resilience, visibility/internal]\nowner: platform\n---\n\n# Service\n\nThe service retries transient failures.\n"
+        },
+        {
+          "path": "fixture/wiki/notes/other.md",
+          "content": "---\ntitle: Other\ntags: [architecture]\n---\n\n# Other\n"
+        }
       ],
       "runtime_tools": [
         "obsidian-wiki"
@@ -116,24 +179,24 @@
   ],
   "invocation_cases": [
     {
-      "id": "explicit-policy-direct",
+      "id": "negative-tag-audit",
       "version": 1,
       "variant": "direct",
-      "prompt": "Explain what a hashtag is in general social-media usage.",
+      "prompt": "List the misspelled and non-canonical tags across my knowledge-base notes.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-paraphrase",
+      "id": "negative-tag-rename",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Explain what a hashtag is in general social-media usage.",
+      "prompt": "Change every #resilience tag in the vault to the approved #reliability tag.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-boundary",
+      "id": "negative-hashtag-explanation",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Explain what a hashtag is in general social-media usage.",
+      "prompt": "Explain the difference between nested Obsidian tags and social-media hashtags.",
       "expected_invocation": "not-invoked"
     }
   ]

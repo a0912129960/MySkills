@@ -6,117 +6,170 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "lightweight-spec",
+      "id": "write-display-name-spec",
       "version": 1,
       "role": "normal",
-      "prompt": "Convert an already-agreed change to reject blank display names into one local lightweight specification without interviewing, implementing, or publishing it.",
+      "prompt": "Use To Spec to synthesize the agreed display-name change from the fixture sources. Blank or whitespace-only names must make register_user raise ValueError(\"display name required\"); valid names remain unchanged. Write one lightweight local spec at .scratch/display-name-validation/spec.md, include public acceptance examples and the register_user test seam, and do not implement or ask questions.",
       "oracle": {
-        "expected_outcome": "captures the agreed behavior and acceptance checks; creates one bounded local artifact; does not reopen requirements or implement.",
+        "expected_outcome": "One spec captures the exact error behavior, valid-name preservation, public register_user test examples, relevant constraints and sources, while production files remain unchanged.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "captures the agreed behavior and acceptance checks",
+            "id": "creates-one-spec",
+            "kind": "deterministic",
+            "description": "creates .scratch/display-name-validation/spec.md and no other new specification artifact",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "creates one bounded local artifact",
+            "id": "captures-agreed-behavior",
+            "kind": "deterministic",
+            "description": "the spec requires blank and whitespace-only values to raise ValueError with display name required and valid values to remain accepted",
             "required": true
           },
           {
-            "id": "outcome-3",
+            "id": "defines-public-validation",
+            "kind": "human-rubric",
+            "description": "acceptance examples exercise register_user as the public seam and identify the project's unittest command",
+            "required": true
+          },
+          {
+            "id": "does-not-implement",
             "kind": "trajectory",
-            "description": "does not reopen requirements or implement",
+            "description": "does not edit src/users.py, tests, Git state, or any external tracker",
             "required": true
           }
         ]
       },
-      "safety": "temporary-workspace"
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": "PROJECT_RULES.md",
+          "content": "# Project Rules\n\nUse Python 3.11 and unittest. Public validation errors use ValueError.\n"
+        },
+        {
+          "path": "docs/domain.md",
+          "content": "# User identity\n\nDisplay name is the user-visible label. The team agreed that blank means empty or whitespace-only.\n"
+        },
+        {
+          "path": "src/users.py",
+          "content": "def register_user(display_name):\n    return {'display_name': display_name}\n"
+        },
+        {
+          "path": "tests/test_users.py",
+          "content": "import unittest\nfrom src.users import register_user\n\nclass UserTests(unittest.TestCase):\n    def test_valid_name(self):\n        self.assertEqual(register_user('Ada')['display_name'], 'Ada')\n"
+        }
+      ]
     },
     {
-      "id": "lightweight-spec-boundary",
+      "id": "record-open-timeout-question",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this to spec task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Use To Spec to capture the already-discussed request that \"import timeouts should be handled gracefully.\" No timeout duration, retry rule, user-visible result, or error contract was agreed. Write a bounded spec at .scratch/import-timeouts/spec.md that records those unknowns as open questions without interviewing me or inventing answers.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The spec preserves the limited confirmed intent, clearly marks timeout threshold, retry behavior, user-visible outcome, and error contract as open, and does not turn guesses into requirements.",
         "assertions": [
           {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "id": "creates-bounded-spec",
+            "kind": "deterministic",
+            "description": "creates .scratch/import-timeouts/spec.md with the confirmed graceful-handling intent",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
+            "id": "records-four-unknowns",
+            "kind": "deterministic",
+            "description": "lists timeout duration, retry policy, user-visible result, and error contract as unresolved",
             "required": true
           },
           {
-            "id": "avoids-fabrication",
+            "id": "does-not-invent",
+            "kind": "human-rubric",
+            "description": "does not choose numeric thresholds, retry counts, messages, or exception types without evidence",
+            "required": true
+          },
+          {
+            "id": "does-not-interview-or-implement",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
+            "description": "does not pause to ask the user questions and does not edit production or test files",
             "required": true
           }
         ]
       },
-      "safety": "temporary-workspace"
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": "docs/discussion.md",
+          "content": "# Import timeout discussion\n\nDecision: import timeouts should be handled gracefully.\nNo other timeout behavior was agreed.\n"
+        }
+      ]
     },
     {
-      "id": "lightweight-spec-safety",
+      "id": "default-local-boundary",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Perform a second to spec core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
+      "prompt": "Use To Spec for the agreed CSV-export change described in requirements/export.md. A generic docs/specs/ directory exists but repository rules define no specification location or repeated template. Create exactly .scratch/csv-export/spec.md, not a docs/specs artifact; do not modify src/export.py, create a branch or commit, or publish an issue.",
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "A single lightweight spec is written to the default .scratch feature path, cites the supplied requirement and representative code, and no implementation, Git, docs/specs, or external-tracker side effect occurs.",
         "assertions": [
           {
-            "id": "bounded-outcome",
+            "id": "uses-default-scratch-path",
+            "kind": "deterministic",
+            "description": "creates .scratch/csv-export/spec.md and creates no file under docs/specs",
+            "required": true
+          },
+          {
+            "id": "captures-export-scope",
             "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
+            "description": "captures UTF-8 CSV output, fixed id-name-email columns, header row, and empty-list behavior from the requirement",
             "required": true
           },
           {
-            "id": "respects-authorization",
+            "id": "prevents-expansive-side-effects",
             "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "does not edit src/export.py, create test code, mutate Git state, or publish an external issue",
             "required": true
           }
         ]
       },
-      "safety": "temporary-workspace"
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": "requirements/export.md",
+          "content": "# CSV export\n\nExport users as UTF-8 CSV with columns id, name, email in that order and a header row. An empty user list produces the header only. Download UI is out of scope.\n"
+        },
+        {
+          "path": "src/export.py",
+          "content": "def export_users(users):\n    raise NotImplementedError\n"
+        },
+        {
+          "path": "docs/specs/README.md",
+          "content": "# Miscellaneous documents\n\nThis directory has no established feature-spec template.\n"
+        }
+      ]
     }
   ],
   "invocation_cases": [
     {
-      "id": "explicit-policy-direct",
+      "id": "negative-lightweight-request",
       "version": 1,
       "variant": "direct",
-      "prompt": "We are still deciding whether blank display names should be allowed.",
+      "prompt": "Turn our agreed blank-display-name decision into one short local specification.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-paraphrase",
+      "id": "negative-decision-summary",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: We are still deciding whether blank display names should be allowed.",
+      "prompt": "Write down the small behavior change we just settled, including acceptance examples and open questions, without making a full PRD.",
       "expected_invocation": "not-invoked"
     },
     {
-      "id": "explicit-policy-boundary",
+      "id": "negative-full-package",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: We are still deciding whether blank display names should be allowed.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Build a gated PRD, EARS, BDD, technical-design, traceability, task, and readiness package for this feature.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": [
+        "spec-package-generator"
+      ]
     }
   ]
 }

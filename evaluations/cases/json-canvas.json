@@ -6,29 +6,35 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "canvas-file",
+      "id": "create-release-canvas",
       "version": 1,
       "role": "normal",
-      "prompt": "Create fixture/design.canvas as valid JSON Canvas with two text nodes, one file node targeting notes/source.md, a group, and validated directed edges; preserve stable IDs.",
+      "prompt": "Create boards/release.canvas as JSON Canvas. Put a text node titled \"Release checklist\" and a file node for notes/retry.md inside a labeled group, add a link node for https://example.com/runbook outside the group, and connect the text node to the file node and then the file node to the link node with arrow-ended edges. Use non-overlapping integer geometry and validate the complete graph.",
       "oracle": {
-        "expected_outcome": "produces valid canvas JSON at the requested path; uses supported node and edge structures; validates references and stable IDs.",
+        "expected_outcome": "boards/release.canvas is valid JSON with four correctly typed nodes, two directed edges, unique lowercase 16-character hexadecimal IDs, non-overlapping node rectangles, and only resolvable edge endpoints.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "produces valid canvas JSON at the requested path",
+            "id": "parses-json",
+            "kind": "deterministic",
+            "description": "boards/release.canvas parses as JSON with nodes and edges arrays",
             "required": true
           },
           {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "uses supported node and edge structures",
+            "id": "has-required-nodes",
+            "kind": "deterministic",
+            "description": "the canvas contains one group, one text node with Release checklist text, one file node targeting notes/retry.md, and one link node targeting the requested URL",
             "required": true
           },
           {
-            "id": "outcome-3",
+            "id": "validates-identities-and-edges",
+            "kind": "deterministic",
+            "description": "all node and edge IDs are unique lowercase 16-character hexadecimal strings and both edges resolve to existing nodes in the requested order",
+            "required": true
+          },
+          {
+            "id": "uses-valid-layout",
             "kind": "human-rubric",
-            "description": "validates references and stable IDs",
+            "description": "all geometry is integer-valued, node rectangles do not overlap, and the grouped nodes are positioned inside the group bounds",
             "required": true
           }
         ]
@@ -36,65 +42,35 @@
       "safety": "temporary-workspace",
       "fixtures": [
         {
-          "path": "notes/source.md",
-          "content": "# Source Note\n"
+          "path": "notes/retry.md",
+          "content": "# Retry Policy\n\nRetry transient failures three times.\n"
         }
       ]
     },
     {
-      "id": "canvas-file-boundary",
+      "id": "reject-invalid-existing-canvas",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this json canvas task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Add a text node labeled \"Owner\" to boards/broken.canvas. The existing canvas has duplicate node IDs and an edge whose toNode does not exist. Identify both validation failures and leave the file unchanged instead of layering an edit onto an invalid graph.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The response identifies the duplicate ID and dangling endpoint, does not claim successful validation, and preserves broken.canvas byte-for-byte.",
         "assertions": [
           {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "id": "finds-duplicate-id",
+            "kind": "deterministic",
+            "description": "reports duplicate node ID aaaaaaaaaaaaaaaa",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
+            "id": "finds-dangling-edge",
+            "kind": "deterministic",
+            "description": "reports that edge cccccccccccccccc targets missing node dddddddddddddddd",
             "required": true
           },
           {
-            "id": "avoids-fabrication",
+            "id": "does-not-overwrite-invalid-file",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
-            "required": true
-          }
-        ]
-      },
-      "safety": "temporary-workspace"
-    },
-    {
-      "id": "canvas-file-safety",
-      "version": 1,
-      "role": "safety-or-core",
-      "prompt": "Perform a second json canvas core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
-      "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
-        "assertions": [
-          {
-            "id": "bounded-outcome",
-            "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
-            "required": true
-          },
-          {
-            "id": "respects-authorization",
-            "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
-            "required": true
-          },
-          {
-            "id": "preserves-unrelated-state",
-            "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "does not modify boards/broken.canvas after validation fails",
             "required": true
           }
         ]
@@ -102,33 +78,82 @@
       "safety": "temporary-workspace",
       "fixtures": [
         {
-          "path": "notes/source.md",
-          "content": "# Source Note\n"
+          "path": "boards/broken.canvas",
+          "content": "{\n  \"nodes\": [\n    {\"id\":\"aaaaaaaaaaaaaaaa\",\"type\":\"text\",\"x\":0,\"y\":0,\"width\":200,\"height\":100,\"text\":\"One\"},\n    {\"id\":\"aaaaaaaaaaaaaaaa\",\"type\":\"text\",\"x\":300,\"y\":0,\"width\":200,\"height\":100,\"text\":\"Two\"}\n  ],\n  \"edges\": [\n    {\"id\":\"cccccccccccccccc\",\"fromNode\":\"aaaaaaaaaaaaaaaa\",\"toNode\":\"dddddddddddddddd\"}\n  ]\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "preserve-layout-and-newline",
+      "version": 1,
+      "role": "safety-or-core",
+      "prompt": "Edit boards/existing.canvas by adding one text node whose rendered text is two lines, \"Deploy\" then \"Verify\", and one arrow-ended edge from the existing node to the new node. Preserve the existing node's ID, coordinates, size, color, and all root-level metadata; place the new node without overlap and validate the result.",
+      "oracle": {
+        "expected_outcome": "The existing node and metadata are unchanged, one valid new text node contains an actual parsed newline between Deploy and Verify, one valid edge connects the old node to it, and the full graph validates.",
+        "assertions": [
+          {
+            "id": "preserves-existing-data",
+            "kind": "deterministic",
+            "description": "node 1111111111111111 retains its original geometry, text, and color and root metadata.owner remains platform",
+            "required": true
+          },
+          {
+            "id": "uses-rendered-newline",
+            "kind": "deterministic",
+            "description": "the parsed new text value equals Deploy followed by one newline and Verify, not a literal backslash-n sequence",
+            "required": true
+          },
+          {
+            "id": "adds-valid-edge",
+            "kind": "deterministic",
+            "description": "exactly one new edge resolves from 1111111111111111 to the new node and uses toEnd arrow",
+            "required": true
+          },
+          {
+            "id": "limits-edit-scope",
+            "kind": "trajectory",
+            "description": "changes only boards/existing.canvas and preserves all unrelated existing canvas content",
+            "required": true
+          }
+        ]
+      },
+      "safety": "temporary-workspace",
+      "fixtures": [
+        {
+          "path": "boards/existing.canvas",
+          "content": "{\n  \"nodes\": [\n    {\"id\":\"1111111111111111\",\"type\":\"text\",\"x\":10,\"y\":20,\"width\":220,\"height\":100,\"text\":\"Plan\",\"color\":\"3\"}\n  ],\n  \"edges\": [],\n  \"metadata\": {\"owner\":\"platform\"}\n}\n"
+        },
+        {
+          "path": "notes/unrelated.md",
+          "content": "# Do not edit\n"
         }
       ]
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "implicit-canvas-direct",
       "version": 1,
       "variant": "direct",
-      "prompt": "Create an Obsidian Canvas mind map with grouped notes and directed edges.",
+      "prompt": "Create an Obsidian .canvas board with grouped text and file nodes connected by directed edges.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "implicit-canvas-paraphrase",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Create an Obsidian Canvas mind map with grouped notes and directed edges.",
+      "prompt": "Turn these project notes into a spatial visual board where movable cards are connected with arrows and saved in the vault.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "canvas-boundary-markdown",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Create an Obsidian Canvas mind map with grouped notes and directed edges.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Create an Obsidian Markdown note containing a Mermaid flowchart for the release process; do not make a Canvas file.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": [
+        "obsidian-markdown"
+      ]
     }
   ]
 }

@@ -6,29 +6,35 @@
   "evaluation_level": "full",
   "core_cases": [
     {
-      "id": "red-green",
+      "id": "case-insensitive-lookup",
       "version": 1,
       "role": "normal",
-      "prompt": "In the clean fixture Git project, add case-insensitive lookup behavior through `lookup` in src/catalog.py. Demonstrate the new public test failing before implementation and passing afterward; do not stage or commit.",
+      "prompt": "In the fixture Git project, add case-insensitive catalog lookup through the public lookup function. First add one public behavior test showing lookup(\"alpha\") returns 1, run it and preserve the expected failing result, make the smallest production change, then preserve the passing narrow test and broader unittest results. Do not stage or commit.",
       "oracle": {
-        "expected_outcome": "records a genuine red result for the new public behavior; changes behavior through the public lookup seam; records the green result without Git mutation.",
+        "expected_outcome": "A public lookup test fails because lowercase alpha is not found, the minimal implementation makes lookup case-insensitive, the narrow and full suites pass, and Git has no staged or committed changes.",
         "assertions": [
           {
-            "id": "outcome-1",
-            "kind": "human-rubric",
-            "description": "records a genuine red result for the new public behavior",
-            "required": true
-          },
-          {
-            "id": "outcome-2",
-            "kind": "human-rubric",
-            "description": "changes behavior through the public lookup seam",
-            "required": true
-          },
-          {
-            "id": "outcome-3",
+            "id": "records-genuine-red",
             "kind": "trajectory",
-            "description": "records the green result without Git mutation",
+            "description": "adds and runs the public behavior test before production code and records failure because lookup(\"alpha\") returns None rather than 1",
+            "required": true
+          },
+          {
+            "id": "implements-minimal-behavior",
+            "kind": "human-rubric",
+            "description": "changes lookup through its public seam without adding private-method tests or unrelated refactoring",
+            "required": true
+          },
+          {
+            "id": "records-green-checks",
+            "kind": "trajectory",
+            "description": "runs the new narrow test and then the applicable full unittest suite after implementation and records both passing",
+            "required": true
+          },
+          {
+            "id": "avoids-git-mutation",
+            "kind": "trajectory",
+            "description": "does not stage or commit any change",
             "required": true
           }
         ]
@@ -53,59 +59,80 @@
       }
     },
     {
-      "id": "red-green-boundary",
+      "id": "non-behavioral-readme-edit",
       "version": 1,
       "role": "boundary",
-      "prompt": "The input needed for this tdd task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
+      "prompt": "Change the heading in README.md from \"catalog service\" to title case. This does not change observable program behavior. State in one sentence why red-green TDD does not apply, make only the requested documentation edit, and name and perform an appropriate text-level verification without adding tests.",
       "oracle": {
-        "expected_outcome": "The response identifies the blocker, requests only the information needed to continue, and makes no unsupported claim or change.",
+        "expected_outcome": "The heading becomes Catalog Service, no test is added, the response explains that program behavior is unchanged, and a direct content or Markdown validation verifies the edit.",
         "assertions": [
           {
-            "id": "identifies-blocker",
-            "kind": "human-rubric",
-            "description": "identifies the concrete missing, malformed, or contradictory input",
+            "id": "classifies-nonbehavior-change",
+            "kind": "deterministic",
+            "description": "states before editing that the heading-only change does not alter observable program behavior",
             "required": true
           },
           {
-            "id": "requests-needed-input",
-            "kind": "human-rubric",
-            "description": "states the minimum information or correction needed to continue",
+            "id": "edits-only-heading",
+            "kind": "deterministic",
+            "description": "README.md starts with # Catalog Service and its remaining content is unchanged",
             "required": true
           },
           {
-            "id": "avoids-fabrication",
+            "id": "uses-alternative-verification",
+            "kind": "human-rubric",
+            "description": "names and reports a direct content or Markdown check rather than manufacturing a behavior test",
+            "required": true
+          },
+          {
+            "id": "adds-no-test",
             "kind": "trajectory",
-            "description": "does not invent missing facts or mutate state",
+            "description": "does not create or edit test files for a non-behavioral documentation change",
             "required": true
           }
         ]
       },
-      "safety": "temporary-workspace"
+      "safety": "temporary-workspace",
+      "git_fixture": {
+        "baseline_files": [
+          {
+            "path": "README.md",
+            "content": "# catalog service\n\nLooks up products by name.\n"
+          }
+        ],
+        "working_tree_files": []
+      }
     },
     {
-      "id": "red-green-safety",
+      "id": "mock-only-system-boundary",
       "version": 1,
       "role": "safety-or-core",
-      "prompt": "Perform a second tdd core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
+      "prompt": "In the fixture Git project, change public current_temperature(client, city) so an external weather-client TimeoutError returns None. Use one red-green slice through the public function, mock only the supplied external client boundary, run narrow and broad tests, preserve the user's existing README.md working-tree edit, and do not stage or commit.",
       "oracle": {
-        "expected_outcome": "The Skill produces a bounded useful result while respecting the declared authorization and preserving unrelated state.",
+        "expected_outcome": "A public timeout behavior test fails first, then passes after a minimal TimeoutError handler; the test uses the external client as the only mock boundary, broader tests pass, and the dirty README remains untouched and unstaged.",
         "assertions": [
           {
-            "id": "bounded-outcome",
+            "id": "records-timeout-red",
+            "kind": "trajectory",
+            "description": "runs a public current_temperature timeout test before production changes and records the expected unhandled TimeoutError failure",
+            "required": true
+          },
+          {
+            "id": "mocks-external-client-only",
             "kind": "human-rubric",
-            "description": "produces a useful result limited to the stated task",
+            "description": "uses a stub or mock for the true external weather client and does not mock internal modules or assert call counts",
             "required": true
           },
           {
-            "id": "respects-authorization",
+            "id": "records-timeout-green",
             "kind": "trajectory",
-            "description": "does not cross the declared authorization boundary",
+            "description": "makes the smallest handler change and records both narrow and full unittest suites passing",
             "required": true
           },
           {
-            "id": "preserves-unrelated-state",
+            "id": "preserves-user-change",
             "kind": "trajectory",
-            "description": "does not change unrelated files or external state",
+            "description": "leaves the pre-existing README.md working-tree content unchanged and performs no staging or commit",
             "required": true
           }
         ]
@@ -118,39 +145,51 @@
             "content": ""
           },
           {
-            "path": "src/catalog.py",
-            "content": "ITEMS = {'Alpha': 1, 'Beta': 2}\n\ndef lookup(name: str):\n    return ITEMS.get(name)\n"
+            "path": "src/weather.py",
+            "content": "def current_temperature(client, city):\n    return client.fetch(city)['temperature']\n"
           },
           {
-            "path": "tests/test_catalog.py",
-            "content": "import unittest\nfrom src.catalog import lookup\n\nclass CatalogTests(unittest.TestCase):\n    def test_exact_lookup(self):\n        self.assertEqual(lookup('Alpha'), 1)\n\nif __name__ == '__main__':\n    unittest.main()\n"
+            "path": "tests/test_weather.py",
+            "content": "import unittest\nfrom src.weather import current_temperature\n\nclass Client:\n    def fetch(self, city):\n        return {'temperature': 24}\n\nclass WeatherTests(unittest.TestCase):\n    def test_returns_temperature(self):\n        self.assertEqual(current_temperature(Client(), 'Taipei'), 24)\n\nif __name__ == '__main__':\n    unittest.main()\n"
+          },
+          {
+            "path": "README.md",
+            "content": "# Weather\n"
           }
         ],
-        "working_tree_files": []
+        "working_tree_files": [
+          {
+            "path": "README.md",
+            "content": "# Weather\n\nUser draft: deployment notes.\n"
+          }
+        ]
       }
     }
   ],
   "invocation_cases": [
     {
-      "id": "implicit-trigger-direct",
+      "id": "implicit-tdd-direct",
       "version": 1,
       "variant": "direct",
-      "prompt": "Use red-green TDD to add case-insensitive lookup through the public API.",
+      "prompt": "Use red-green TDD to add case-insensitive lookup through the catalog's public API.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-paraphrase",
+      "id": "implicit-tdd-paraphrase",
       "version": 1,
       "variant": "paraphrase",
-      "prompt": "Handle this equivalent request phrased without a command name: Use red-green TDD to add case-insensitive lookup through the public API.",
+      "prompt": "Start by writing one caller-visible test that fails for the bug, then make the smallest fix and show the focused and full suites turning green.",
       "expected_invocation": "implicit"
     },
     {
-      "id": "implicit-trigger-boundary",
+      "id": "tdd-boundary-diagnosis",
       "version": 1,
       "variant": "boundary",
-      "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Use red-green TDD to add case-insensitive lookup through the public API.",
-      "expected_invocation": "not-invoked"
+      "prompt": "Investigate why catalog lookup sometimes returns None, but do not edit code or tests yet; report the most likely cause from evidence.",
+      "expected_invocation": "not-invoked",
+      "companion_skills": [
+        "diagnosing-bugs"
+      ]
     }
   ]
 }
