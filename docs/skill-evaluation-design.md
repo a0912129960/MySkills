@@ -204,6 +204,30 @@ Regression evaluation follows the behavior that a change can affect:
 Each regression case is executed once per platform. A failed result is not automatically
 retried.
 
+### Source-controlled record layout
+
+Each Skill evaluation run is stored at:
+
+```text
+evaluations/records/<skill>/<run-id>/
+|-- summary.md
+`-- record.json
+```
+
+`summary.md` is the concise human review surface. It states what was tested, platform results,
+the directly observed failure point and reason, and the corrective action or later
+improvement. `record.json` is the schema-validated machine-readable record containing the
+required inputs, observations, assertions, and results.
+
+A required value that the platform does not expose is represented as `null` together with a
+reason; it is not silently omitted. The record schema determines whether that unavailable
+value permits a valid result for the case.
+
+`attestations/skills/<skill>.json` identifies the currently selected passing record for the
+Skill and its digest. It is a release pointer, not the evaluation history. The existing
+attestation schema implements the earlier compact-attestation model and must be migrated when
+the revised evaluation model is implemented.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -217,5 +241,4 @@ until an actual size or operability problem is observed.
 
 The following items remain under discussion and are not yet acceptance rules:
 
-- The source-controlled evidence path, schema, representation of unavailable fields, and
-  concise human-readable format.
+- The negative implicit-selection case count for Explicit-invocation Skills.
