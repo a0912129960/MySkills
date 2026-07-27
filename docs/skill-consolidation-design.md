@@ -727,7 +727,9 @@ tools are selected only when required by the task and project.
 - Trigger results are target-specific. Claude results never stand in for Codex. A passing
   attestation requires both the Claude `claude -p` runner and Codex `codex exec --ephemeral`
   runner to pass discovery, isolation, and harmless smoke tests and then pass the Skill's
-  required cases. Antigravity is outside the behavioral attestation in the first version.
+  three core cases and three invocation cases. The v4 catalog stores each Skill's cases in
+  an independently owned source file and fixes each case to one attempt per target.
+  Antigravity is outside the behavioral attestation in the first version.
   Claude description optimization uses `claude -p` only when explicitly requested for the
   Claude target and proposes, rather than silently applies, the winning description.
 - Claude and Codex evaluation scores are calculated independently and cannot offset each

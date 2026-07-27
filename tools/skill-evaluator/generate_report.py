@@ -108,9 +108,18 @@ def _render_declared_assertions(case: dict[str, Any]) -> str:
         return (
             "<p>No plan-level assertions; use the grading criteria below.</p>"
         )
-    return "<ul>" + "".join(
-        f"<li>{_escape(assertion)}</li>" for assertion in assertions
-    ) + "</ul>"
+    rendered = []
+    for assertion in assertions:
+        if isinstance(assertion, dict):
+            description = assertion.get("description", "")
+            label = assertion.get("id", "assertion")
+            rendered.append(
+                f"<li><strong>{_escape(label)}</strong>: "
+                f"{_escape(description)}</li>"
+            )
+        else:
+            rendered.append(f"<li>{_escape(assertion)}</li>")
+    return "<ul>" + "".join(rendered) + "</ul>"
 
 
 def _render_events(events: list[dict[str, Any]]) -> str:

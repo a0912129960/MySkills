@@ -1,10 +1,5 @@
 # Skill attestation workflow
 
-> **Migration notice:** Record publishing and v3 release pointers below implement
-> [`skill-evaluation-design.md`](skill-evaluation-design.md). The case-manifest and batch-run
-> sections still describe the v3 one-required/one-trigger profile until the next migration
-> slice replaces them with the accepted core and invocation profiles.
-
 Release validation requires one passing, source-controlled attestation for the
 current directory digest of every Managed Skill. Raw model output stays under
 `.scratch/skill-evals/` and is never committed.
@@ -27,15 +22,17 @@ current directory digest of every Managed Skill. Raw model output stays under
      --allow-ephemeral-auth-copy
    ```
 
-   The authoritative batch cases are in `evaluations/cases.json`. Validate and
-   preview them before spending model quota:
+   `evaluations/cases.json` is the authoritative v4 catalog and each
+   `evaluations/cases/<skill>.json` file is the independently owned case source
+   for one Managed Skill. Validate and preview the merged plan before spending
+   model quota:
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py validate-cases .
    python tools/skill-evaluator/skill_evaluator.py plan-batch . --skills qmd
    ```
 
-   Required cases may declare reusable `fixture_sets`, case-local `fixtures`,
+   Core and approved Golden cases may declare reusable `fixture_sets`, case-local `fixtures`,
    a deterministic `git_fixture`, companion Skills, and allowlisted
    `runtime_tools`. The plan expands and digests those inputs before execution.
    Each run stages them in its isolated workspace; fixture content may use
@@ -52,9 +49,12 @@ current directory digest of every Managed Skill. Raw model output stays under
    permission in read-only Claude cases. The launchers reject mutating
    subcommands and paths outside the evaluation workspace.
 
-   A complete 42-Skill run currently contains 168 target calls: Claude and
-   Codex for one required and one trigger case per Skill. Execution is
-   deliberately gated:
+   A complete 42-Skill run contains 504 target calls: three core cases and
+   three invocation cases, each run once on Claude and once on Codex. Explicit
+   Skills use three negative implicit-selection cases. Implicit Skills use a
+   direct positive, paraphrased positive, and nearest-boundary negative case.
+   The plan fixes `max_attempts` to `1`; a rerun is a new explicitly authorized
+   evaluation, never an automatic retry. Execution is deliberately gated:
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py run-batch . `

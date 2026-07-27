@@ -103,6 +103,20 @@ assertion must pass; outcome failures are not hidden by averaging scores across 
 Applicable tool and side-effect cases include their predeclared trajectory assertions in the
 same evaluation.
 
+### Machine-readable case layout
+
+`evaluations/cases.json` is the schema-v4 catalog. It contains shared fixture sets and a
+sorted, unique list of one `evaluations/cases/<skill>.json` source for every Managed Skill.
+The per-Skill files carry the canonical invocation classification, three core cases, three
+invocation cases, and any approved Golden cases. This split permits independent file
+ownership while the loader returns one deterministic merged plan.
+
+Every plan item records its expected observable outcome or invocation classification,
+predeclared typed assertions, case role, current Skill and dependency digests, fixtures,
+tools, target platform, and `max_attempts: 1`. The validator rejects missing Managed Skills,
+extra or duplicate entries, weakened case counts, invocation policy mismatches, baseline
+configuration, unsafe fixture paths, and undeclared tools before any model tokens are spent.
+
 ### Human review
 
 Human review cannot override a platform threshold failure by changing it directly to a pass.

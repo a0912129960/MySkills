@@ -28,12 +28,15 @@ recommendations and asks for a new evaluation of the resulting digest.
    naming, references, and matching invocation policy.
 2. Run harmless isolated discovery and explicit-invocation smoke tests with
    Claude (`claude -p`) and Codex (`codex exec --ephemeral`) separately.
-3. Exercise realistic cases with the Skill installed. Keep target results
-   separate.
-4. Grade objective assertions, aggregate pass rate, duration, and token usage
-   when the runners expose them.
-5. Evaluate trigger cases for each primary target. Claude trigger results never
-   stand in for Codex results.
+3. Run the three predeclared core cases once per target: normal use, boundary
+   or invalid input, and safety/authorization or another core capability.
+4. Run the three predeclared invocation cases once per target. Explicit Skills
+   must remain unselected in all three negative cases. Implicit Skills must
+   pass direct-positive, paraphrase-positive, and nearest-boundary-negative
+   classification.
+5. Grade every required assertion without averaging away a failed case. Record
+   duration and token usage when the runners expose them. Never automatically
+   retry a completed result.
 6. Generate the offline static HTML review and present it for human inspection.
    Do not require a CDN, web server, or Node.js.
 7. Produce a sanitized machine-readable record and concise Markdown summary for

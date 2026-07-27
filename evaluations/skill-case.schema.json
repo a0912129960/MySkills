@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/a0912129960/MySkills/blob/main/evaluations/skill-case.schema.json",
+  "title": "MySkills per-Skill evaluation cases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "skill_name",
+    "invocation",
+    "evaluation_level",
+    "core_cases",
+    "invocation_cases"
+  ],
+  "properties": {
+    "$schema": {"const": "../skill-case.schema.json"},
+    "schema_version": {"const": 4},
+    "skill_name": {"$ref": "#/$defs/kebab"},
+    "invocation": {"enum": ["explicit", "implicit"]},
+    "evaluation_level": {"const": "full"},
+    "core_cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/coreCase"}
+    },
+    "invocation_cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/invocationCase"}
+    },
+    "golden_cases": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/goldenCase"}
+    }
+  },
+  "$defs": {
+    "kebab": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "description", "required"],
+      "properties": {
+        "id": {"$ref": "#/$defs/kebab"},
+        "kind": {
+          "enum": ["deterministic", "human-rubric", "trajectory"]
+        },
+        "description": {"type": "string", "minLength": 3},
+        "required": {"type": "boolean"}
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_outcome", "assertions"],
+      "properties": {
+        "expected_outcome": {"type": "string", "minLength": 3},
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assertion"}
+        }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "content"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*[. ](?:/|$))(?!.*(?:^|/)\\.\\.?/)(?!.*(?:^|/)\\.(?:[Aa][Gg][Ee][Nn][Tt][Ss]|[Cc][Ll][Aa][Uu][Dd][Ee]|[Cc][Oo][Dd][Ee][Xx]|[Gg][Ee][Mm][Ii][Nn][Ii]|[Gg][Ii][Tt])(?:/|$))[A-Za-z0-9._ -]+(?:/[A-Za-z0-9._ -]+)*$"
+        },
+        "content": {"type": "string"}
+      }
+    },
+    "gitFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_files", "working_tree_files"],
+      "properties": {
+        "baseline_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/fixture"}
+        },
+        "working_tree_files": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fixture"}
+        }
+      }
+    },
+    "executionContext": {
+      "type": "object",
+      "properties": {
+        "fixture_sets": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/kebab"}
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fixture"}
+        },
+        "companion_skills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/kebab"}
+        },
+        "external_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["qmd"]}
+        }
+      }
+    },
+    "coreCase": {
+      "allOf": [
+        {"$ref": "#/$defs/executionContext"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "role", "prompt", "oracle", "safety"],
+          "properties": {
+            "id": {"$ref": "#/$defs/kebab"},
+            "role": {
+              "enum": ["normal", "boundary", "safety-or-core"]
+            },
+            "prompt": {"type": "string", "minLength": 20},
+            "oracle": {"$ref": "#/$defs/oracle"},
+            "safety": {"enum": ["read-only", "temporary-workspace"]},
+            "fixture_sets": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "fixtures": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/fixture"}
+            },
+            "companion_skills": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "git_fixture": {"$ref": "#/$defs/gitFixture"},
+            "runtime_tools": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": ["obsidian-wiki", "skill-evaluator"]
+              }
+            },
+            "external_tools": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["qmd"]}
+            }
+          }
+        }
+      ]
+    },
+    "invocationCase": {
+      "allOf": [
+        {"$ref": "#/$defs/executionContext"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "variant",
+            "prompt",
+            "expected_invocation"
+          ],
+          "properties": {
+            "id": {"$ref": "#/$defs/kebab"},
+            "variant": {"enum": ["direct", "paraphrase", "boundary"]},
+            "prompt": {"type": "string", "minLength": 20},
+            "expected_invocation": {
+              "enum": ["implicit", "not-invoked"]
+            },
+            "fixture_sets": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "fixtures": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/fixture"}
+            },
+            "companion_skills": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "external_tools": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["qmd"]}
+            }
+          }
+        }
+      ]
+    },
+    "goldenCase": {
+      "allOf": [
+        {"$ref": "#/$defs/executionContext"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "prompt",
+            "oracle",
+            "safety",
+            "provenance",
+            "approved_by",
+            "approved_at",
+            "deidentified"
+          ],
+          "properties": {
+            "id": {"$ref": "#/$defs/kebab"},
+            "prompt": {"type": "string", "minLength": 20},
+            "oracle": {"$ref": "#/$defs/oracle"},
+            "safety": {"enum": ["read-only", "temporary-workspace"]},
+            "provenance": {"type": "string", "minLength": 3},
+            "approved_by": {"type": "string", "minLength": 1},
+            "approved_at": {"type": "string", "format": "date-time"},
+            "deidentified": {"const": true},
+            "fixture_sets": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "fixtures": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/fixture"}
+            },
+            "companion_skills": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/kebab"}
+            },
+            "git_fixture": {"$ref": "#/$defs/gitFixture"},
+            "runtime_tools": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": ["obsidian-wiki", "skill-evaluator"]
+              }
+            },
+            "external_tools": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["qmd"]}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

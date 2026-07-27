@@ -27,14 +27,94 @@ FIXTURE_PATH = re.compile(
 def load_cases(repo_root: Path | str) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     path = root / "evaluations" / "cases.json"
-    document = json.loads(
+    index = json.loads(
         path.read_text(encoding="utf-8"),
         object_pairs_hook=_reject_duplicate_keys,
     )
+    index_errors = _validate_case_index(index)
+    if index_errors:
+        raise ValueError("\n".join(index_errors))
+
+    skills: list[dict[str, Any]] = []
+    evaluations_root = path.parent.resolve()
+    for relative in index["skill_case_files"]:
+        source = (evaluations_root / relative).resolve()
+        try:
+            source.relative_to(evaluations_root)
+        except ValueError as error:
+            raise ValueError(
+                f"evaluation case source escapes evaluations/: {relative}"
+            ) from error
+        try:
+            entry = json.loads(
+                source.read_text(encoding="utf-8"),
+                object_pairs_hook=_reject_duplicate_keys,
+            )
+        except OSError as error:
+            raise ValueError(
+                f"evaluation case source is unavailable: {relative}"
+            ) from error
+        expected_name = Path(relative).stem
+        if (
+            not isinstance(entry, dict)
+            or entry.get("skill_name") != expected_name
+        ):
+            raise ValueError(
+                f"{relative}: skill_name must match the source filename"
+            )
+        skills.append(entry)
+
+    document = {
+        "$schema": "./cases.schema.json",
+        "schema_version": 4,
+        "fixture_sets": index.get("fixture_sets", {}),
+        "skills": skills,
+    }
     errors = validate_cases(root, document)
     if errors:
         raise ValueError("\n".join(errors))
     return document
+
+
+def _validate_case_index(document: object) -> list[str]:
+    required = {"$schema", "schema_version", "skill_case_files"}
+    optional = {"fixture_sets"}
+    if (
+        not isinstance(document, dict)
+        or not required.issubset(document)
+        or not set(document).issubset(required | optional)
+    ):
+        return ["evaluation case catalog fields are invalid"]
+    errors: list[str] = []
+    if document.get("$schema") != "./cases.schema.json":
+        errors.append("evaluation case catalog $schema is invalid")
+    if document.get("schema_version") != 4:
+        errors.append("evaluation case catalog schema_version must be 4")
+    fixture_errors = _validate_fixture_sets(document.get("fixture_sets", {}))
+    errors.extend(fixture_errors)
+    sources = document.get("skill_case_files")
+    if not isinstance(sources, list) or not sources:
+        errors.append(
+            "evaluation case catalog skill_case_files are invalid, "
+            "duplicated, or unsorted"
+        )
+    elif (
+        not _unique_strings(sources)
+        or sources != sorted(sources)
+        or not all(
+            isinstance(source, str)
+            and re.fullmatch(
+                r"cases/[a-z0-9]+(?:-[a-z0-9]+)*\.json",
+                source,
+            )
+            for source in sources
+        )
+    ):
+        errors.append(
+            "evaluation case catalog skill_case_files are invalid, "
+            "duplicated, or unsorted"
+        )
+    return errors
 
 
 def validate_cases(repo_root: Path | str, document: object) -> list[str]:
@@ -56,8 +136,8 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         return ["evaluation cases root fields are invalid"]
     if document.get("$schema") != "./cases.schema.json":
         errors.append("evaluation cases $schema is invalid")
-    if document.get("schema_version") != 3:
-        errors.append("evaluation cases schema_version must be 3")
+    if document.get("schema_version") != 4:
+        errors.append("evaluation cases schema_version must be 4")
     skills = document.get("skills")
     if not isinstance(skills, list):
         return errors + ["evaluation cases skills must be an array"]
@@ -78,14 +158,28 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
     seen: set[str] = set()
     for index, entry in enumerate(skills):
         location = f"skills[{index}]"
-        if not isinstance(entry, dict) or set(entry) != {
+        if not isinstance(entry, dict) or not {
             "skill_name",
+            "invocation",
             "evaluation_level",
-            "required_cases",
-            "trigger_cases",
-        }:
+            "core_cases",
+            "invocation_cases",
+        }.issubset(entry) or not set(entry).issubset({
+            "$schema",
+            "schema_version",
+            "skill_name",
+            "invocation",
+            "evaluation_level",
+            "core_cases",
+            "invocation_cases",
+            "golden_cases",
+        }):
             errors.append(f"{location} fields are invalid")
             continue
+        if entry.get("$schema") != "../skill-case.schema.json":
+            errors.append(f"{location}.$schema is invalid")
+        if entry.get("schema_version") != 4:
+            errors.append(f"{location}.schema_version must be 4")
         name = entry.get("skill_name")
         if not isinstance(name, str) or name not in managed:
             errors.append(f"{location}.skill_name is not a managed Skill")
@@ -95,22 +189,44 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         seen.add(name)
         if entry.get("evaluation_level") != "full":
             errors.append(f"{name}: consolidated Skills require full evaluation")
+        invocation = managed[name]["invocation"]
+        if entry.get("invocation") != invocation:
+            errors.append(
+                f"{name}: invocation must match inventory value {invocation}"
+            )
         errors.extend(
-            _validate_required_cases(
+            _validate_core_cases(
                 name,
-                entry.get("required_cases"),
+                entry.get("core_cases"),
                 set(managed),
                 fixture_sets,
             )
         )
         errors.extend(
-            _validate_trigger_cases(
+            _validate_invocation_cases(
                 name,
-                entry.get("trigger_cases"),
-                managed[name]["invocation"],
+                entry.get("invocation_cases"),
+                invocation,
+                set(managed),
                 fixture_sets,
             )
         )
+        errors.extend(
+            _validate_golden_cases(
+                name,
+                entry.get("golden_cases", []),
+                set(managed),
+                fixture_sets,
+            )
+        )
+        case_ids = [
+            case.get("id")
+            for field in ("core_cases", "invocation_cases", "golden_cases")
+            for case in entry.get(field, [])
+            if isinstance(case, dict) and isinstance(case.get("id"), str)
+        ]
+        if len(case_ids) != len(set(case_ids)):
+            errors.append(f"{name}: case ids must be unique across all suites")
     missing = sorted(set(managed) - seen)
     extra = sorted(seen - set(managed))
     if missing:
@@ -174,7 +290,7 @@ def build_plan(
     fixture_sets = document.get("fixture_sets", {})
     for name in sorted(selected):
         entry = entries[name]
-        for case in entry["required_cases"]:
+        for case in entry["core_cases"]:
             expanded_fixtures = _expanded_fixtures(case, fixture_sets)
             runtime_tools = case.get("runtime_tools", [])
             external_tools = case.get("external_tools", [])
@@ -212,13 +328,14 @@ def build_plan(
                             for tool in runtime_tools
                         },
                         external_tools=external_tools,
-                        mode="required",
+                        mode="core",
                         explicit=True,
                     )
                 )
-        for case in entry["trigger_cases"]:
+        for case in entry["invocation_cases"]:
             expanded_fixtures = _expanded_fixtures(case, fixture_sets)
             external_tools = case.get("external_tools", [])
+            companions = case.get("companion_skills", [])
             for target in TARGETS:
                 plan.append(
                     _plan_item(
@@ -228,15 +345,58 @@ def build_plan(
                         target,
                         evaluation_level=entry["evaluation_level"],
                         skill_digest=skill_digest(name),
-                        companion_skill_paths={},
-                        companion_skill_digests={},
+                        companion_skill_paths={
+                            companion: paths[companion]
+                            for companion in companions
+                        },
+                        companion_skill_digests={
+                            companion: skill_digest(companion)
+                            for companion in companions
+                        },
                         fixture_set_names=case.get("fixture_sets", []),
                         fixtures=expanded_fixtures,
                         runtime_tool_sources={},
                         runtime_tool_digests={},
                         external_tools=external_tools,
-                        mode="trigger",
+                        mode="invocation",
                         explicit=False,
+                    )
+                )
+        for case in entry.get("golden_cases", []):
+            expanded_fixtures = _expanded_fixtures(case, fixture_sets)
+            runtime_tools = case.get("runtime_tools", [])
+            external_tools = case.get("external_tools", [])
+            companions = case.get("companion_skills", [])
+            for target in TARGETS:
+                plan.append(
+                    _plan_item(
+                        name,
+                        paths[name],
+                        case,
+                        target,
+                        evaluation_level=entry["evaluation_level"],
+                        skill_digest=skill_digest(name),
+                        companion_skill_paths={
+                            companion: paths[companion]
+                            for companion in companions
+                        },
+                        companion_skill_digests={
+                            companion: skill_digest(companion)
+                            for companion in companions
+                        },
+                        fixture_set_names=case.get("fixture_sets", []),
+                        fixtures=expanded_fixtures,
+                        runtime_tool_sources={
+                            tool: runtime_source(tool)
+                            for tool in runtime_tools
+                        },
+                        runtime_tool_digests={
+                            tool: runtime_digest(tool)
+                            for tool in runtime_tools
+                        },
+                        external_tools=external_tools,
+                        mode="golden",
+                        explicit=True,
                     )
                 )
     return plan
@@ -245,7 +405,7 @@ def build_plan(
 def summarize_plan(plan: list[dict[str, Any]]) -> dict[str, Any]:
     skills = sorted({item["skill_name"] for item in plan})
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "skill_count": len(skills),
         "model_run_count": len(plan),
         "targets": list(TARGETS),
@@ -664,30 +824,30 @@ def audit_reviewed_skill(
     targets: dict[str, dict[str, Any]] = {}
     efficiency: dict[str, dict[str, int | None]] = {}
     for target in TARGETS:
-        required_total = sum(
+        core_total = sum(
             1
             for item in expected
             if item["target"] == target
-            and item["mode"] == "required"
+            and item["mode"] == "core"
         )
-        trigger_total = sum(
+        invocation_total = sum(
             1
             for item in expected
             if item["target"] == target
-            and item["mode"] == "trigger"
+            and item["mode"] == "invocation"
         )
         targets[target] = {
             "status": "pass",
             "discovery": True,
             "explicit_invocation": True,
             "isolation": True,
-            "required_cases": {
-                "passed": required_total,
-                "total": required_total,
+            "core_cases": {
+                "passed": core_total,
+                "total": core_total,
             },
-            "trigger_results": {
-                "passed": trigger_total,
-                "total": trigger_total,
+            "invocation_cases": {
+                "passed": invocation_total,
+                "total": invocation_total,
             },
             "summary": (
                 f"{len(durations[target])} isolated processes and reviewed "
@@ -722,8 +882,13 @@ def audit_reviewed_skill(
 
 
 def _grading_assertions(plan: dict[str, Any]) -> list[str]:
-    assertions = list(plan.get("assertions") or ())
-    if plan.get("mode") == "trigger":
+    assertions = [
+        assertion["description"]
+        for assertion in plan.get("assertions", [])
+        if isinstance(assertion, dict)
+        and _nonempty(assertion.get("description"))
+    ]
+    if plan.get("mode") == "invocation":
         expected = plan.get("expected_invocation")
         assertions = [
             f"Target behavior matches {expected} invocation policy"
@@ -756,8 +921,10 @@ def _plan_item(
         "skill_path": str(skill_path),
         "case_id": case["id"],
         "mode": mode,
+        "case_role": case.get("role") or case.get("variant"),
         "target": target,
         "evaluation_level": evaluation_level,
+        "max_attempts": 1,
         "skill_digest": skill_digest,
         "fixture_sets": list(fixture_set_names),
         "fixtures": [dict(fixture) for fixture in fixtures],
@@ -783,27 +950,51 @@ def _plan_item(
         "companion_skill_digests": dict(companion_skill_digests),
         "explicit": explicit,
         "prompt": case["prompt"],
-        "assertions": case.get("assertions", []),
+        "expected_outcome": (
+            case.get("oracle", {}).get("expected_outcome")
+            if isinstance(case.get("oracle"), dict)
+            else (
+                f"Skill invocation classification is "
+                f"{case.get('expected_invocation')}"
+            )
+        ),
+        "assertions": (
+            case.get("oracle", {}).get("assertions", [])
+            if isinstance(case.get("oracle"), dict)
+            else [
+                {
+                    "id": "invocation-classification",
+                    "kind": "deterministic",
+                    "description": (
+                        "observed Skill invocation classification equals "
+                        f"{case.get('expected_invocation')}"
+                    ),
+                    "required": True,
+                }
+            ]
+        ),
         "safety": case.get("safety", "read-only"),
         "expected_invocation": case.get("expected_invocation"),
     }
 
 
-def _validate_required_cases(
+def _validate_core_cases(
     name: str,
     value: object,
     managed_names: set[str],
     fixture_sets: dict[str, list[dict[str, str]]],
 ) -> list[str]:
-    if not isinstance(value, list) or not value:
-        return [f"{name}: required_cases must be non-empty"]
+    if not isinstance(value, list) or len(value) != 3:
+        return [f"{name}: exactly 3 core_cases are required"]
     errors: list[str] = []
     seen: set[str] = set()
+    roles: list[object] = []
     for case in value:
         required_fields = {
             "id",
+            "role",
             "prompt",
-            "assertions",
+            "oracle",
             "safety",
         }
         optional_fields = {
@@ -827,33 +1018,33 @@ def _validate_required_cases(
             or KEBAB_CASE.fullmatch(case_id) is None
             or case_id in seen
         ):
-            errors.append(f"{name}: required case id is invalid or duplicated")
-        seen.add(case_id)
+            errors.append(f"{name}: core case id is invalid or duplicated")
+        if isinstance(case_id, str):
+            seen.add(case_id)
+        role = case.get("role")
+        if role not in ("normal", "boundary", "safety-or-core"):
+            errors.append(f"{name}/{case_id}: core role is invalid")
+        else:
+            roles.append(role)
         if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
             errors.append(f"{name}/{case_id}: prompt is too short")
-        assertions = case.get("assertions")
-        if not isinstance(assertions, list) or not assertions or not all(
-            _nonempty(item) for item in assertions
-        ):
-            errors.append(f"{name}/{case_id}: assertions must be non-empty")
-        if case.get("safety") not in {"read-only", "temporary-workspace"}:
+        errors.extend(_validate_oracle(name, case_id, case.get("oracle")))
+        if case.get("safety") not in ("read-only", "temporary-workspace"):
             errors.append(f"{name}/{case_id}: safety is invalid")
         fixtures = case.get("fixtures", [])
-        if not isinstance(fixtures, list) or not all(
+        fixtures_valid = isinstance(fixtures, list) and all(
             _valid_fixture(item) for item in fixtures
-        ):
+        )
+        if not fixtures_valid:
             errors.append(f"{name}/{case_id}: fixtures are invalid")
         selected_fixture_sets = case.get("fixture_sets", [])
-        if (
-            not isinstance(selected_fixture_sets, list)
-            or not all(
-                isinstance(item, str) for item in selected_fixture_sets
-            )
-            or len(selected_fixture_sets) != len(set(selected_fixture_sets))
-            or not all(item in fixture_sets for item in selected_fixture_sets)
-        ):
+        fixture_sets_valid = (
+            _unique_strings(selected_fixture_sets)
+            and all(item in fixture_sets for item in selected_fixture_sets)
+        )
+        if not fixture_sets_valid:
             errors.append(f"{name}/{case_id}: fixture_sets are invalid")
-        elif isinstance(fixtures, list):
+        elif fixtures_valid:
             expanded = _expanded_fixtures(case, fixture_sets)
             paths = [fixture.get("path") for fixture in expanded]
             if len(paths) != len(set(paths)):
@@ -865,7 +1056,7 @@ def _validate_required_cases(
             errors.extend(
                 _validate_git_fixture(name, case_id, git_fixture)
             )
-            if isinstance(fixtures, list) and isinstance(git_fixture, dict):
+            if fixtures_valid and isinstance(git_fixture, dict):
                 regular_paths = {
                     fixture.get("path")
                     for fixture in _expanded_fixtures(case, fixture_sets)
@@ -889,32 +1080,31 @@ def _validate_required_cases(
                     )
         runtime_tools = case.get("runtime_tools", [])
         if (
-            not isinstance(runtime_tools, list)
-            or not all(isinstance(tool, str) for tool in runtime_tools)
-            or len(runtime_tools) != len(set(runtime_tools))
+            not _unique_strings(runtime_tools)
             or not all(tool in RUNTIME_TOOLS for tool in runtime_tools)
         ):
             errors.append(f"{name}/{case_id}: runtime_tools are invalid")
         external_tools = case.get("external_tools", [])
         if (
-            not isinstance(external_tools, list)
-            or not all(isinstance(tool, str) for tool in external_tools)
-            or len(external_tools) != len(set(external_tools))
+            not _unique_strings(external_tools)
             or not all(tool in EXTERNAL_TOOLS for tool in external_tools)
         ):
             errors.append(f"{name}/{case_id}: external_tools are invalid")
         companions = case.get("companion_skills", [])
         if (
-            not isinstance(companions, list)
-            or len(companions) != len(set(companions))
+            not _unique_strings(companions)
             or not all(
-                isinstance(item, str)
-                and item in managed_names
+                item in managed_names
                 and item != name
                 for item in companions
             )
         ):
             errors.append(f"{name}/{case_id}: companion_skills are invalid")
+    if set(roles) != {"normal", "boundary", "safety-or-core"}:
+        errors.append(
+            f"{name}: core_cases must contain normal, boundary, and "
+            "safety-or-core roles exactly once"
+        )
     return errors
 
 
@@ -1009,26 +1199,100 @@ def _validate_git_fixture(
     return errors
 
 
-def _validate_trigger_cases(
+def _validate_oracle(
+    name: str,
+    case_id: object,
+    value: object,
+) -> list[str]:
+    if not isinstance(value, dict) or set(value) != {
+        "expected_outcome",
+        "assertions",
+    }:
+        return [f"{name}/{case_id}: oracle fields are invalid"]
+    errors: list[str] = []
+    if not _nonempty(value.get("expected_outcome")):
+        errors.append(f"{name}/{case_id}: expected_outcome is required")
+    assertions = value.get("assertions")
+    if not isinstance(assertions, list) or not assertions:
+        return errors + [f"{name}/{case_id}: assertions must be non-empty"]
+    seen: set[str] = set()
+    required_count = 0
+    for assertion in assertions:
+        if not isinstance(assertion, dict) or set(assertion) != {
+            "id",
+            "kind",
+            "description",
+            "required",
+        }:
+            errors.append(f"{name}/{case_id}: assertion fields are invalid")
+            continue
+        assertion_id = assertion.get("id")
+        if (
+            not isinstance(assertion_id, str)
+            or KEBAB_CASE.fullmatch(assertion_id) is None
+            or assertion_id in seen
+        ):
+            errors.append(
+                f"{name}/{case_id}: assertion id is invalid or duplicated"
+            )
+        if isinstance(assertion_id, str):
+            seen.add(assertion_id)
+        if assertion.get("kind") not in (
+            "deterministic",
+            "human-rubric",
+            "trajectory",
+        ):
+            errors.append(
+                f"{name}/{case_id}/{assertion_id}: assertion kind is invalid"
+            )
+        if not _nonempty(assertion.get("description")):
+            errors.append(
+                f"{name}/{case_id}/{assertion_id}: description is required"
+            )
+        if not isinstance(assertion.get("required"), bool):
+            errors.append(
+                f"{name}/{case_id}/{assertion_id}: required must be boolean"
+            )
+        elif assertion["required"]:
+            required_count += 1
+    if required_count == 0:
+        errors.append(
+            f"{name}/{case_id}: at least one assertion must be required"
+        )
+    return errors
+
+
+def _validate_invocation_cases(
     name: str,
     value: object,
     invocation: str,
+    managed_names: set[str],
     fixture_sets: dict[str, list[dict[str, str]]],
 ) -> list[str]:
-    if not isinstance(value, list) or not value:
-        return [f"{name}: trigger_cases must be non-empty"]
-    expected = "implicit" if invocation == "implicit" else "manual-only"
+    if not isinstance(value, list) or len(value) != 3:
+        return [f"{name}: exactly 3 invocation_cases are required"]
     errors: list[str] = []
     seen: set[str] = set()
+    variants: dict[object, object] = {}
     for case in value:
-        required_fields = {"id", "prompt", "expected_invocation"}
-        optional_fields = {"fixtures", "fixture_sets", "external_tools"}
+        required_fields = {
+            "id",
+            "variant",
+            "prompt",
+            "expected_invocation",
+        }
+        optional_fields = {
+            "fixtures",
+            "fixture_sets",
+            "companion_skills",
+            "external_tools",
+        }
         if (
             not isinstance(case, dict)
             or not required_fields.issubset(case)
             or not set(case).issubset(required_fields | optional_fields)
         ):
-            errors.append(f"{name}: trigger case fields are invalid")
+            errors.append(f"{name}: invocation case fields are invalid")
             continue
         case_id = case.get("id")
         if (
@@ -1036,30 +1300,41 @@ def _validate_trigger_cases(
             or KEBAB_CASE.fullmatch(case_id) is None
             or case_id in seen
         ):
-            errors.append(f"{name}: trigger case id is invalid or duplicated")
-        seen.add(case_id)
-        if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
-            errors.append(f"{name}/{case_id}: trigger prompt is too short")
-        if case.get("expected_invocation") != expected:
             errors.append(
-                f"{name}/{case_id}: expected_invocation must be {expected}"
+                f"{name}: invocation case id is invalid or duplicated"
+            )
+        if isinstance(case_id, str):
+            seen.add(case_id)
+        variant = case.get("variant")
+        expected_invocation = case.get("expected_invocation")
+        if variant not in ("direct", "paraphrase", "boundary"):
+            errors.append(f"{name}/{case_id}: invocation variant is invalid")
+        elif variant in variants:
+            errors.append(
+                f"{name}/{case_id}: invocation variant is duplicated"
+            )
+        else:
+            variants[variant] = expected_invocation
+        if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
+            errors.append(f"{name}/{case_id}: invocation prompt is too short")
+        if expected_invocation not in ("implicit", "not-invoked"):
+            errors.append(
+                f"{name}/{case_id}: expected_invocation is invalid"
             )
         fixtures = case.get("fixtures", [])
-        if not isinstance(fixtures, list) or not all(
+        fixtures_valid = isinstance(fixtures, list) and all(
             _valid_fixture(item) for item in fixtures
-        ):
+        )
+        if not fixtures_valid:
             errors.append(f"{name}/{case_id}: fixtures are invalid")
         selected_fixture_sets = case.get("fixture_sets", [])
-        if (
-            not isinstance(selected_fixture_sets, list)
-            or not all(
-                isinstance(item, str) for item in selected_fixture_sets
-            )
-            or len(selected_fixture_sets) != len(set(selected_fixture_sets))
-            or not all(item in fixture_sets for item in selected_fixture_sets)
-        ):
+        fixture_sets_valid = (
+            _unique_strings(selected_fixture_sets)
+            and all(item in fixture_sets for item in selected_fixture_sets)
+        )
+        if not fixture_sets_valid:
             errors.append(f"{name}/{case_id}: fixture_sets are invalid")
-        elif isinstance(fixtures, list):
+        elif fixtures_valid:
             paths = [
                 fixture.get("path")
                 for fixture in _expanded_fixtures(case, fixture_sets)
@@ -1068,17 +1343,162 @@ def _validate_trigger_cases(
                 errors.append(f"{name}/{case_id}: duplicate fixture path")
         external_tools = case.get("external_tools", [])
         if (
-            not isinstance(external_tools, list)
-            or not all(isinstance(tool, str) for tool in external_tools)
-            or len(external_tools) != len(set(external_tools))
+            not _unique_strings(external_tools)
             or not all(tool in EXTERNAL_TOOLS for tool in external_tools)
         ):
             errors.append(f"{name}/{case_id}: external_tools are invalid")
+        companions = case.get("companion_skills", [])
+        if (
+            not _unique_strings(companions)
+            or not all(
+                item in managed_names
+                and item != name
+                for item in companions
+            )
+        ):
+            errors.append(f"{name}/{case_id}: companion_skills are invalid")
+    if set(variants) != {"direct", "paraphrase", "boundary"}:
+        errors.append(
+            f"{name}: invocation_cases must contain direct, paraphrase, "
+            "and boundary variants exactly once"
+        )
+    if invocation == "explicit":
+        if not variants or not all(
+            value == "not-invoked" for value in variants.values()
+        ):
+            errors.append(
+                f"{name}: explicit Skill invocation cases must all be "
+                "not-invoked"
+            )
+    elif variants != {
+        "direct": "implicit",
+        "paraphrase": "implicit",
+        "boundary": "not-invoked",
+    }:
+        errors.append(
+            f"{name}: implicit Skill direct and paraphrase cases must invoke; "
+            "boundary must be not-invoked"
+        )
+    return errors
+
+
+def _validate_golden_cases(
+    name: str,
+    value: object,
+    managed_names: set[str],
+    fixture_sets: dict[str, list[dict[str, str]]],
+) -> list[str]:
+    if not isinstance(value, list):
+        return [f"{name}: golden_cases must be an array"]
+    errors: list[str] = []
+    seen: set[str] = set()
+    for case in value:
+        required_fields = {
+            "id",
+            "prompt",
+            "oracle",
+            "safety",
+            "provenance",
+            "approved_by",
+            "approved_at",
+            "deidentified",
+        }
+        optional_fields = {
+            "fixtures",
+            "fixture_sets",
+            "companion_skills",
+            "git_fixture",
+            "runtime_tools",
+            "external_tools",
+        }
+        if (
+            not isinstance(case, dict)
+            or not required_fields.issubset(case)
+            or not set(case).issubset(required_fields | optional_fields)
+        ):
+            errors.append(f"{name}: golden case fields are invalid")
+            continue
+        case_id = case.get("id")
+        if (
+            not isinstance(case_id, str)
+            or KEBAB_CASE.fullmatch(case_id) is None
+            or case_id in seen
+        ):
+            errors.append(f"{name}: golden case id is invalid or duplicated")
+        if isinstance(case_id, str):
+            seen.add(case_id)
+        if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
+            errors.append(f"{name}/{case_id}: golden prompt is too short")
+        errors.extend(_validate_oracle(name, case_id, case.get("oracle")))
+        if case.get("safety") not in ("read-only", "temporary-workspace"):
+            errors.append(f"{name}/{case_id}: safety is invalid")
+        for field in ("provenance", "approved_by", "approved_at"):
+            if not _nonempty(case.get(field)):
+                errors.append(f"{name}/{case_id}: {field} is required")
+        if case.get("deidentified") is not True:
+            errors.append(f"{name}/{case_id}: deidentified must be true")
+        fixtures = case.get("fixtures", [])
+        fixtures_valid = isinstance(fixtures, list) and all(
+            _valid_fixture(item) for item in fixtures
+        )
+        if not fixtures_valid:
+            errors.append(f"{name}/{case_id}: fixtures are invalid")
+        selected_fixture_sets = case.get("fixture_sets", [])
+        fixture_sets_valid = (
+            _unique_strings(selected_fixture_sets)
+            and all(
+                isinstance(item, str) and item in fixture_sets
+                for item in selected_fixture_sets
+            )
+        )
+        if not fixture_sets_valid:
+            errors.append(f"{name}/{case_id}: fixture_sets are invalid")
+        elif fixtures_valid:
+            paths = [
+                fixture.get("path")
+                for fixture in _expanded_fixtures(case, fixture_sets)
+            ]
+            if len(paths) != len(set(paths)):
+                errors.append(f"{name}/{case_id}: duplicate fixture path")
+        if case.get("git_fixture") is not None:
+            errors.extend(
+                _validate_git_fixture(name, case_id, case["git_fixture"])
+            )
+        runtime_tools = case.get("runtime_tools", [])
+        if (
+            not _unique_strings(runtime_tools)
+            or not all(tool in RUNTIME_TOOLS for tool in runtime_tools)
+        ):
+            errors.append(f"{name}/{case_id}: runtime_tools are invalid")
+        external_tools = case.get("external_tools", [])
+        if (
+            not _unique_strings(external_tools)
+            or not all(tool in EXTERNAL_TOOLS for tool in external_tools)
+        ):
+            errors.append(f"{name}/{case_id}: external_tools are invalid")
+        companions = case.get("companion_skills", [])
+        if (
+            not _unique_strings(companions)
+            or not all(
+                item in managed_names
+                and item != name
+                for item in companions
+            )
+        ):
+            errors.append(f"{name}/{case_id}: companion_skills are invalid")
     return errors
 
 
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _unique_strings(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and all(isinstance(item, str) for item in value)
+        and len(value) == len(set(value))
+    )
 
 
 def _directory_digest(path: Path) -> str:

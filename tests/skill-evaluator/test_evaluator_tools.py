@@ -41,10 +41,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         summary = cases.summarize_plan(plan)
 
         self.assertEqual(summary["skill_count"], 42)
-        self.assertEqual(summary["model_run_count"], 168)
+        self.assertEqual(summary["model_run_count"], 504)
         for name in summary["skills"]:
             runs = [item for item in plan if item["skill_name"] == name]
-            self.assertEqual(len(runs), 4, name)
+            self.assertEqual(len(runs), 12, name)
             self.assertTrue(
                 all(
                     item["evaluation_level"] == "full"
@@ -63,17 +63,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item
             for item in plan
             if item["skill_name"] == "qmd"
-            and item["mode"] == "trigger"
+            and item["mode"] == "invocation"
         ]
-        self.assertTrue(
-            all(item["external_tools"] == ["qmd"] for item in qmd_trigger_runs)
+        self.assertEqual(len(qmd_trigger_runs), 6)
+        self.assertEqual(
+            sum(item["external_tools"] == ["qmd"] for item in qmd_trigger_runs),
+            4,
         )
-        self.assertEqual(len(qmd_trigger_runs), 2)
         self.assertTrue(
             all(
                 item["fixture_sets"] == ["qmd-index"]
                 and item["fixtures"] == qmd_trigger_runs[0]["fixtures"]
                 for item in qmd_trigger_runs
+                if item["expected_invocation"] == "implicit"
             )
         )
 
@@ -95,7 +97,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             for item in invalid_external["skills"]
             if item["skill_name"] == "qmd"
         )
-        invalid_qmd["trigger_cases"][0]["external_tools"] = ["shell"]
+        invalid_qmd["invocation_cases"][0]["external_tools"] = ["shell"]
         self.assertTrue(
             any(
                 "external_tools are invalid" in error
@@ -104,10 +106,12 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         )
 
         invalid = copy.deepcopy(document)
-        invalid["skills"][0]["trigger_cases"][0]["expected_invocation"] = "implicit"
+        invalid["skills"][0]["invocation_cases"][0][
+            "expected_invocation"
+        ] = "implicit"
         errors = cases.validate_cases(ROOT, invalid)
         self.assertTrue(
-            any("expected_invocation" in error for error in errors),
+            any("invocation cases" in error for error in errors),
             errors,
         )
 
@@ -148,7 +152,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             plan = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(plan["skill_count"], 1)
-            self.assertEqual(plan["model_run_count"], 4)
+            self.assertEqual(plan["model_run_count"], 12)
             self.assertEqual(plan["skills"], ["qmd"])
 
             preview = Path(temp_dir) / "preview.json"
@@ -238,7 +242,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in extended["skills"]
             if item["skill_name"] == "implement"
         )
-        required = implement["required_cases"][0]
+        required = implement["core_cases"][0]
         required["fixtures"] = [
             {
                 "path": "fixture/spec.md",
@@ -249,7 +253,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
         self.assertEqual(cases.validate_cases(ROOT, extended), [])
         plan = cases.build_plan(ROOT, extended, ["implement"])
-        required_runs = [item for item in plan if item["mode"] == "required"]
+        required_runs = [
+            item
+            for item in plan
+            if item["case_id"] == required["id"]
+        ]
         self.assertTrue(
             all(item["fixtures"] == required["fixtures"] for item in required_runs)
         )
@@ -293,7 +301,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in extended["skills"]
             if item["skill_name"] == "qmd"
         )
-        required = qmd["required_cases"][0]
+        required = qmd["core_cases"][0]
         required["fixture_sets"] = ["wiki-base"]
         required["fixtures"] = [
             {
@@ -304,7 +312,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
         self.assertEqual(cases.validate_cases(ROOT, extended), [])
         plan = cases.build_plan(ROOT, extended, ["qmd"])
-        required_runs = [item for item in plan if item["mode"] == "required"]
+        required_runs = [
+            item
+            for item in plan
+            if item["case_id"] == required["id"]
+        ]
         self.assertTrue(
             all(
                 item["fixture_sets"] == ["wiki-base"]
@@ -319,7 +331,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in duplicate["skills"]
             if item["skill_name"] == "qmd"
         )
-        duplicate_qmd["required_cases"][0]["fixtures"][0]["path"] = (
+        duplicate_qmd["core_cases"][0]["fixtures"][0]["path"] = (
             "fixture/wiki/config.json"
         )
         self.assertTrue(
@@ -361,7 +373,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         qmd_case = next(
             item for item in bad_case_id["skills"]
             if item["skill_name"] == "qmd"
-        )["required_cases"][0]
+        )["core_cases"][0]
         qmd_case["id"] = "Bad ID"
         self.assertTrue(
             any(
@@ -393,7 +405,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in extended["skills"]
             if item["skill_name"] == "qmd"
         )
-        required = qmd["required_cases"][0]
+        required = qmd["core_cases"][0]
         required["git_fixture"] = {
             "baseline_files": [
                 {
@@ -415,7 +427,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
         self.assertEqual(cases.validate_cases(ROOT, extended), [])
         plan = cases.build_plan(ROOT, extended, ["qmd"])
-        required_runs = [item for item in plan if item["mode"] == "required"]
+        required_runs = [
+            item
+            for item in plan
+            if item["case_id"] == required["id"]
+        ]
         self.assertTrue(
             all(
                 item["git_fixture"] == required["git_fixture"]
@@ -432,7 +448,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in duplicate["skills"]
             if item["skill_name"] == "qmd"
         )
-        duplicate_qmd["required_cases"][0]["git_fixture"][
+        duplicate_qmd["core_cases"][0]["git_fixture"][
             "baseline_files"
         ].append(
             {
@@ -452,7 +468,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in cross_collection_duplicate["skills"]
             if item["skill_name"] == "qmd"
         )
-        duplicate_qmd["required_cases"][0]["fixtures"] = [
+        duplicate_qmd["core_cases"][0]["fixtures"] = [
             {
                 "path": "new.txt",
                 "content": "ambiguous overlay\n",
@@ -473,7 +489,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in unsafe["skills"]
             if item["skill_name"] == "qmd"
         )
-        unsafe_qmd["required_cases"][0]["git_fixture"][
+        unsafe_qmd["core_cases"][0]["git_fixture"][
             "working_tree_files"
         ][0]["path"] = ".git/config"
         self.assertTrue(
@@ -494,15 +510,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in extended["skills"]
             if item["skill_name"] == "qmd"
         )
-        qmd["required_cases"][0]["runtime_tools"] = [
+        qmd["core_cases"][0]["runtime_tools"] = [
             "obsidian-wiki",
             "skill-evaluator",
         ]
-        qmd["required_cases"][0]["external_tools"] = ["qmd"]
+        qmd["core_cases"][0]["external_tools"] = ["qmd"]
 
         self.assertEqual(cases.validate_cases(ROOT, extended), [])
         plan = cases.build_plan(ROOT, extended, ["qmd"])
-        required_runs = [item for item in plan if item["mode"] == "required"]
+        required_runs = [
+            item
+            for item in plan
+            if item["case_id"] == qmd["core_cases"][0]["id"]
+        ]
         first = required_runs[0]
         self.assertEqual(
             first["runtime_tools"],
@@ -538,7 +558,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in unknown["skills"]
             if item["skill_name"] == "qmd"
         )
-        unknown_qmd["required_cases"][0]["runtime_tools"] = ["shell"]
+        unknown_qmd["core_cases"][0]["runtime_tools"] = ["shell"]
         self.assertTrue(
             any(
                 "runtime_tools" in error
@@ -551,7 +571,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             item for item in duplicate["skills"]
             if item["skill_name"] == "qmd"
         )
-        duplicate_qmd["required_cases"][0]["runtime_tools"] = [
+        duplicate_qmd["core_cases"][0]["runtime_tools"] = [
             "obsidian-wiki",
             "obsidian-wiki",
         ]
@@ -610,7 +630,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     {
                         "skill_name": "fixture-skill",
                         "evaluation_level": "full",
-                        "required_cases": [
+                        "core_cases": [
                             {
                                 "id": "required",
                                 "prompt": "Exercise the fixture Skill behavior.",
@@ -619,7 +639,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 "runtime_tools": ["skill-evaluator"],
                             }
                         ],
-                        "trigger_cases": [
+                        "invocation_cases": [
                             {
                                 "id": "trigger",
                                 "prompt": "Naturally trigger the fixture Skill behavior.",
@@ -676,7 +696,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     {
                         "skill_name": "fixture-skill",
                         "evaluation_level": "full",
-                        "required_cases": [
+                        "core_cases": [
                             {
                                 "id": "required",
                                 "prompt": "Exercise the fixture Skill behavior.",
@@ -684,7 +704,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 "safety": "read-only",
                             }
                         ],
-                        "trigger_cases": [
+                        "invocation_cases": [
                             {
                                 "id": "trigger",
                                 "prompt": "Naturally trigger the fixture Skill behavior.",
@@ -922,8 +942,8 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 {"claude", "codex"},
             )
             self.assertEqual(
-                review["targets"]["claude"]["required_cases"],
-                {"passed": 1, "total": 1},
+                review["targets"]["claude"]["core_cases"],
+                {"passed": 3, "total": 3},
             )
 
             external_item = next(
