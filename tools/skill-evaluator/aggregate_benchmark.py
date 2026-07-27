@@ -390,6 +390,7 @@ def _codex_evidence(stdout: str) -> dict[str, Any]:
     }
     messages: list[str] = []
     event_count = 0
+    terminal_turn_count = 0
     for line_number, line in enumerate(stdout.splitlines(), start=1):
         if not line.strip():
             continue
@@ -404,6 +405,7 @@ def _codex_evidence(stdout: str) -> dict[str, Any]:
             continue
         event_count += 1
         if event.get("type") == "turn.completed":
+            terminal_turn_count += 1
             evidence["metadata"]["usage"] = event.get("usage")
             continue
         if event.get("type") != "item.completed":
@@ -429,6 +431,26 @@ def _codex_evidence(stdout: str) -> dict[str, Any]:
                     "status": item.get("status"),
                 }
             )
+        elif item_type == "mcp_tool_call":
+            evidence["events"].append(
+                {
+                    "type": "mcp_tool_call",
+                    "server": item.get("server"),
+                    "tool": item.get("tool"),
+                    "arguments": item.get("arguments"),
+                    "result": item.get("result"),
+                    "error": item.get("error"),
+                    "status": item.get("status"),
+                }
+            )
+        elif item_type in {"web_search", "file_change"}:
+            evidence["events"].append(
+                {
+                    "type": item_type,
+                    "details": item,
+                    "status": item.get("status"),
+                }
+            )
         elif item_type == "error":
             evidence["events"].append(
                 {
@@ -446,6 +468,11 @@ def _codex_evidence(stdout: str) -> dict[str, Any]:
     if messages:
         evidence["final_response"] = messages[-1]
     evidence["metadata"]["raw_event_count"] = event_count
+    evidence["metadata"]["terminal_turn_count"] = terminal_turn_count
+    if terminal_turn_count != 1:
+        evidence["parse_errors"].append(
+            "Codex evidence must contain exactly one completed turn"
+        )
     return evidence
 
 
@@ -469,11 +496,23 @@ def model_evidence(target: str, result: dict[str, Any]) -> dict[str, Any]:
     return evidence
 
 
-def _review_state(expectations: list[dict[str, Any]]) -> str:
+def _review_state(
+    expectations: list[dict[str, Any]],
+    observed_invocation: object = None,
+    invocation_evidence: object = None,
+) -> str:
     if not expectations:
+        return "pending"
+    if (
+        observed_invocation == "unknown"
+        or not isinstance(invocation_evidence, str)
+        or not invocation_evidence.strip()
+        or invocation_evidence.strip() == PENDING_EVIDENCE
+    ):
         return "pending"
     if any(
         item.get("status") == "pending"
+        or item.get("observation") == "pending"
         or not isinstance(item.get("evidence"), str)
         or not item["evidence"].strip()
         or item["evidence"].strip() == PENDING_EVIDENCE
@@ -498,6 +537,30 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
     skill_root = root / skill_name
     if not skill_root.is_dir():
         skill_root = root
+    retained_plans: dict[tuple[str, str, str], dict[str, Any]] = {}
+    retained_plan_path = root / "plan.json"
+    if retained_plan_path.is_file():
+        retained_document = json.loads(
+            retained_plan_path.read_text(encoding="utf-8")
+        )
+        retained_runs = (
+            retained_document.get("runs")
+            if isinstance(retained_document, dict)
+            else None
+        )
+        if isinstance(retained_runs, list):
+            retained_plans = {
+                (
+                    item.get("skill_name"),
+                    item.get("case_id"),
+                    item.get("target"),
+                ): item
+                for item in retained_runs
+                if isinstance(item, dict)
+                and isinstance(item.get("skill_name"), str)
+                and isinstance(item.get("case_id"), str)
+                and isinstance(item.get("target"), str)
+            }
     cases: list[dict[str, Any]] = []
     grading_paths = sorted(skill_root.glob("*/*/grading.json"))
     if not grading_paths:
@@ -508,14 +571,32 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
     for grading_path in grading_paths:
         run_dir = grading_path.parent
         result_path = run_dir / "result.json"
-        if not result_path.is_file():
-            raise ValueError(f"{run_dir}: result.json is required")
-        record = json.loads(result_path.read_text(encoding="utf-8"))
-        plan = record.get("plan")
+        case_name = run_dir.parent.name
+        target = run_dir.name
+        retained_plan = retained_plans.get(
+            (skill_name, case_name, target)
+        )
+        record: dict[str, Any] = {}
+        raw_result_state = "missing"
+        if result_path.is_file():
+            try:
+                loaded_record = json.loads(
+                    result_path.read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                raw_result_state = "malformed"
+            else:
+                if isinstance(loaded_record, dict):
+                    record = loaded_record
+                    raw_result_state = "present"
+                else:
+                    raw_result_state = "malformed"
+        raw_plan = record.get("plan")
+        plan = raw_plan if isinstance(raw_plan, dict) else retained_plan
         if not isinstance(plan, dict):
-            raise ValueError(f"{result_path}: batch plan is required")
-        case_name = plan.get("case_id")
-        target = plan.get("target")
+            raise ValueError(
+                f"{result_path}: batch plan is unavailable from raw or retained evidence"
+            )
         if (
             plan.get("skill_name") != skill_name
             or case_name != run_dir.parent.name
@@ -524,7 +605,53 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             raise ValueError(
                 f"{result_path}: plan metadata does not match the batch path"
             )
+        if retained_plan is not None and plan != retained_plan:
+            raw_result_state = "plan-mismatch"
+            plan = retained_plan
         grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        if not isinstance(grading, dict) or set(grading) != {
+            "schema_version",
+            "observed_invocation",
+            "invocation_evidence",
+            "observed_external_state",
+            "expectations",
+        }:
+            raise ValueError(
+                f"{grading_path} requires the v3 grading fields"
+            )
+        if grading.get("schema_version") != 3:
+            raise ValueError(
+                f"{grading_path} grading schema_version must be 3"
+            )
+        observed_invocation = grading.get("observed_invocation")
+        invocation_evidence = grading.get("invocation_evidence")
+        observed_external_state = grading.get("observed_external_state")
+        if observed_invocation not in (
+            "explicit",
+            "implicit",
+            "not-invoked",
+            "unknown",
+        ):
+            raise ValueError(
+                f"{grading_path} observed invocation is invalid"
+            )
+        if (
+            not isinstance(invocation_evidence, str)
+            or not invocation_evidence.strip()
+        ):
+            raise ValueError(
+                f"{grading_path} invocation evidence is invalid"
+            )
+        if (
+            observed_external_state is not None
+            and (
+                not isinstance(observed_external_state, str)
+                or not observed_external_state.strip()
+            )
+        ):
+            raise ValueError(
+                f"{grading_path} observed external state is invalid"
+            )
         expectations = grading.get("expectations", [])
         if not isinstance(expectations, list):
             raise ValueError(f"{grading_path} expectations must be an array")
@@ -535,8 +662,10 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
                 "kind",
                 "description",
                 "required",
+                "trajectory_observation",
                 "status",
                 "evidence",
+                "observation",
             }:
                 raise ValueError(
                     f"{grading_path} expectations require the v2 typed "
@@ -559,6 +688,23 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
                 or not isinstance(item.get("description"), str)
                 or not item["description"].strip()
                 or not isinstance(item.get("required"), bool)
+                or item.get("trajectory_observation")
+                not in (
+                    "tool-trace",
+                    "external-state",
+                    "verified-absence",
+                    "not-applicable",
+                )
+                or item.get("observation")
+                not in (
+                    "pending",
+                    "final-output",
+                    "tool-trace",
+                    "external-state",
+                    "verified-absence",
+                    "invocation-trace",
+                    "not-applicable",
+                )
             ):
                 raise ValueError(
                     f"{grading_path} expectation contract is invalid"
@@ -581,7 +727,9 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
         )
         result = record.get("result")
         if not isinstance(result, dict):
-            raise ValueError(f"{result_path}: process result is required")
+            result = {}
+            if raw_result_state == "present":
+                raw_result_state = "malformed"
         evidence = model_evidence(str(target), result)
         execution_workspace = record.get("execution_workspace")
         if not isinstance(execution_workspace, str) or not execution_workspace:
@@ -631,6 +779,9 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "assertions": list(plan.get("assertions") or ()),
             "safety": plan.get("safety"),
             "expected_invocation": plan.get("expected_invocation"),
+            "observed_invocation": observed_invocation,
+            "invocation_evidence": invocation_evidence,
+            "observed_external_state": observed_external_state,
             "explicit": plan.get("explicit"),
             "skill_path": plan.get("skill_path"),
             "skill_digest": plan.get("skill_digest"),
@@ -641,6 +792,11 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "external_tools": list(plan.get("external_tools") or ()),
             "external_tool_evidence": dict(
                 record.get("external_tool_evidence") or {}
+            ),
+            "workspace_changes": (
+                list(record.get("workspace_changes"))
+                if isinstance(record.get("workspace_changes"), list)
+                else []
             ),
             "companion_skills": list(plan.get("companion_skills") or ()),
             "target_identity": record.get("target_identity"),
@@ -657,13 +813,18 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
                     "total_tokens",
                 )
             },
+            "raw_result_state": raw_result_state,
             "model_evidence": evidence,
             "execution_workspace": execution_workspace,
             "isolation_violations": list(isolation_violations),
             "isolation_audit_state": isolation_audit_state,
             "result_path": result_path.relative_to(skill_root).as_posix(),
             "grading_path": grading_path.relative_to(skill_root).as_posix(),
-            "review_state": _review_state(expectations),
+            "review_state": _review_state(
+                expectations,
+                observed_invocation,
+                invocation_evidence,
+            ),
             "passed": passed,
             "total": total,
             "pass_rate": passed / total if total else 0.0,

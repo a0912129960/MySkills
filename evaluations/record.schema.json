@@ -22,7 +22,7 @@
   ],
   "properties": {
     "$schema": {"const": "../../../record.schema.json"},
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "run_id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
@@ -30,7 +30,7 @@
     "skill_name": {"$ref": "#/$defs/kebab"},
     "skill_digest": {"$ref": "#/$defs/digest"},
     "case_manifest_digest": {"$ref": "#/$defs/digest"},
-    "evaluator_version": {"const": "myskills-skill-evaluator/3"},
+    "evaluator_version": {"const": "myskills-skill-evaluator/4"},
     "started_at": {"type": "string", "format": "date-time"},
     "completed_at": {"type": "string", "format": "date-time"},
     "status": {"$ref": "#/$defs/resultStatus"},
@@ -110,8 +110,21 @@
           "enum": ["deterministic", "human-rubric", "trajectory"]
         },
         "description": {"type": "string", "minLength": 1},
-        "required": {"type": "boolean"}
-      }
+        "required": {"type": "boolean"},
+        "trajectory_observation": {
+          "enum": ["tool-trace", "external-state", "verified-absence"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"kind": {"const": "trajectory"}},
+            "required": ["kind"]
+          },
+          "then": {"required": ["trajectory_observation"]},
+          "else": {"not": {"required": ["trajectory_observation"]}}
+        }
+      ]
     },
     "expected": {
       "type": "object",
@@ -161,6 +174,7 @@
       "additionalProperties": false,
       "required": [
         "invocation",
+        "invocation_evidence",
         "tool_calls",
         "final_output",
         "external_state",
@@ -170,6 +184,7 @@
         "invocation": {
           "enum": ["explicit", "implicit", "not-invoked", "unknown"]
         },
+        "invocation_evidence": {"type": "string", "minLength": 1},
         "tool_calls": {
           "type": "array",
           "items": {"$ref": "#/$defs/toolCall"}
@@ -195,11 +210,21 @@
     "assertionResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assertion_id", "status", "evidence"],
+      "required": ["assertion_id", "status", "evidence", "observation"],
       "properties": {
         "assertion_id": {"$ref": "#/$defs/kebab"},
         "status": {"enum": ["pass", "fail", "invalid"]},
-        "evidence": {"type": "string", "minLength": 1}
+        "evidence": {"type": "string", "minLength": 1},
+        "observation": {
+          "enum": [
+            "final-output",
+            "tool-trace",
+            "external-state",
+            "verified-absence",
+            "invocation-trace",
+            "not-applicable"
+          ]
+        }
       }
     },
     "failure": {
@@ -320,9 +345,10 @@
     "sanitization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "redactions"],
+      "required": ["status", "redactions", "human_confirmed"],
       "properties": {
         "status": {"const": "pass"},
+        "human_confirmed": {"const": true},
         "redactions": {
           "type": "array",
           "items": {"type": "string", "minLength": 1}

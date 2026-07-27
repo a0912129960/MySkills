@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -19,6 +21,108 @@ import evaluation_records
 import generate_report
 import runners
 import validate_skill
+
+
+_WORKSPACE_TEXT_LIMIT = 64 * 1024
+_HASH_CHUNK_SIZE = 1024 * 1024
+
+
+def _workspace_snapshot(root: Path) -> dict[str, dict[str, Any]]:
+    """Capture a non-following, reviewable snapshot of a disposable workspace."""
+
+    snapshot: dict[str, dict[str, Any]] = {}
+    for current, directories, filenames in os.walk(
+        root,
+        topdown=True,
+        followlinks=False,
+    ):
+        current_path = Path(current)
+        entries = sorted([*directories, *filenames])
+        for name in entries:
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                target = os.readlink(path)
+                payload = target.encode("utf-8", errors="surrogatepass")
+                snapshot[relative] = {
+                    "kind": "symlink",
+                    "sha256": f"sha256:{hashlib.sha256(payload).hexdigest()}",
+                    "size": len(payload),
+                    "text": target,
+                }
+                if name in directories:
+                    directories.remove(name)
+                continue
+            if path.is_dir():
+                snapshot[relative] = {
+                    "kind": "directory",
+                    "sha256": None,
+                    "size": None,
+                    "text": None,
+                }
+                continue
+            if not path.is_file():
+                continue
+            reported_size = path.stat().st_size
+            preview = (
+                bytearray()
+                if reported_size <= _WORKSPACE_TEXT_LIMIT
+                else None
+            )
+            digest = hashlib.sha256()
+            actual_size = 0
+            with path.open("rb") as stream:
+                while chunk := stream.read(_HASH_CHUNK_SIZE):
+                    digest.update(chunk)
+                    actual_size += len(chunk)
+                    if preview is not None:
+                        if actual_size <= _WORKSPACE_TEXT_LIMIT:
+                            preview.extend(chunk)
+                        else:
+                            preview = None
+            text: str | None = None
+            if preview is not None and b"\x00" not in preview:
+                try:
+                    text = bytes(preview).decode("utf-8")
+                except UnicodeDecodeError:
+                    text = None
+            snapshot[relative] = {
+                "kind": "file",
+                "sha256": f"sha256:{digest.hexdigest()}",
+                "size": actual_size,
+                "text": text,
+            }
+    return snapshot
+
+
+def _workspace_changes(
+    before: dict[str, dict[str, Any]],
+    after: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return a deterministic before/after diff for retained raw evidence."""
+
+    changes: list[dict[str, Any]] = []
+    for relative in sorted(set(before) | set(after)):
+        prior = before.get(relative)
+        current = after.get(relative)
+        if prior == current:
+            continue
+        change = (
+            "created"
+            if prior is None
+            else "deleted"
+            if current is None
+            else "modified"
+        )
+        changes.append(
+            {
+                "path": relative,
+                "change": change,
+                "before": prior,
+                "after": current,
+            }
+        )
+    return changes
 
 
 def smoke_contract() -> dict[str, Any]:
@@ -84,14 +188,20 @@ def smoke_contract() -> dict[str, Any]:
         (run_dir / "grading.json").write_text(
             json.dumps(
                 {
+                    "schema_version": 3,
+                    "observed_invocation": "explicit",
+                    "invocation_evidence": "Fixture invokes the Skill explicitly.",
+                    "observed_external_state": None,
                     "expectations": [
                         {
                             "assertion_id": "fixture",
                             "kind": "deterministic",
                             "description": "fixture",
                             "required": True,
+                            "trajectory_observation": "not-applicable",
                             "status": "pass",
                             "evidence": "smoke",
+                            "observation": "final-output",
                         }
                     ]
                 }
@@ -119,6 +229,7 @@ def _execute_batch_item(
 ) -> dict[str, Any]:
     """Execute one plan item in a disposable workspace outside the repository."""
 
+    started_at = datetime.now(timezone.utc).isoformat()
     skill_path = Path(item["skill_path"])
     staged_skills = [
         skill_path,
@@ -183,12 +294,14 @@ def _execute_batch_item(
                 env=env,
                 timeout_seconds=30,
             )
+            workspace_before = _workspace_snapshot(execution_root)
             result = runners.run_command(
                 command,
                 cwd=execution_root,
                 env=env,
                 timeout_seconds=timeout_seconds,
             )
+            workspace_after = _workspace_snapshot(execution_root)
         execution_workspace = str(execution_root)
         evidence = aggregate_benchmark.model_evidence(
             item["target"],
@@ -208,11 +321,18 @@ def _execute_batch_item(
                 ),
             )
         )
+    completed_at = datetime.now(timezone.utc).isoformat()
     return {
         "plan": item,
+        "started_at": started_at,
+        "completed_at": completed_at,
         "target_identity": identity["stdout"].strip(),
         "target_identity_returncode": identity["returncode"],
         "external_tool_evidence": external_tool_evidence,
+        "workspace_changes": _workspace_changes(
+            workspace_before,
+            workspace_after,
+        ),
         "execution_workspace": execution_workspace,
         "isolation_violations": isolation_violations,
         "result": result,
@@ -310,6 +430,21 @@ def main(argv: list[str] | None = None) -> int:
     prepare_review_parser.add_argument("workspace", type=Path)
     prepare_review_parser.add_argument("--overwrite", action="store_true")
     prepare_review_parser.add_argument("--output", type=Path)
+
+    build_record_parser = subparsers.add_parser("build-record")
+    build_record_parser.add_argument("repo_root", type=Path)
+    build_record_parser.add_argument("workspace", type=Path)
+    build_record_parser.add_argument("skill_name")
+    build_record_parser.add_argument("run_id")
+    build_record_parser.add_argument("--review", type=Path)
+    build_record_parser.add_argument("--output", type=Path)
+
+    publish_reviewed_parser = subparsers.add_parser("publish-reviewed")
+    publish_reviewed_parser.add_argument("repo_root", type=Path)
+    publish_reviewed_parser.add_argument("workspace", type=Path)
+    publish_reviewed_parser.add_argument("skill_name")
+    publish_reviewed_parser.add_argument("run_id")
+    publish_reviewed_parser.add_argument("--review", type=Path)
 
     publish_record_parser = subparsers.add_parser("publish-record")
     publish_record_parser.add_argument("repo_root", type=Path)
@@ -558,6 +693,33 @@ def main(argv: list[str] | None = None) -> int:
             if args.workspace
             else repo_root / ".scratch" / "skill-evals" / f"batch-{run_id}"
         )
+        plan_path = workspace / "plan.json"
+        if plan_path.exists():
+            _write_json(
+                {
+                    "valid": False,
+                    "errors": [
+                        f"batch plan already exists: {plan_path}"
+                    ],
+                },
+                args.output,
+            )
+            return 1
+        workspace.mkdir(parents=True, exist_ok=True)
+        retained_plan = evaluation_cases.summarize_plan(plan)
+        retained_plan["run_id"] = run_id
+        retained_plan["created_at"] = datetime.now(
+            timezone.utc
+        ).isoformat()
+        plan_path.write_text(
+            json.dumps(
+                retained_plan,
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         results: list[dict[str, Any]] = []
         for item in plan:
             run_root = (
@@ -615,6 +777,40 @@ def main(argv: list[str] | None = None) -> int:
             _write_json({"valid": False, "errors": [str(error)]}, args.output)
             return 1
         _write_json(result, args.output)
+        return 0
+
+    if args.command in {"build-record", "publish-reviewed"}:
+        import reviewed_records
+
+        review_path = (
+            args.review
+            if args.review is not None
+            else args.workspace / args.skill_name / "review.json"
+        )
+        try:
+            review = (
+                reviewed_records.read_human_review(review_path)
+                if review_path.is_file()
+                else None
+            )
+            document = reviewed_records.build_reviewed_record(
+                args.repo_root,
+                args.workspace,
+                args.skill_name,
+                args.run_id,
+                human_review=review,
+            )
+            if args.command == "build-record":
+                _write_json(document, args.output)
+                return 0
+            output = evaluation_records.write_record(
+                args.repo_root,
+                document,
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            print(f"ERROR: {error}")
+            return 1
+        print(output)
         return 0
 
     if args.command == "publish-record":

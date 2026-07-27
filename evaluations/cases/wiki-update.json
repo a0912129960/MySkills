@@ -28,6 +28,7 @@
           {
             "id": "checkpoint-without-git-mutation",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "The manifest checkpoint follows successful Wiki maintenance, and no commit, push, branch, tag, issue, or remote-host mutation occurs.",
             "required": true
           }
@@ -67,6 +68,7 @@
           {
             "id": "no-host-inference",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No issue tracker is queried or inferred and no Git or external system mutation occurs.",
             "required": true
           }
@@ -104,6 +106,7 @@
           {
             "id": "project-and-git-unchanged",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "Writes are limited to Wiki pages and tracking artifacts; project files, Git state, remotes, and issue trackers are untouched.",
             "required": true
           }

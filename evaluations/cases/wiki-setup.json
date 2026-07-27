@@ -16,6 +16,7 @@
           {
             "id": "managed-setup-command",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "The MySkills-managed obsidian-wiki launcher is invoked with setup --vault and the resolved absolute fixture/new-vault path.",
             "required": true
           },
@@ -28,6 +29,7 @@
           {
             "id": "no-installer-expansion",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No Skill, CLI, QMD, hook, plugin, or third-party program installation is attempted.",
             "required": true
           }
@@ -53,6 +55,7 @@
           {
             "id": "no-unconfirmed-replacement",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "The config value is not replaced and neither vault is modified before the user decides.",
             "required": true
           }
@@ -92,6 +95,7 @@
           {
             "id": "repair-only-missing-defaults",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "Only missing safe defaults and required configuration state are created; incompatible existing values are not replaced without confirmation.",
             "required": true
           }

@@ -64,6 +64,7 @@
           {
             "id": "stops-workflow",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not issue any command after the failed obsidian help preflight",
             "required": true
           },

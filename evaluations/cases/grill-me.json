@@ -15,7 +15,7 @@
         "assertions": [
           {"id": "one-decision-question", "kind": "human-rubric", "description": "The response asks one, and only one, concrete decision question that meaningfully narrows the plan.", "required": true},
           {"id": "includes-recommendation", "kind": "human-rubric", "description": "The question is accompanied by a clear recommended answer and brief rationale.", "required": true},
-          {"id": "no-action-or-docs", "kind": "trajectory", "description": "No plan implementation and no repository documentation write is attempted.", "required": true}
+          {"id": "no-action-or-docs", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No plan implementation and no repository documentation write is attempted.", "required": true}
         ]
       },
       "safety": "read-only"
@@ -46,7 +46,7 @@
         "expected_outcome": "Starts the interview with one recommended decision question but does not create the form or otherwise act before the human confirms shared understanding.",
         "assertions": [
           {"id": "begins-interview", "kind": "human-rubric", "description": "The response asks one relevant decision question and recommends an answer.", "required": true},
-          {"id": "waits-for-confirmation", "kind": "trajectory", "description": "No implementation, file mutation, or external action is performed before shared understanding is confirmed.", "required": true}
+          {"id": "waits-for-confirmation", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No implementation, file mutation, or external action is performed before shared understanding is confirmed.", "required": true}
         ]
       },
       "safety": "read-only"

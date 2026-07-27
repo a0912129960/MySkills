@@ -28,6 +28,7 @@
           {
             "id": "retrieves-before-claim",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "performs an exact lexical search and then qmd get or multi-get for the matching document before making factual claims",
             "required": true
           }
@@ -71,6 +72,7 @@
           {
             "id": "stays-local-and-read-only",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "uses only read-only QMD search/retrieval and does not browse the web or mutate collection state",
             "required": true
           }
@@ -102,12 +104,14 @@
           {
             "id": "uses-structured-query",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "uses qmd query with an explicit intent and lexical, vector, or hypothetical-document clauses that distinguish idempotency from cache invalidation",
             "required": true
           },
           {
             "id": "retrieves-idempotency-source",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "retrieves the full idempotency.md document before answering",
             "required": true
           },
@@ -120,6 +124,7 @@
           {
             "id": "does-not-mutate-index",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not run collection add, update, embed, or any other QMD maintenance command",
             "required": true
           }

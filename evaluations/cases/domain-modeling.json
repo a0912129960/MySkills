@@ -17,7 +17,7 @@
         "expected_outcome": "Updates `CONTEXT.md` inline with tight, implementation-free definitions for `Subscriber` and `User`, preserves existing content, chooses canonical terms, and reports the resolved language without creating an ADR.",
         "assertions": [
           {"id": "correct-glossary-definitions", "kind": "human-rubric", "description": "The added definitions preserve the organization/person distinction and use one or two implementation-free sentences per term.", "required": true},
-          {"id": "updates-context-inline", "kind": "trajectory", "description": "The applicable existing `CONTEXT.md` is updated during the resolved decision; no unrelated file or ADR is created.", "required": true},
+          {"id": "updates-context-inline", "kind": "trajectory", "trajectory_observation": "external-state", "description": "The applicable existing `CONTEXT.md` is updated during the resolved decision; no unrelated file or ADR is created.", "required": true},
           {"id": "preserves-existing-term", "kind": "deterministic", "description": "The existing `Subscription` entry remains present after the update.", "required": true}
         ]
       },
@@ -36,7 +36,7 @@
         "assertions": [
           {"id": "surfaces-exact-conflict", "kind": "human-rubric", "description": "The response contrasts whole-Order Cancellation with the proposed single-Line-Item behavior and explains why one overloaded term is ambiguous.", "required": true},
           {"id": "proposes-canonical-distinction", "kind": "human-rubric", "description": "It offers a precise term distinction and asks for a decision rather than silently redefining the glossary.", "required": true},
-          {"id": "waits-before-write", "kind": "trajectory", "description": "`CONTEXT.md` remains unchanged until the human resolves the conflict.", "required": true}
+          {"id": "waits-before-write", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "`CONTEXT.md` remains unchanged until the human resolves the conflict.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -54,7 +54,7 @@
         "assertions": [
           {"id": "rejects-general-ui-term", "kind": "human-rubric", "description": "The response explains why `Continue` is general presentation wording rather than a domain concept for the glossary.", "required": true},
           {"id": "applies-all-adr-criteria", "kind": "human-rubric", "description": "It notes that the decision is reversible, unsurprising, and lacks a real trade-off.", "required": true},
-          {"id": "no-documentation-noise", "kind": "trajectory", "description": "No glossary edit, ADR, or unrelated documentation is created.", "required": true}
+          {"id": "no-documentation-noise", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No glossary edit, ADR, or unrelated documentation is created.", "required": true}
         ]
       },
       "safety": "temporary-workspace"

@@ -74,6 +74,7 @@
           {
             "id": "preserves-broken-note",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not modify notes/broken.md after detecting the ambiguity",
             "required": true
           }
@@ -116,6 +117,7 @@
           {
             "id": "limits-note-edit",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "modifies only notes/existing.md and does not rewrite unrelated content",
             "required": true
           }

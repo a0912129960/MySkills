@@ -28,6 +28,7 @@
           {
             "id": "bounded-side-effects",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No formal Wiki page is modified; the only permitted vault write is the workflow activity-log append.",
             "required": true
           }
@@ -94,6 +95,7 @@
           {
             "id": "no-formal-write",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "Formal Wiki pages remain unchanged; only the bounded activity-log append is allowed.",
             "required": true
           }

@@ -58,8 +58,17 @@ current directory digest of every Managed Skill. Raw model output stays under
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py run-batch . `
-     --execute --allow-ephemeral-auth-copy
+      --execute --allow-ephemeral-auth-copy
    ```
+
+   Before the first target call, `run-batch` writes the complete fixed
+   `plan.json` at the batch root and refuses to reuse an existing plan. If the
+   batch is interrupted, the retained plan still identifies every intended
+   call; missing or malformed results are published as `invalid` evidence
+   instead of disappearing from the record. `prepare-review` creates
+   fail-closed grading and review files for every planned run even when its raw
+   result is missing or malformed, and the offline report labels that raw state
+   rather than aborting the whole review.
 
    The runner copies only the target CLI authentication file into an OS
    temporary directory and removes that directory after each call. The
@@ -76,7 +85,11 @@ current directory digest of every Managed Skill. Raw model output stays under
    forced through the non-interactive permission gate in those cases. No user
    settings or user exec-policy rules are copied. Prompts, commands, machine
    isolation results, and model output are written under the ignored batch
-   workspace; credentials are never written there.
+   workspace; credentials are never written there. Immediately before and
+   after the target call, the evaluator snapshots the disposable execution
+   workspace without following symlinks. The retained raw result includes a
+   deterministic created/modified/deleted diff with relative paths, content
+   digests, sizes, and bounded UTF-8 text for human inspection before cleanup.
 
 3. Grade the raw results and review the offline report. Claude evidence cannot
    substitute for Codex evidence or vice versa.
@@ -111,24 +124,66 @@ current directory digest of every Managed Skill. Raw model output stays under
    failure, not a pass. The
    report places Claude and Codex runs in separate target sections. A process
    pass is not a behavior pass; the human records a specific reason for every
-   assertion in the linked `grading.json`. The v2 grading contract preserves
+   assertion in the linked `grading.json`. The v3 grading contract preserves
    each assertion's ID, kind, description, and required/optional flag. Optional
-   failures remain visible warnings; required failures block acceptance.
+   failures remain visible warnings; required failures block acceptance. It
+   also requires `observed_invocation`: `explicit`, `implicit`, `not-invoked`,
+   or `unknown`, plus a concise `invocation_evidence` explanation. Templates
+   always begin as `unknown`, including explicit runs. The reviewer classifies
+   them from the observable trace; the evaluator compares the result with the
+   predeclared expectation. Each trajectory assertion also predeclares exactly
+   one acceptable observable evidence class in the source case. The grade must
+   match that class: Tool trace, external state, or verified absence from a
+   complete trace. A positive Tool-call requirement cannot pass by claiming
+   verified absence. An external-state pass requires an actual captured
+   workspace change; reviewer prose alone is insufficient. Non-trajectory
+   assertions use final output, invocation trace, or not applicable as
+   appropriate, and no completed grade may retain a pending observation.
 
-4. After completing every grading template, audit the reviewed evidence and
-   create a sanitized `record-draft.json` that satisfies
-   `evaluations/record.schema.json`. Publish it without overwriting any earlier
-   run:
+   `prepare-review` also creates `<name>/review.json`. After checking the HTML
+   and every grading file, set its status to `pass` and record the reviewer,
+   timezone-qualified review time, reason, and any corrective action. Here
+   `pass` means review was completed; it cannot change a failed platform result
+   into a pass. Set `sanitization_confirmed` only after inspecting the retained
+   evidence for credentials, personal data, private paths, and other secrets.
+   The builder also scans the entire prospective record—including prompts,
+   expected outcomes, observations, and review text—and fails closed on
+   residual sensitive values.
+
+4. Build a sanitized preview directly from the raw results, grading files, and
+   review decision:
 
    ```powershell
-   python tools/skill-evaluator/skill_evaluator.py publish-record . `
-     .scratch/skill-evals/batch-<run-id>/<name>/record-draft.json
+   python tools/skill-evaluator/skill_evaluator.py build-record . `
+     .scratch/skill-evals/batch-<run-id> <name> <run-id> `
+     --output .scratch/skill-evals/batch-<run-id>/<name>/record-draft.json
+   ```
+
+   Then publish from the same fixed plan without hand-copying evidence:
+
+   ```powershell
+   python tools/skill-evaluator/skill_evaluator.py publish-reviewed . `
+     .scratch/skill-evals/batch-<run-id> <name> <run-id>
    ```
 
    The command writes
    `evaluations/records/<name>/<run-id>/record.json` and `summary.md`. Every
-   pass, failure, and invalid run is retained. Do not mark unavailable, failed,
-   unreviewed, stale, or partially run evidence as passing.
+   completed pass, failure, and invalid run is retained. Missing or malformed
+   measurement evidence is `invalid`, not a Skill failure. If exactly one
+   platform passes, the preview is `human-review-required`; after review it
+   remains `fail` or `invalid`, never `pass`. Private paths and credential-like
+   values are redacted; raw streams remain ignored. Publishing is append-only.
+   A residual sensitive-data scan fails closed even after human confirmation.
+   Observable isolation or authorization violations are Skill failures, while
+   missing or contradictory audit evidence is invalid measurement.
+
+   The builder reads the fixed plans stored in each raw result. If the Skill or
+   case manifest has changed, the invalid record retains the digest, prompt, and
+   case manifest that were actually tested; it does not relabel old evidence as
+   a test of current content.
+
+   `publish-record` remains available for a separately constructed compatible
+   record; the normal workflow is `publish-reviewed`.
 
 5. If and only if the published record passes for both platforms and the exact
    current Skill digest, select it as the current release record and verify the

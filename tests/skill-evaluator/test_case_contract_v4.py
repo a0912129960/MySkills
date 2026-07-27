@@ -100,6 +100,21 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
                     ),
                     f"{name}/{case['id']}",
                 )
+                for assertion in case["oracle"]["assertions"]:
+                    if assertion["kind"] == "trajectory":
+                        self.assertIn(
+                            assertion["trajectory_observation"],
+                            {
+                                "tool-trace",
+                                "external-state",
+                                "verified-absence",
+                            },
+                        )
+                    else:
+                        self.assertNotIn(
+                            "trajectory_observation",
+                            assertion,
+                        )
 
             if entry["invocation"] == "explicit":
                 self.assertEqual(
@@ -200,6 +215,24 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
         invalid_version["skills"][0]["core_cases"][0]["version"] = 0
         errors = self.cases.validate_cases(ROOT, invalid_version)
         self.assertTrue(any("version" in error for error in errors), errors)
+
+        missing_trajectory_observation = copy.deepcopy(document)
+        trajectory = next(
+            assertion
+            for entry in missing_trajectory_observation["skills"]
+            for case in entry["core_cases"]
+            for assertion in case["oracle"]["assertions"]
+            if assertion["kind"] == "trajectory"
+        )
+        trajectory.pop("trajectory_observation")
+        errors = self.cases.validate_cases(
+            ROOT,
+            missing_trajectory_observation,
+        )
+        self.assertTrue(
+            any("assertion fields are invalid" in error for error in errors),
+            errors,
+        )
 
     def test_golden_cases_require_versioned_human_approval(self) -> None:
         document = self.cases.load_cases(ROOT)

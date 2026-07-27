@@ -17,9 +17,9 @@
       "oracle": {
         "expected_outcome": "Runs a fast deterministic red-capable command that asserts the exact stale-value symptom, minimizes while preserving it, ranks multiple falsifiable hypotheses before probing, and concludes from evidence that `expire_for_test` moves expiry into the future instead of expiring the entry; leaves source unchanged.",
         "assertions": [
-          {"id": "tight-red-loop-first", "kind": "trajectory", "description": "A command exercising the supplied repro is run and observed red before source inspection is used to settle a hypothesis.", "required": true},
+          {"id": "tight-red-loop-first", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "A command exercising the supplied repro is run and observed red before source inspection is used to settle a hypothesis.", "required": true},
           {"id": "evidence-backed-cause", "kind": "human-rubric", "description": "The diagnosis connects the observed failure to `expire_for_test(now)` assigning `now + 10`, with a falsifiable prediction and minimized evidence.", "required": true},
-          {"id": "diagnosis-only", "kind": "trajectory", "description": "`cache.py` and other production files are not repaired because implementation was not authorized.", "required": true}
+          {"id": "diagnosis-only", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "`cache.py` and other production files are not repaired because implementation was not authorized.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -33,7 +33,7 @@
         "expected_outcome": "Explains that no red-capable feedback loop can be built from the supplied evidence, lists bounded attempts or unavailable paths, and asks for environment access, a captured artifact, or authorization for temporary instrumentation without advancing to hypotheses.",
         "assertions": [
           {"id": "stops-without-loop", "kind": "human-rubric", "description": "The response explicitly says a usable feedback loop could not be constructed and requests one of the concrete evidence sources allowed by the workflow.", "required": true},
-          {"id": "no-unsupported-hypothesis", "kind": "trajectory", "description": "No cause is asserted and no production instrumentation or state change is attempted without permission.", "required": true}
+          {"id": "no-unsupported-hypothesis", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No cause is asserted and no production instrumentation or state change is attempted without permission.", "required": true}
         ]
       },
       "safety": "read-only"
@@ -50,9 +50,9 @@
       "oracle": {
         "expected_outcome": "Runs the exact repro, reports that the predicate checks oddness (`n % 2 == 1`) as the evidenced cause, and does not apply the obvious repair.",
         "assertions": [
-          {"id": "reproduces-exact-symptom", "kind": "trajectory", "description": "The supplied command is run and its `is_even(4)` assertion failure is observed.", "required": true},
+          {"id": "reproduces-exact-symptom", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "The supplied command is run and its `is_even(4)` assertion failure is observed.", "required": true},
           {"id": "correct-diagnosis", "kind": "human-rubric", "description": "The response identifies the inverted parity comparison with direct source and runtime evidence.", "required": true},
-          {"id": "no-fix", "kind": "trajectory", "description": "The implementation and fixtures remain unchanged after diagnosis.", "required": true}
+          {"id": "no-fix", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "The implementation and fixtures remain unchanged after diagnosis.", "required": true}
         ]
       },
       "safety": "temporary-workspace"

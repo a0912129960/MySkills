@@ -22,6 +22,7 @@
           {
             "id": "new-dashboard-transaction",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "Only dashboard-related and required maintenance files inside the fixture vault are changed, followed by structural verification.",
             "required": true
           }
@@ -49,6 +50,7 @@
           {
             "id": "no-plugin-or-dashboard-write",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No plugin installation, .base file, Dataview note, or unrelated vault change occurs.",
             "required": true
           }
@@ -76,6 +78,7 @@
           {
             "id": "waits-for-confirmation",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No existing dashboard or note is modified before explicit confirmation.",
             "required": true
           }

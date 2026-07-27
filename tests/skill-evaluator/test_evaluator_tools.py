@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -837,6 +838,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             grading_path = run / "grading.json"
             grading = json.loads(grading_path.read_text(encoding="utf-8"))
             self.assertEqual(first["created_grading_count"], 1)
+            self.assertEqual(first["created_review_count"], 1)
+            self.assertEqual(grading["schema_version"], 3)
+            self.assertEqual(grading["observed_invocation"], "unknown")
+            self.assertEqual(
+                grading["invocation_evidence"],
+                "PENDING HUMAN REVIEW",
+            )
+            review = json.loads(
+                (workspace / "qmd" / "review.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIs(review["sanitization_confirmed"], False)
             self.assertTrue(
                 all(
                     item["status"] == "pending"
@@ -846,15 +860,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         "kind",
                         "description",
                         "required",
+                        "trajectory_observation",
                         "status",
                         "evidence",
+                        "observation",
                     }
+                    and item["observation"] == "pending"
                     for item in grading["expectations"]
                 )
             )
 
             grading["expectations"][0]["status"] = "pass"
             grading["expectations"][0]["evidence"] = "Reviewed evidence."
+            grading["expectations"][0]["observation"] = "final-output"
             grading_path.write_text(
                 json.dumps(grading),
                 encoding="utf-8",
@@ -863,6 +881,148 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             preserved = json.loads(grading_path.read_text(encoding="utf-8"))
             self.assertEqual(second["preserved_grading_count"], 1)
             self.assertEqual(preserved["expectations"][0]["status"], "pass")
+
+    def test_interrupted_batch_prepares_every_planned_review(self) -> None:
+        cases = load_module(
+            "skill_evaluator_interrupted_review_templates",
+            "evaluation_cases.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            runs = []
+            for skill_name in ("first-skill", "second-skill"):
+                runs.append(
+                    {
+                        "skill_name": skill_name,
+                        "case_id": "normal-use",
+                        "target": "codex",
+                        "mode": "core",
+                        "assertions": [
+                            {
+                                "id": "correct-result",
+                                "kind": "deterministic",
+                                "description": "Returns the correct result.",
+                                "required": True,
+                            }
+                        ],
+                    }
+                )
+            (workspace / "plan.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 4,
+                        "skill_count": 2,
+                        "model_run_count": 2,
+                        "targets": ["claude", "codex"],
+                        "skills": ["first-skill", "second-skill"],
+                        "runs": runs,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            malformed = (
+                workspace
+                / "first-skill"
+                / "normal-use"
+                / "codex"
+                / "result.json"
+            )
+            malformed.parent.mkdir(parents=True)
+            malformed.write_text("{not-json", encoding="utf-8")
+
+            result = cases.prepare_review_templates(workspace)
+
+            self.assertEqual(result["created_grading_count"], 2)
+            self.assertEqual(result["created_review_count"], 2)
+            for skill_name in ("first-skill", "second-skill"):
+                self.assertTrue(
+                    (
+                        workspace
+                        / skill_name
+                        / "normal-use"
+                        / "codex"
+                        / "grading.json"
+                    ).is_file()
+                )
+                self.assertTrue(
+                    (workspace / skill_name / "review.json").is_file()
+                )
+            aggregate = load_module(
+                "skill_evaluator_interrupted_aggregate",
+                "aggregate_benchmark.py",
+            )
+            first = aggregate.aggregate_workspace(
+                workspace,
+                "first-skill",
+            )
+            second = aggregate.aggregate_workspace(
+                workspace,
+                "second-skill",
+            )
+            self.assertEqual(
+                first["cases"][0]["raw_result_state"],
+                "malformed",
+            )
+            self.assertEqual(
+                second["cases"][0]["raw_result_state"],
+                "missing",
+            )
+
+    def test_workspace_changes_capture_content_before_cleanup(self) -> None:
+        entry = load_module(
+            "skill_evaluator_workspace_changes",
+            "skill_evaluator.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            deleted = root / "deleted.txt"
+            modified = root / "modified.txt"
+            deleted.write_text("before delete", encoding="utf-8")
+            modified.write_text("before change", encoding="utf-8")
+            before = entry._workspace_snapshot(root)
+            deleted.unlink()
+            modified.write_text("after change", encoding="utf-8")
+            (root / "created.txt").write_text("new state", encoding="utf-8")
+            after = entry._workspace_snapshot(root)
+
+            changes = entry._workspace_changes(before, after)
+
+            self.assertEqual(
+                [item["path"] for item in changes],
+                ["created.txt", "deleted.txt", "modified.txt"],
+            )
+            self.assertEqual(
+                [item["change"] for item in changes],
+                ["created", "deleted", "modified"],
+            )
+            self.assertEqual(changes[0]["after"]["text"], "new state")
+            self.assertEqual(changes[1]["before"]["text"], "before delete")
+            self.assertEqual(changes[2]["after"]["text"], "after change")
+
+    def test_workspace_snapshot_streams_large_files_without_text(self) -> None:
+        entry = load_module(
+            "skill_evaluator_large_workspace_snapshot",
+            "skill_evaluator.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            large = root / "large.bin"
+            payload = b"x" * (entry._WORKSPACE_TEXT_LIMIT + 1)
+            large.write_bytes(payload)
+
+            with patch.object(
+                Path,
+                "read_bytes",
+                side_effect=AssertionError("snapshot must stream files"),
+            ):
+                snapshot = entry._workspace_snapshot(root)
+
+            self.assertEqual(snapshot["large.bin"]["size"], len(payload))
+            self.assertEqual(
+                snapshot["large.bin"]["sha256"],
+                "sha256:" + hashlib.sha256(payload).hexdigest(),
+            )
+            self.assertIsNone(snapshot["large.bin"]["text"])
 
     def test_complete_reviewed_batch_passes_fail_closed_audit(self) -> None:
         cases = load_module(
@@ -881,6 +1041,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "kind": "trajectory",
                 "description": "uses the shortest available safe query",
                 "required": False,
+                "trajectory_observation": "tool-trace",
             }
         )
         plan = cases.build_plan(ROOT, document, ["qmd"])
@@ -933,6 +1094,90 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     }
                 }
 
+            def fixture_stdout(item):
+                needs_tool = any(
+                    assertion.get("trajectory_observation")
+                    == "tool-trace"
+                    for assertion in item["assertions"]
+                )
+                if item["target"] == "claude":
+                    events = []
+                    if needs_tool:
+                        events.extend(
+                            [
+                                {
+                                    "type": "assistant",
+                                    "message": {
+                                        "content": [
+                                            {
+                                                "type": "tool_use",
+                                                "id": "tool-1",
+                                                "name": "Bash",
+                                                "input": {
+                                                    "command": (
+                                                        "qmd query fixture"
+                                                    )
+                                                },
+                                            }
+                                        ]
+                                    },
+                                },
+                                {
+                                    "type": "user",
+                                    "message": {
+                                        "content": [
+                                            {
+                                                "type": "tool_result",
+                                                "tool_use_id": "tool-1",
+                                                "content": "fixture evidence",
+                                                "is_error": False,
+                                            }
+                                        ]
+                                    },
+                                },
+                            ]
+                        )
+                    events.append(
+                        {
+                            "type": "result",
+                            "result": "fixture evidence",
+                        }
+                    )
+                    return "\n".join(json.dumps(event) for event in events)
+                events = []
+                if needs_tool:
+                    events.append(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "qmd query fixture",
+                                "aggregated_output": "fixture evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    )
+                events.extend(
+                    [
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "agent_message",
+                                "text": "fixture evidence",
+                            },
+                        },
+                        {
+                            "type": "turn.completed",
+                            "usage": {
+                                "input_tokens": 10,
+                                "output_tokens": 5,
+                            },
+                        },
+                    ]
+                )
+                return "\n".join(json.dumps(event) for event in events)
+
             for item in plan:
                 run = (
                     workspace
@@ -962,17 +1207,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 "timed_out": False,
                                 "duration_ms": 10,
                                 "total_tokens": 20,
-                                "stdout": (
-                                    json.dumps(
-                                        {
-                                            "type": "result",
-                                            "result": "fixture evidence",
-                                        }
-                                    )
-                                    + "\n"
-                                    if item["target"] == "claude"
-                                    else "fixture evidence"
-                                ),
+                                "stdout": fixture_stdout(item),
                                 "stderr": "",
                             },
                         }
@@ -982,11 +1217,35 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             cases.prepare_review_templates(workspace)
             for grading_path in workspace.rglob("grading.json"):
                 grading = json.loads(grading_path.read_text(encoding="utf-8"))
+                result = json.loads(
+                    grading_path.with_name("result.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                item = result["plan"]
+                grading["observed_invocation"] = (
+                    "explicit"
+                    if item["explicit"]
+                    else item["expected_invocation"]
+                )
+                grading["invocation_evidence"] = (
+                    "Human checked the observable target trace."
+                )
                 for expectation in grading["expectations"]:
                     expectation["status"] = (
                         "pass" if expectation["required"] else "fail"
                     )
                     expectation["evidence"] = "Human checked the raw result."
+                    expectation["observation"] = (
+                        expectation["trajectory_observation"]
+                        if expectation["kind"] == "trajectory"
+                        else (
+                            "invocation-trace"
+                            if expectation["assertion_id"]
+                            == "invocation-classification"
+                            else "final-output"
+                        )
+                    )
                 grading_path.write_text(
                     json.dumps(grading, indent=2) + "\n",
                     encoding="utf-8",
@@ -3055,18 +3314,26 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 (run_dir / "grading.json").write_text(
                     json.dumps(
                         {
+                            "schema_version": 3,
+                            "observed_invocation": "explicit",
+                            "invocation_evidence": (
+                                "Fixture explicitly invokes the Skill."
+                            ),
+                            "observed_external_state": None,
                             "expectations": [
                                 {
                                     "assertion_id": "produces-required-file",
                                     "kind": "deterministic",
                                     "description": "Produces the required file",
                                     "required": True,
+                                    "trajectory_observation": "not-applicable",
                                     "status": "pass",
                                     "evidence": (
                                         "PENDING HUMAN REVIEW"
                                         if target == "claude"
                                         else "fixture"
                                     ),
+                                    "observation": "final-output",
                                 }
                             ]
                         }

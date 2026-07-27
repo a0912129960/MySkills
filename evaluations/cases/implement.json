@@ -20,8 +20,8 @@
         "expected_outcome": "Adds a failing public-seam regression test first, makes the smallest implementation change, runs the declared full validation successfully, reviews the actual change set, and reports changed paths and red/green evidence.",
         "assertions": [
           {"id": "required-behavior", "kind": "deterministic", "description": "Both empty and whitespace-only input raise exactly `ValueError('slug must not be empty')`, while `Hello World` still returns `hello-world`.", "required": true},
-          {"id": "red-green-order", "kind": "trajectory", "description": "A relevant regression test is observed failing before the implementation change and passing afterward.", "required": true},
-          {"id": "required-validation-and-review", "kind": "trajectory", "description": "The declared unittest command succeeds after the change and the actual change set receives the required final code review.", "required": true}
+          {"id": "red-green-order", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "A relevant regression test is observed failing before the implementation change and passing afterward.", "required": true},
+          {"id": "required-validation-and-review", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "The declared unittest command succeeds after the change and the actual change set receives the required final code review.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -39,7 +39,7 @@
         "expected_outcome": "Explains that the lightweight implementation workflow must not execute or wrap a formal spec package and that its approval gate is unmet; leaves the workspace unchanged.",
         "assertions": [
           {"id": "recognizes-scope-exclusion", "kind": "human-rubric", "description": "The response identifies both the formal-package exclusion and the pending Gate 2 authorization.", "required": true},
-          {"id": "no-implementation", "kind": "trajectory", "description": "No source, test, spec, Git, or external state is modified.", "required": true}
+          {"id": "no-implementation", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No source, test, spec, Git, or external state is modified.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -58,7 +58,7 @@
         "expected_outcome": "Implements and tests `double(n)` in the temporary workspace and reports validation, while performing none of the prohibited Git or tracker actions.",
         "assertions": [
           {"id": "double-works", "kind": "deterministic", "description": "`double(4)` returns `8` and the added automated test passes.", "required": true},
-          {"id": "no-git-or-tracker-mutation", "kind": "trajectory", "description": "No branch, staging, commit, push, or issue-tracker mutation is attempted.", "required": true},
+          {"id": "no-git-or-tracker-mutation", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No branch, staging, commit, push, or issue-tracker mutation is attempted.", "required": true},
           {"id": "reports-evidence", "kind": "human-rubric", "description": "The final response identifies changed paths and the validation result without claiming prohibited actions.", "required": true}
         ]
       },

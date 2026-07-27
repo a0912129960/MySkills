@@ -50,10 +50,20 @@ before constructing cases or recording results.
 Default evaluation is report-only. List failures, unavailable capabilities, and
 recommendations without modifying the Skill.
 
-After completing grading, create a record draft that satisfies
-`evaluations/record.schema.json`, then use `publish-record` to write its
-append-only `record.json` and `summary.md`. Do not commit credentials, personal
-data, private machine paths, or unsanitized raw output.
+After completing every v3 grading file and the batch `review.json`, use
+`build-record` to preview the sanitized record, then `publish-reviewed` to write
+its append-only `record.json` and `summary.md` directly from the fixed raw
+workspace. Do not infer hidden reasoning or copy raw streams into the record.
+Do not commit credentials, personal data, private machine paths, or unsanitized
+raw output.
+
+Do not pre-answer invocation classification, even for an explicit run. Record
+the reviewed trace evidence. Each trajectory assertion predeclares one
+acceptable observation; the grade must match it and the actual Tool trace,
+captured before/after workspace change, or complete-trace verified absence.
+Reviewer prose alone cannot satisfy external-state evidence. Confirm
+sanitization separately in `review.json`; the builder scans the entire
+prospective record for residual sensitive data and fails closed.
 
 Use `select-record` only when the published record passes for the exact current
 Skill digest and both primary platforms. This writes the current release pointer

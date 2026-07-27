@@ -28,6 +28,7 @@
           {
             "id": "backs-up-before-write",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "creates and verifies a backup of the original graph.json before replacing colorGroups",
             "required": true
           },
@@ -83,6 +84,7 @@
           {
             "id": "does-not-initialize-vault",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create .obsidian, graph.json, a backup, or a log entry",
             "required": true
           }
@@ -126,6 +128,7 @@
           {
             "id": "does-not-restore",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not invoke restore or modify graph.json before the user selects a backup",
             "required": true
           }

@@ -16,6 +16,7 @@
           {
             "id": "records-genuine-red",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "adds and runs the public behavior test before production code and records failure because lookup(\"alpha\") returns None rather than 1",
             "required": true
           },
@@ -28,12 +29,14 @@
           {
             "id": "records-green-checks",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "runs the new narrow test and then the applicable full unittest suite after implementation and records both passing",
             "required": true
           },
           {
             "id": "avoids-git-mutation",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not stage or commit any change",
             "required": true
           }
@@ -87,6 +90,7 @@
           {
             "id": "adds-no-test",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create or edit test files for a non-behavioral documentation change",
             "required": true
           }
@@ -114,6 +118,7 @@
           {
             "id": "records-timeout-red",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "runs a public current_temperature timeout test before production changes and records the expected unhandled TimeoutError failure",
             "required": true
           },
@@ -126,12 +131,14 @@
           {
             "id": "records-timeout-green",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "makes the smallest handler change and records both narrow and full unittest suites passing",
             "required": true
           },
           {
             "id": "preserves-user-change",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "leaves the pre-existing README.md working-tree content unchanged and performs no staging or commit",
             "required": true
           }

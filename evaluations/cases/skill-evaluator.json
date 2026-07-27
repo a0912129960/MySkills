@@ -16,6 +16,7 @@
           {
             "id": "uses-managed-evaluator",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "uses only the MySkills-managed skill-evaluator runtime and stages raw output under the disposable evaluation workspace",
             "required": true
           },
@@ -77,12 +78,14 @@
           {
             "id": "stops-before-model-runs",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not launch Claude or Codex discovery, core, or invocation cases after the precondition failure",
             "required": true
           },
           {
             "id": "does-not-edit-skill",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "reports the recommendation without modifying fixture/skill",
             "required": true
           }
@@ -120,18 +123,21 @@
           {
             "id": "does-not-retry",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not automatically rerun a completed Claude suite to seek a different score",
             "required": true
           },
           {
             "id": "does-not-author-skill",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not modify fixture/skill in response to evaluation findings",
             "required": true
           },
           {
             "id": "does-not-select-record",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not publish a passing record or write a release pointer without both target passes",
             "required": true
           }

@@ -28,6 +28,7 @@
           {
             "id": "audit-read-only",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "The focused audit does not write, redirect, or rewrite links.",
             "required": true
           }
@@ -65,6 +66,7 @@
           {
             "id": "no-false-merge",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No canonical page, redirect, content merge, or link rewrite is performed.",
             "required": true
           }
@@ -98,6 +100,7 @@
           {
             "id": "confirmation-gate",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No page merge, redirect creation, inbound-link rewrite, or maintenance write occurs before confirmation.",
             "required": true
           }

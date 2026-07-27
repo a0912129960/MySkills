@@ -22,7 +22,7 @@
         "assertions": [
           {"id": "offline-html-created", "kind": "deterministic", "description": "A `.html` report exists under the operating-system temporary directory and contains no remote script, stylesheet, font, or image dependency.", "required": true},
           {"id": "candidate-is-evidence-backed", "kind": "human-rubric", "description": "The report ties a deepening direction to the repeated payment validation, names involved files, test-seam impact, leverage/locality gains, ADR compatibility, and recommendation strength.", "required": true},
-          {"id": "report-before-discussion", "kind": "trajectory", "description": "The report is produced and the human is asked to select one candidate before any interface design or production refactor occurs.", "required": true}
+          {"id": "report-before-discussion", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "The report is produced and the human is asked to select one candidate before any interface design or production refactor occurs.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -40,7 +40,7 @@
         "expected_outcome": "Asks the human for a survey scope and does not fabricate Git history, architecture candidates, or a report.",
         "assertions": [
           {"id": "asks-for-scope", "kind": "human-rubric", "description": "The response explains why scope cannot be inferred and asks one focused scope question.", "required": true},
-          {"id": "no-invented-survey", "kind": "trajectory", "description": "No HTML report is written and no unsupported candidates or Git evidence are claimed.", "required": true}
+          {"id": "no-invented-survey", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No HTML report is written and no unsupported candidates or Git evidence are claimed.", "required": true}
         ]
       },
       "safety": "read-only"
@@ -59,7 +59,7 @@
         "expected_outcome": "Produces the requested offline survey report and asks the human to select a candidate, but does not edit production code or design the selected interface.",
         "assertions": [
           {"id": "produces-report", "kind": "deterministic", "description": "A self-contained HTML report is created and its absolute path is reported.", "required": true},
-          {"id": "no-unselected-refactor", "kind": "trajectory", "description": "Files under `src/` remain unchanged and no production refactor is initiated before candidate selection.", "required": true}
+          {"id": "no-unselected-refactor", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "Files under `src/` remain unchanged and no production refactor is initiated before candidate selection.", "required": true}
         ]
       },
       "safety": "temporary-workspace"

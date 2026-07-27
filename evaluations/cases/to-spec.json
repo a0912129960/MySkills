@@ -34,6 +34,7 @@
           {
             "id": "does-not-implement",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not edit src/users.py, tests, Git state, or any external tracker",
             "required": true
           }
@@ -88,6 +89,7 @@
           {
             "id": "does-not-interview-or-implement",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not pause to ask the user questions and does not edit production or test files",
             "required": true
           }
@@ -124,6 +126,7 @@
           {
             "id": "prevents-expansive-side-effects",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not edit src/export.py, create test code, mutate Git state, or publish an external issue",
             "required": true
           }

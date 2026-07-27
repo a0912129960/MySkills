@@ -53,7 +53,8 @@ def _render_expectations(case: dict[str, Any]) -> str:
             f"<strong>{_escape(expectation.get('assertion_id'))}</strong>: "
             f"{_escape(expectation.get('description'))} "
             f"({_escape(expectation.get('kind'))}, "
-            f"{'required' if required else 'optional'})"
+            f"{'required' if required else 'optional'}, "
+            f"observation: {_escape(expectation.get('observation'))})"
             f"<div class=\"evidence\">{_escape(evidence)}</div>"
             "</li>"
         )
@@ -230,6 +231,8 @@ def _render_run(case: dict[str, Any]) -> str:
     result_path = _relative_href(case.get("result_path"))
     grading_path = _relative_href(case.get("grading_path"))
     external_tool_evidence = case.get("external_tool_evidence") or {}
+    workspace_changes = case.get("workspace_changes") or []
+    raw_result_state = case.get("raw_result_state", "present")
     return f"""
 <article class="run-card">
   <h4>{title}</h4>
@@ -247,8 +250,15 @@ def _render_run(case: dict[str, Any]) -> str:
     <dt>Timed out</dt><dd>{_escape(timed_out)}</dd>
     <dt>Duration</dt><dd>{_escape(process.get('duration_ms'))} ms</dd>
     <dt>Total tokens</dt><dd>{_escape(process.get('total_tokens'))}</dd>
+    <dt>Raw result state</dt><dd>{_escape(raw_result_state)}</dd>
     <dt>Safety</dt><dd>{_escape(case.get('safety'))}</dd>
     <dt>Explicit Skill invocation</dt><dd>{_escape(case.get('explicit'))}</dd>
+    <dt>Expected invocation</dt>
+    <dd>{_escape(case.get('expected_invocation') or 'explicit')}</dd>
+    <dt>Observed invocation</dt>
+    <dd>{_escape(case.get('observed_invocation'))}</dd>
+    <dt>Invocation evidence</dt>
+    <dd>{_escape(case.get('invocation_evidence'))}</dd>
     <dt>Execution workspace</dt>
     <dd>{_escape(case.get('execution_workspace'))}</dd>
   </dl>
@@ -270,6 +280,10 @@ def _render_run(case: dict[str, Any]) -> str:
   <details>
     <summary>External runtime identity and setup</summary>
     <pre>{_json_text(external_tool_evidence)}</pre>
+  </details>
+  <details open>
+    <summary>Captured workspace changes</summary>
+    <pre>{_json_text(workspace_changes)}</pre>
   </details>
   <details>
     <summary>Structured model/tool trace</summary>

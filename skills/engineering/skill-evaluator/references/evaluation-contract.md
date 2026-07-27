@@ -42,6 +42,7 @@ Use one ignored directory per case and target:
 
 ```text
 .scratch/skill-evals/batch-<run-id>/
+  plan.json
   <skill>/
     <case>/
       <target>/
@@ -50,14 +51,28 @@ Use one ignored directory per case and target:
         grading.json
     benchmark.json
     review.html
+    review.json
     record-draft.json
 ```
 
-`grading.json` schema v2 expectations preserve `assertion_id`, `kind`,
+`grading.json` schema v3 expectations preserve `assertion_id`, `kind`,
 `description`, and `required` from the plan, plus the reviewer-controlled
 `status` and `evidence`. Status is `pending`, `pass`, `fail`, or `invalid`.
 Every assertion must be reviewed. A non-passing required assertion blocks the
-case; a non-passing optional assertion is retained as a warning.
+case; a non-passing optional assertion is retained as a warning. The grading
+also records observable invocation as `explicit`, `implicit`, `not-invoked`,
+or `unknown`, together with the trace evidence for that classification;
+templates always start at `unknown`. `unknown` cannot pass final audit. Each
+trajectory assertion predeclares exactly one acceptable observation in the
+source case: Tool trace, external state, or verified absence. Its grade must
+match that declaration and the observable evidence. A positive Tool-call
+requirement cannot pass through verified absence. Non-trajectory grades use
+final output, invocation trace, or not applicable as appropriate.
+
+`review.json` records the batch reviewer, timezone-qualified review time,
+reason, and optional corrective action. Its `pass` status means review was
+completed, not that a failed target is accepted. It separately requires human
+confirmation that the retained record is sanitized.
 Each `result.json` records `duration_ms` and records `total_tokens` as `null`
 when the runner does not expose it.
 
@@ -83,6 +98,20 @@ companion and runtime digest. Review audit rebuilds the plan, reparses raw Tool
 traces, recomputes isolation results, and rejects missing, stale, changed, or
 non-empty violation evidence.
 
+`run-batch` writes the complete fixed `plan.json` before its first target call
+and refuses to reuse an existing plan. An interrupted batch therefore retains
+the full intended call set; missing or malformed results become `invalid`
+records instead of being omitted. `prepare-review` scaffolds every planned run,
+and aggregation labels missing or malformed raw evidence instead of aborting
+the review.
+
+Immediately before and after each target call, the runner snapshots the
+disposable execution workspace without following symlinks. `result.json`
+retains the deterministic relative-path diff, file kinds, sizes, digests, and
+bounded UTF-8 text before the workspace is removed. A reviewer may describe
+what the diff means, but an `external-state` pass is valid only when captured
+state changes exist; reviewer prose cannot manufacture the evidence.
+
 ## Source-controlled evaluation records
 
 After grading, publish every evaluation run at:
@@ -97,6 +126,22 @@ evaluations/records/<skill>/<run-id>/
 `evaluations/record.schema.json`. `summary.md` is deterministic, concise, and
 states what was tested, platform results, expected and actual outcomes,
 observable failure location, reason, and corrective action.
+
+Use `build-record` to preview and `publish-reviewed` to construct this record
+from the fixed current plan, raw target traces, v3 grades, and batch review.
+The builder compares invocation classifications, reparses Tool trajectories,
+recomputes isolation evidence, verifies declared external tools, localizes
+failures, and redacts machine paths plus credential-like values. It does not
+infer hidden reasoning. A missing or malformed measurement is `invalid`; a
+required behavioral mismatch or observable isolation violation is `fail`.
+Residual private paths, common personal identifiers, private keys, and token
+formats fail closed instead of being marked sanitized. This scan covers the
+entire prospective record, including prompts, expected outcomes, observations,
+and review text. The record's
+`sanitization.human_confirmed` field preserves the review confirmation. The
+saved raw plan is the historical identity: a mismatch against the current plan
+is invalid, while the record keeps the digest and inputs that were actually
+tested.
 
 Use `null` plus `unavailable_reason` when a required platform value is not
 exposed. Never infer a pass from unavailable evidence. Source-controlled

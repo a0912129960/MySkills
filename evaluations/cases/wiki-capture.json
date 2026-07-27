@@ -22,6 +22,7 @@
           {
             "id": "formal-write-transaction",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "The formal page write is followed by applicable index, hot, log, and health maintenance inside the configured fixture vault only.",
             "required": true
           }
@@ -55,6 +56,7 @@
           {
             "id": "no-formal-promotion",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "The run does not create or modify a formal knowledge page, index entry, or source-ingested checkpoint.",
             "required": true
           }
@@ -88,6 +90,7 @@
           {
             "id": "no-fallback-write",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No alternate vault is selected and no page, log, manifest, or configuration file is written.",
             "required": true
           }

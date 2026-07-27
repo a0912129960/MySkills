@@ -28,6 +28,7 @@
           {
             "id": "query-write-boundary",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No formal page or derived readout is created; only the bounded query-log append is permitted.",
             "required": true
           }
@@ -61,6 +62,7 @@
           {
             "id": "no-derived-page",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No formal Wiki page or readout file is created to fill the missing knowledge.",
             "required": true
           }
@@ -94,6 +96,7 @@
           {
             "id": "formal-pages-unchanged",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "The query does not rewrite either conflicting page or create a synthesis page.",
             "required": true
           }

@@ -70,6 +70,7 @@
           {
             "id": "does-not-overwrite-invalid-file",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not modify boards/broken.canvas after validation fails",
             "required": true
           }
@@ -112,6 +113,7 @@
           {
             "id": "limits-edit-scope",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "changes only boards/existing.canvas and preserves all unrelated existing canvas content",
             "required": true
           }

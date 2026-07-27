@@ -51,8 +51,21 @@
           "enum": ["deterministic", "human-rubric", "trajectory"]
         },
         "description": {"type": "string", "minLength": 3},
-        "required": {"type": "boolean"}
-      }
+        "required": {"type": "boolean"},
+        "trajectory_observation": {
+          "enum": ["tool-trace", "external-state", "verified-absence"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"kind": {"const": "trajectory"}},
+            "required": ["kind"]
+          },
+          "then": {"required": ["trajectory_observation"]},
+          "else": {"not": {"required": ["trajectory_observation"]}}
+        }
+      ]
     },
     "oracle": {
       "type": "object",

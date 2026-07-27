@@ -28,6 +28,7 @@
           {
             "id": "research-write-transaction",
             "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
             "description": "Wiki pages are written only with retrieved source provenance and are followed by applicable index, log, QMD, and health maintenance.",
             "required": true
           }
@@ -55,6 +56,7 @@
           {
             "id": "no-offline-fabrication",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No research page, fabricated citation, invented access date, or maintenance write is produced.",
             "required": true
           }
@@ -82,6 +84,7 @@
           {
             "id": "no-wiki-side-effects",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "No Wiki page, index, hot, log, manifest, or QMD state is changed.",
             "required": true
           }

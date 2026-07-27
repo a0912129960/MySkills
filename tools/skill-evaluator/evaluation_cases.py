@@ -426,25 +426,86 @@ def prepare_review_templates(
     results = sorted(root.rglob("result.json"))
     created: list[str] = []
     preserved: list[str] = []
-    for result_path in results:
-        record = json.loads(result_path.read_text(encoding="utf-8"))
-        plan = record.get("plan")
-        if not isinstance(plan, dict):
-            raise ValueError(f"{result_path}: missing batch plan")
-        grading_path = result_path.with_name("grading.json")
+    skill_roots: set[Path] = set()
+    planned_runs: list[tuple[Path, dict[str, Any]]] = []
+    plan_path = root / "plan.json"
+    if plan_path.is_file():
+        document = json.loads(
+            plan_path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+        runs = document.get("runs") if isinstance(document, dict) else None
+        if (
+            not isinstance(document, dict)
+            or document.get("schema_version") != 4
+            or not isinstance(runs, list)
+            or not all(isinstance(item, dict) for item in runs)
+        ):
+            raise ValueError(f"{plan_path}: retained batch plan is invalid")
+        for item in runs:
+            skill_name = item.get("skill_name")
+            case_id = item.get("case_id")
+            target = item.get("target")
+            if (
+                not isinstance(skill_name, str)
+                or not skill_name
+                or not isinstance(case_id, str)
+                or not case_id
+                or target not in TARGETS
+            ):
+                raise ValueError(
+                    f"{plan_path}: retained run identity is invalid"
+                )
+            run_root = root / skill_name / case_id / target
+            planned_runs.append((run_root, item))
+    else:
+        for result_path in results:
+            record = json.loads(
+                result_path.read_text(encoding="utf-8"),
+                object_pairs_hook=_reject_duplicate_keys,
+            )
+            plan = record.get("plan")
+            if not isinstance(plan, dict):
+                raise ValueError(f"{result_path}: missing batch plan")
+            skill_name = plan.get("skill_name")
+            if not isinstance(skill_name, str) or not skill_name:
+                try:
+                    skill_name = result_path.relative_to(root).parts[0]
+                except (ValueError, IndexError) as error:
+                    raise ValueError(
+                        f"{result_path}: missing batch Skill name"
+                    ) from error
+            planned_runs.append((result_path.parent, plan))
+
+    for run_root, plan in planned_runs:
+        skill_name = plan.get("skill_name")
+        if not isinstance(skill_name, str) or not skill_name:
+            skill_name = run_root.relative_to(root).parts[0]
+        skill_roots.add(root / skill_name)
+        grading_path = run_root / "grading.json"
         if grading_path.exists() and not overwrite:
             preserved.append(str(grading_path))
             continue
+        grading_path.parent.mkdir(parents=True, exist_ok=True)
         assertions = _grading_assertions(plan)
         grading = {
+            "schema_version": 3,
+            "observed_invocation": "unknown",
+            "invocation_evidence": "PENDING HUMAN REVIEW",
+            "observed_external_state": None,
             "expectations": [
                 {
                     "assertion_id": assertion["id"],
                     "kind": assertion["kind"],
                     "description": assertion["description"],
                     "required": assertion["required"],
+                    "trajectory_observation": assertion.get(
+                        "trajectory_observation",
+                        "not-applicable",
+                    ),
                     "status": "pending",
                     "evidence": "PENDING HUMAN REVIEW",
+                    "observation": "pending",
                 }
                 for assertion in assertions
             ]
@@ -454,14 +515,45 @@ def prepare_review_templates(
             encoding="utf-8",
         )
         created.append(str(grading_path))
+    created_reviews: list[str] = []
+    preserved_reviews: list[str] = []
+    for skill_root in sorted(skill_roots):
+        review_path = skill_root / "review.json"
+        if review_path.exists() and not overwrite:
+            preserved_reviews.append(str(review_path))
+            continue
+        review_path.parent.mkdir(parents=True, exist_ok=True)
+        review_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "pending",
+                    "reviewer": None,
+                    "reviewed_at": None,
+                    "reason": None,
+                    "corrective_action": None,
+                    "sanitization_confirmed": False,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        created_reviews.append(str(review_path))
     index = {
-        "schema_version": 2,
+        "schema_version": 3,
         "workspace": str(root),
+        "planned_run_count": len(planned_runs),
         "raw_result_count": len(results),
         "created_grading_count": len(created),
         "preserved_grading_count": len(preserved),
+        "created_review_count": len(created_reviews),
+        "preserved_review_count": len(preserved_reviews),
         "created": created,
         "preserved": preserved,
+        "created_reviews": created_reviews,
+        "preserved_reviews": preserved_reviews,
         "status": "PENDING_HUMAN_REVIEW",
     }
     (root / "review-index.json").write_text(
@@ -700,6 +792,10 @@ def audit_reviewed_skill(
         if not isinstance(result, dict):
             errors.append(f"{result_path}: process result is missing")
             continue
+        model_evidence = aggregate_benchmark.model_evidence(
+            item["target"],
+            result,
+        )
         execution_workspace = record.get("execution_workspace")
         execution_path: Path | None = None
         if (
@@ -737,14 +833,10 @@ def audit_reviewed_skill(
                 + "; ".join(isolation_violations)
             )
         if execution_path is not None:
-            evidence = aggregate_benchmark.model_evidence(
-                item["target"],
-                result,
-            )
             recomputed_isolation = (
                 aggregate_benchmark.model_isolation_violations(
                     item["target"],
-                    evidence,
+                    model_evidence,
                     execution_path,
                     allowed_commands=[
                         *item["runtime_tools"],
@@ -789,6 +881,51 @@ def audit_reviewed_skill(
             if isinstance(grading, dict)
             else None
         )
+        if (
+            not isinstance(grading, dict)
+            or set(grading)
+            != {
+                "schema_version",
+                "observed_invocation",
+                "invocation_evidence",
+                "observed_external_state",
+                "expectations",
+            }
+            or grading.get("schema_version") != 3
+        ):
+            errors.append(f"{grading_path}: v3 grading fields are invalid")
+            continue
+        expected_invocation = (
+            "explicit"
+            if item["explicit"]
+            else item["expected_invocation"]
+        )
+        observed_invocation = grading.get("observed_invocation")
+        invocation_evidence = grading.get("invocation_evidence")
+        observed_external_state = grading.get("observed_external_state")
+        if observed_invocation == "unknown":
+            errors.append(
+                f"{grading_path}: observed invocation classification is required"
+            )
+        elif observed_invocation != expected_invocation:
+            errors.append(
+                f"{grading_path}: expected {expected_invocation} invocation "
+                f"but observed {observed_invocation}"
+            )
+        if (
+            not _nonempty(invocation_evidence)
+            or invocation_evidence.strip() == "PENDING HUMAN REVIEW"
+        ):
+            errors.append(
+                f"{grading_path}: invocation evidence is required"
+            )
+        if (
+            observed_external_state is not None
+            and not _nonempty(observed_external_state)
+        ):
+            errors.append(
+                f"{grading_path}: observed external state is invalid"
+            )
         if not isinstance(expectations, list) or len(expectations) != len(
             expected_assertions
         ):
@@ -803,8 +940,10 @@ def audit_reviewed_skill(
                 "kind",
                 "description",
                 "required",
+                "trajectory_observation",
                 "status",
                 "evidence",
+                "observation",
             }:
                 errors.append(f"{grading_path}: grading fields are invalid")
                 continue
@@ -813,10 +952,18 @@ def audit_reviewed_skill(
                 "kind": "kind",
                 "description": "description",
                 "required": "required",
+                "trajectory_observation": "trajectory_observation",
             }
             if any(
                 grade.get(grade_field)
-                != expected_assertion.get(assertion_field)
+                != (
+                    expected_assertion.get(assertion_field)
+                    if assertion_field != "trajectory_observation"
+                    else expected_assertion.get(
+                        assertion_field,
+                        "not-applicable",
+                    )
+                )
                 for grade_field, assertion_field in immutable_fields.items()
             ):
                 errors.append(
@@ -837,6 +984,73 @@ def audit_reviewed_skill(
                 or evidence.strip() == "PENDING HUMAN REVIEW"
             ):
                 errors.append(f"{grading_path}: reviewed evidence is required")
+            observation = grade.get("observation")
+            if observation not in {
+                "final-output",
+                "tool-trace",
+                "external-state",
+                "verified-absence",
+                "invocation-trace",
+                "not-applicable",
+            }:
+                errors.append(
+                    f"{grading_path}: reviewed observation is required"
+                )
+            expected_observation = expected_assertion.get(
+                "trajectory_observation",
+                "not-applicable",
+            )
+            if (
+                expected_assertion["kind"] == "trajectory"
+                and observation != expected_observation
+            ):
+                errors.append(
+                    f"{grading_path}: trajectory observation must be "
+                    f"{expected_observation}"
+                )
+            if (
+                expected_assertion["kind"] == "trajectory"
+                and status == "pass"
+            ):
+                tool_events = {
+                    "tool_use",
+                    "command_execution",
+                    "mcp_tool_call",
+                    "web_search",
+                    "file_change",
+                }
+                if (
+                    observation == "tool-trace"
+                    and not any(
+                        isinstance(event, dict)
+                        and event.get("type") in tool_events
+                        for event in model_evidence.get("events", [])
+                    )
+                ):
+                    errors.append(
+                        f"{grading_path}: tool-trace pass has no "
+                        "observable Tool event"
+                    )
+                elif (
+                    observation == "external-state"
+                    and (
+                        not _nonempty(observed_external_state)
+                        or not _has_captured_workspace_change(raw)
+                    )
+                ):
+                    errors.append(
+                        f"{grading_path}: external-state pass has no "
+                        "captured workspace change"
+                    )
+                elif observation not in {
+                    "tool-trace",
+                    "external-state",
+                    "verified-absence",
+                }:
+                    errors.append(
+                        f"{grading_path}: trajectory pass lacks "
+                        "observable evidence"
+                    )
         assertion_count += len(expectations)
 
     actual_results = set(skill_root.rglob("result.json")) if skill_root.exists() else set()
@@ -912,13 +1126,18 @@ def audit_reviewed_skill(
 
 def _grading_assertions(plan: dict[str, Any]) -> list[dict[str, Any]]:
     assertions = plan.get("assertions")
-    required_fields = {"id", "kind", "description", "required"}
+    base_fields = {"id", "kind", "description", "required"}
     if (
         not isinstance(assertions, list)
         or not assertions
         or not all(
             isinstance(assertion, dict)
-            and set(assertion) == required_fields
+            and set(assertion)
+            == (
+                base_fields | {"trajectory_observation"}
+                if assertion.get("kind") == "trajectory"
+                else base_fields
+            )
             for assertion in assertions
         )
     ):
@@ -1250,12 +1469,13 @@ def _validate_oracle(
     seen: set[str] = set()
     required_count = 0
     for assertion in assertions:
-        if not isinstance(assertion, dict) or set(assertion) != {
-            "id",
-            "kind",
-            "description",
-            "required",
-        }:
+        base_fields = {"id", "kind", "description", "required"}
+        if not isinstance(assertion, dict) or set(assertion) != (
+            base_fields | {"trajectory_observation"}
+            if isinstance(assertion, dict)
+            and assertion.get("kind") == "trajectory"
+            else base_fields
+        ):
             errors.append(f"{name}/{case_id}: assertion fields are invalid")
             continue
         assertion_id = assertion.get("id")
@@ -1276,6 +1496,15 @@ def _validate_oracle(
         ):
             errors.append(
                 f"{name}/{case_id}/{assertion_id}: assertion kind is invalid"
+            )
+        if (
+            assertion.get("kind") == "trajectory"
+            and assertion.get("trajectory_observation")
+            not in {"tool-trace", "external-state", "verified-absence"}
+        ):
+            errors.append(
+                f"{name}/{case_id}/{assertion_id}: trajectory observation "
+                "is invalid"
             )
         if not _nonempty(assertion.get("description")):
             errors.append(
@@ -1531,6 +1760,39 @@ def _validate_golden_cases(
 
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _has_captured_workspace_change(raw: dict[str, Any]) -> bool:
+    changes = raw.get("workspace_changes")
+    if not isinstance(changes, list) or not changes:
+        return False
+    for change in changes:
+        if (
+            not isinstance(change, dict)
+            or set(change) != {"path", "change", "before", "after"}
+            or not _nonempty(change.get("path"))
+            or change.get("change")
+            not in {"created", "modified", "deleted"}
+        ):
+            return False
+        before = change.get("before")
+        after = change.get("after")
+        if (
+            (
+                change["change"] == "created"
+                and (before is not None or after is None)
+            )
+            or (
+                change["change"] == "deleted"
+                and (before is None or after is not None)
+            )
+            or (
+                change["change"] == "modified"
+                and (before is None or after is None or before == after)
+            )
+        ):
+            return False
+    return True
 
 
 def _valid_version(value: object) -> bool:

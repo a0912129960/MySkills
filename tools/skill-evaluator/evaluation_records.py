@@ -12,8 +12,8 @@ import tempfile
 from typing import Any
 
 
-RECORD_SCHEMA_VERSION = 1
-EVALUATOR_VERSION = "myskills-skill-evaluator/3"
+RECORD_SCHEMA_VERSION = 2
+EVALUATOR_VERSION = "myskills-skill-evaluator/4"
 TARGETS = ("claude", "codex")
 KEBAB_CASE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -157,6 +157,9 @@ def render_summary(document: dict[str, Any]) -> str:
                     "",
                     f"- Expected: {_brief(case['expected']['outcome'])}",
                     f"- Actual: {_brief(case['observed']['final_output'])}",
+                    "- Invocation: "
+                    f"{case['observed']['invocation']} — "
+                    f"{_brief(case['observed']['invocation_evidence'])}",
                 ]
             )
             calls = case["observed"]["tool_calls"]
@@ -329,11 +332,17 @@ def validate_record_document(document: object) -> list[str]:
 
 def _validate_sanitization(value: object) -> list[str]:
     prefix = "evaluation record sanitization"
-    if not isinstance(value, dict) or set(value) != {"status", "redactions"}:
+    if not isinstance(value, dict) or set(value) != {
+        "status",
+        "redactions",
+        "human_confirmed",
+    }:
         return [f"{prefix} fields are invalid"]
     errors: list[str] = []
     if value.get("status") != "pass":
         errors.append(f"{prefix}.status must be 'pass'")
+    if value.get("human_confirmed") is not True:
+        errors.append(f"{prefix}.human_confirmed must be true")
     redactions = value.get("redactions")
     if not isinstance(redactions, list) or not all(
         _nonempty(item) for item in redactions
@@ -366,7 +375,9 @@ def _validate_human_review(value: object) -> list[str]:
     else:
         for field in ("reviewer", "reviewed_at", "reason"):
             if value.get(field) is not None:
-                errors.append(f"{prefix}.{field} must be null when review is incomplete")
+                errors.append(
+                    f"{prefix}.{field} must be null when review is incomplete"
+                )
     corrective_action = value.get("corrective_action")
     if corrective_action is not None and not _nonempty(corrective_action):
         errors.append(f"{prefix}.corrective_action must be null or non-empty")
@@ -458,6 +469,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
     expected = value.get("expected")
     assertion_ids: set[str] = set()
     assertion_requirements: dict[str, bool] = {}
+    assertion_observations: dict[str, str] = {}
     if not isinstance(expected, dict) or set(expected) != {
         "invocation",
         "outcome",
@@ -479,12 +491,13 @@ def _validate_case(prefix: str, value: object) -> list[str]:
         else:
             for index, assertion in enumerate(assertions):
                 assertion_prefix = f"{prefix}.expected.assertions[{index}]"
-                if not isinstance(assertion, dict) or set(assertion) != {
-                    "id",
-                    "kind",
-                    "description",
-                    "required",
-                }:
+                base_fields = {"id", "kind", "description", "required"}
+                if not isinstance(assertion, dict) or set(assertion) != (
+                    base_fields | {"trajectory_observation"}
+                    if isinstance(assertion, dict)
+                    and assertion.get("kind") == "trajectory"
+                    else base_fields
+                ):
                     errors.append(f"{assertion_prefix} fields are invalid")
                     continue
                 assertion_id = assertion.get("id")
@@ -500,6 +513,25 @@ def _validate_case(prefix: str, value: object) -> list[str]:
                     "trajectory",
                 }:
                     errors.append(f"{assertion_prefix}.kind is invalid")
+                if (
+                    assertion.get("kind") == "trajectory"
+                    and assertion.get("trajectory_observation")
+                    not in {
+                        "tool-trace",
+                        "external-state",
+                        "verified-absence",
+                    }
+                ):
+                    errors.append(
+                        f"{assertion_prefix}.trajectory_observation is invalid"
+                    )
+                elif (
+                    assertion.get("kind") == "trajectory"
+                    and isinstance(assertion_id, str)
+                ):
+                    assertion_observations[assertion_id] = assertion[
+                        "trajectory_observation"
+                    ]
                 if not _nonempty(assertion.get("description")):
                     errors.append(f"{assertion_prefix}.description is required")
                 if not isinstance(assertion.get("required"), bool):
@@ -510,6 +542,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
     observed = value.get("observed")
     if not isinstance(observed, dict) or set(observed) != {
         "invocation",
+        "invocation_evidence",
         "tool_calls",
         "final_output",
         "external_state",
@@ -524,6 +557,10 @@ def _validate_case(prefix: str, value: object) -> list[str]:
             "unknown",
         }:
             errors.append(f"{prefix}.observed.invocation is invalid")
+        if not _nonempty(observed.get("invocation_evidence")):
+            errors.append(
+                f"{prefix}.observed.invocation_evidence is required"
+            )
         errors.extend(
             _validate_tool_calls(
                 f"{prefix}.observed.tool_calls",
@@ -552,12 +589,17 @@ def _validate_case(prefix: str, value: object) -> list[str]:
                 "assertion_id",
                 "status",
                 "evidence",
+                "observation",
             }:
                 errors.append(f"{result_prefix} fields are invalid")
                 continue
             assertion_id = result.get("assertion_id")
             if not _matches(assertion_id, KEBAB_CASE):
                 errors.append(f"{result_prefix}.assertion_id is invalid")
+            elif assertion_id in result_ids:
+                errors.append(
+                    f"{result_prefix}.assertion_id is duplicated"
+                )
             else:
                 result_ids.add(assertion_id)
                 result_statuses[assertion_id] = result.get("status")
@@ -567,6 +609,15 @@ def _validate_case(prefix: str, value: object) -> list[str]:
                 )
             if not _nonempty(result.get("evidence")):
                 errors.append(f"{result_prefix}.evidence is required")
+            if result.get("observation") not in {
+                "final-output",
+                "tool-trace",
+                "external-state",
+                "verified-absence",
+                "invocation-trace",
+                "not-applicable",
+            }:
+                errors.append(f"{result_prefix}.observation is invalid")
     if assertion_ids and result_ids != assertion_ids:
         errors.append(f"{prefix}.assertion_results must cover every assertion")
 
@@ -580,6 +631,59 @@ def _validate_case(prefix: str, value: object) -> list[str]:
         errors.append(
             f"{prefix}: passing case requires all required assertions to pass"
         )
+    if (
+        isinstance(expected, dict)
+        and isinstance(results, list)
+        and isinstance(observed, dict)
+    ):
+        assertion_kinds = {
+            assertion.get("id"): assertion.get("kind")
+            for assertion in expected.get("assertions", [])
+            if isinstance(assertion, dict)
+        }
+        for result in results:
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "pass"
+                and value.get("status") == "pass"
+                and assertion_kinds.get(result.get("assertion_id"))
+                == "trajectory"
+            ):
+                observation = result.get("observation")
+                expected_observation = assertion_observations.get(
+                    result.get("assertion_id")
+                )
+                if observation != expected_observation:
+                    errors.append(
+                        f"{prefix}: trajectory assertion observation must "
+                        f"be {expected_observation}"
+                    )
+                    continue
+                if (
+                    observation == "tool-trace"
+                    and not observed.get("tool_calls")
+                ):
+                    errors.append(
+                        f"{prefix}: tool-trace assertion pass requires "
+                        "an observed Tool call"
+                    )
+                elif (
+                    observation == "external-state"
+                    and not _nonempty(observed.get("external_state"))
+                ):
+                    errors.append(
+                        f"{prefix}: external-state assertion pass requires "
+                        "an observed external state"
+                    )
+                elif observation not in {
+                    "tool-trace",
+                    "external-state",
+                    "verified-absence",
+                }:
+                    errors.append(
+                        f"{prefix}: trajectory assertion pass requires "
+                        "observable trajectory evidence"
+                    )
     failure = value.get("failure")
     if not isinstance(failure, dict) or set(failure) != {
         "stage",

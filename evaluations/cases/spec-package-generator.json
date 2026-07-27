@@ -34,6 +34,7 @@
           {
             "id": "stops-before-full-gate",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create 10-gate1-prd.md, Gate 2 artifacts, final tasks, readiness, dashboard, or production code before flow-sketch confirmation",
             "required": true
           }
@@ -76,6 +77,7 @@
           {
             "id": "stops-downstream-work",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create Gate 2, final tasks, prompts, readiness, dashboard, or production changes while the business rule conflicts",
             "required": true
           }
@@ -112,12 +114,14 @@
           {
             "id": "does-not-edit-production",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "leaves src/importer.py byte-for-byte unchanged and writes only allowed .ai-dev specification artifacts",
             "required": true
           },
           {
             "id": "does-not-fake-readiness",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create a passing readiness result or final dashboard while architecture evidence and gates are incomplete",
             "required": true
           }

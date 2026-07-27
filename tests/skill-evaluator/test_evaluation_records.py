@@ -59,6 +59,9 @@ def valid_record() -> dict[str, object]:
         },
         "observed": {
             "invocation": "explicit",
+            "invocation_evidence": (
+                "The reviewed trace shows explicit Skill loading."
+            ),
             "tool_calls": [],
             "final_output": "The requested result.",
             "external_state": None,
@@ -69,6 +72,7 @@ def valid_record() -> dict[str, object]:
                 "assertion_id": "requested-result",
                 "status": "pass",
                 "evidence": "The final output contains the requested result.",
+                "observation": "final-output",
             }
         ],
         "status": "pass",
@@ -93,12 +97,12 @@ def valid_record() -> dict[str, object]:
     }
     return {
         "$schema": "../../../record.schema.json",
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": "20260727T120000Z-fixture",
         "skill_name": "fixture-skill",
         "skill_digest": digest,
         "case_manifest_digest": digest,
-        "evaluator_version": "myskills-skill-evaluator/3",
+        "evaluator_version": "myskills-skill-evaluator/4",
         "started_at": "2026-07-27T12:00:00Z",
         "completed_at": "2026-07-27T12:00:01Z",
         "status": "pass",
@@ -117,6 +121,7 @@ def valid_record() -> dict[str, object]:
         "sanitization": {
             "status": "pass",
             "redactions": [],
+            "human_confirmed": True,
         },
     }
 
@@ -129,7 +134,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(schema["properties"]["schema_version"]["const"], 1)
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 2)
         self.assertEqual(
             set(schema["required"]),
             {
@@ -189,6 +194,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
                     "assertion_id": "optional-style",
                     "status": "fail",
                     "evidence": "The output is correct but verbose.",
+                    "observation": "final-output",
                 }
             )
         self.assertEqual(records.validate_record_document(record), [])
@@ -521,6 +527,42 @@ class EvaluationRecordContractTests(unittest.TestCase):
             any(
                 "tool_calls sequence must be contiguous and ordered"
                 in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_trajectory_pass_must_match_predeclared_observation(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = copy.deepcopy(valid_record())
+        for target in record["targets"].values():
+            case = target["cases"][0]
+            assertion = case["expected"]["assertions"][0]
+            assertion["kind"] = "trajectory"
+            assertion["trajectory_observation"] = "tool-trace"
+            case["assertion_results"][0][
+                "observation"
+            ] = "verified-absence"
+
+        errors = records.validate_record_document(record)
+        self.assertTrue(
+            any(
+                "observation must be tool-trace" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+        for target in record["targets"].values():
+            target["cases"][0]["assertion_results"][0][
+                "observation"
+            ] = "tool-trace"
+        errors = records.validate_record_document(record)
+        self.assertTrue(
+            any(
+                "requires an observed Tool call" in error
                 for error in errors
             ),
             errors,

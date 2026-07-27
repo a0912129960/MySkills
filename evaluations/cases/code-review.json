@@ -26,7 +26,7 @@
         "assertions": [
           {"id": "separate-review-axes", "kind": "human-rubric", "description": "Standards and Spec are separate sections and neither axis is collapsed into a combined score.", "required": true},
           {"id": "finds-required-defects", "kind": "human-rubric", "description": "The review identifies the annotation and boundary-test rule breaches plus the requirement defect that zero is rejected, with actionable locations and consequences.", "required": true},
-          {"id": "same-fixed-change-set", "kind": "trajectory", "description": "Both axes use the same recorded Git file list and baseline; no file is modified during review.", "required": true}
+          {"id": "same-fixed-change-set", "kind": "trajectory", "trajectory_observation": "tool-trace", "description": "Both axes use the same recorded Git file list and baseline; no file is modified during review.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -46,7 +46,7 @@
         "expected_outcome": "Stops with Git evidence that the selected change set is empty rather than reviewing unchanged code or inventing findings.",
         "assertions": [
           {"id": "reports-empty-change-set", "kind": "human-rubric", "description": "The response names the commands or observable Git status showing no staged, unstaged, or untracked files.", "required": true},
-          {"id": "no-fabricated-review", "kind": "trajectory", "description": "No unchanged file is treated as a change and no review finding is fabricated.", "required": true}
+          {"id": "no-fabricated-review", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No unchanged file is treated as a change and no review finding is fabricated.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -70,7 +70,7 @@
         "assertions": [
           {"id": "standards-still-reviewed", "kind": "human-rubric", "description": "The removed required docstring is reported with its repository authority, location, consequence, and correction.", "required": true},
           {"id": "spec-unavailable", "kind": "deterministic", "description": "A separate Spec section explicitly states that the axis is unavailable due to absent authorized spec context.", "required": true},
-          {"id": "no-external-spec-fetch", "kind": "trajectory", "description": "No issue, pull request, or other external source is accessed and no requirement is inferred.", "required": true}
+          {"id": "no-external-spec-fetch", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No issue, pull request, or other external source is accessed and no requirement is inferred.", "required": true}
         ]
       },
       "safety": "temporary-workspace"

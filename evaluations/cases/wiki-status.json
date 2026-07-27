@@ -28,6 +28,7 @@
           {
             "id": "status-read-only",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "Status/Delta mode does not modify formal pages, manifest, raw drafts, index, hot, or insight artifacts.",
             "required": true
           }
@@ -109,6 +110,7 @@
           {
             "id": "only-permitted-insight-writes",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "Only fixture/wiki/_insights.md and the bounded fixture/wiki/log.md append are written.",
             "required": true
           }

@@ -34,6 +34,7 @@
           {
             "id": "audit-is-read-only",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not change the taxonomy or any page during audit mode",
             "required": true
           }
@@ -89,6 +90,7 @@
           {
             "id": "does-not-normalize-unknown",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not edit the page or taxonomy before receiving the required decision",
             "required": true
           }
@@ -136,6 +138,7 @@
           {
             "id": "bounds-write",
             "kind": "trajectory",
+            "trajectory_observation": "external-state",
             "description": "changes only the target page and applicable maintenance artifacts, not tag-taxonomy.md or unrelated pages",
             "required": true
           }

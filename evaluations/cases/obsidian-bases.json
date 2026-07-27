@@ -74,6 +74,7 @@
           {
             "id": "preserves-ambiguous-base",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not modify views/projects.base before the ambiguity is resolved",
             "required": true
           }
@@ -110,6 +111,7 @@
           {
             "id": "does-not-create-or-claim",
             "kind": "trajectory",
+            "trajectory_observation": "verified-absence",
             "description": "does not create views/travel.base or claim successful rendering before the dependency is selected",
             "required": true
           }

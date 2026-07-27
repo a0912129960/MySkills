@@ -19,7 +19,7 @@
         "assertions": [
           {"id": "isolated-runnable-prototype", "kind": "deterministic", "description": "Prototype files live under `.scratch/`, and the reported single run command starts successfully using the existing Python runtime.", "required": true},
           {"id": "question-shaped-logic", "kind": "human-rubric", "description": "The pure logic represents held, expired, and restored transitions and makes post-expiry payment invalid; the TUI visibly exposes relevant state after interactions.", "required": true},
-          {"id": "throwaway-boundary", "kind": "trajectory", "description": "No production file, dependency set, branch, commit, issue, or test suite is changed or created.", "required": true}
+          {"id": "throwaway-boundary", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No production file, dependency set, branch, commit, issue, or test suite is changed or created.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -36,7 +36,7 @@
         "expected_outcome": "States the design question it can infer, explains that no host runtime can be selected from evidence, and asks the human to choose a runtime before creating prototype files.",
         "assertions": [
           {"id": "identifies-runtime-blocker", "kind": "human-rubric", "description": "The response accurately reports the absence of an existing runtime and asks one focused runtime choice question.", "required": true},
-          {"id": "does-not-guess-or-build", "kind": "trajectory", "description": "No package manager, dependency, runtime configuration, or prototype artifact is introduced.", "required": true}
+          {"id": "does-not-guess-or-build", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "No package manager, dependency, runtime configuration, or prototype artifact is introduced.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
@@ -55,7 +55,7 @@
         "assertions": [
           {"id": "three-real-variants", "kind": "human-rubric", "description": "At least three layouts differ in structure or interaction rather than only color, spacing, or labels, and all are reachable in one run.", "required": true},
           {"id": "one-command-and-decision", "kind": "human-rubric", "description": "The final response gives a working run command, identifies compared directions, and states what evidence supports the likely winner.", "required": true},
-          {"id": "no-promotion-or-commit", "kind": "trajectory", "description": "`src/task-list.html` is unchanged and no staging, commit, branch, issue, or production promotion occurs.", "required": true}
+          {"id": "no-promotion-or-commit", "kind": "trajectory", "trajectory_observation": "verified-absence", "description": "`src/task-list.html` is unchanged and no staging, commit, branch, issue, or production promotion occurs.", "required": true}
         ]
       },
       "safety": "temporary-workspace"
