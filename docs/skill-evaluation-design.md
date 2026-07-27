@@ -47,6 +47,19 @@ the same Skill has the same classification on every supported platform.
 An Explicit-invocation Skill must succeed when explicitly invoked and must not be selected
 implicitly. It is not graded on a positive implicit-trigger rate.
 
+### Implicit trigger evaluation
+
+Each Implicit-invocation Skill has a fixed ten-case trigger suite for each platform in an
+evaluation run:
+
+- five cases that should invoke the Skill;
+- five cases that should not invoke the Skill; and
+- paraphrase variants and nearest-Skill boundary cases within those ten cases.
+
+Each case is executed once per platform. A platform reaches the trigger threshold when at
+least nine of its ten classifications are correct. Results are not retried after they are
+known.
+
 ### Platform-specific results
 
 Claude and Codex are evaluated and scored independently. Their results cannot offset each
@@ -102,6 +115,13 @@ divergence, such as invocation, tool selection, parameters or ordering, tool-res
 or final outcome. If the available evidence cannot support a classification, the evaluation is
 invalid rather than a Skill failure.
 
+Observable tool trajectories are evaluation evidence, not hidden model reasoning. A case may
+check the selected tool or command, its syntax or parameters, call order, returned status, and
+resulting external state. It grades only requirements declared before execution that are
+necessary for task correctness or safety. A semantically equivalent command or safe
+alternative tool is not a failure unless the Skill contract requires the specific choice. If
+a required trajectory cannot be observed, the case cannot receive a trajectory pass.
+
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner
 output may exist only as ignored, temporary execution data and is not the repository's
@@ -117,7 +137,7 @@ The following items remain under discussion and are not yet acceptance rules:
 
 - The source-controlled evidence path, schema, representation of unavailable fields, and
   concise human-readable format.
-- Case counts, sampling protocol, and platform-specific thresholds.
+- Case counts and thresholds for non-trigger outcome and trajectory evaluation.
 - The result oracle for objective and subjective outcomes.
 - Which trajectory constraints are acceptance-critical.
 - Token-budget warning and failure criteria.
