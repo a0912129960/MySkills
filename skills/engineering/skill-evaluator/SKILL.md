@@ -1,6 +1,6 @@
 ---
 name: skill-evaluator
-description: Evaluate an existing MySkills Skill for structure, cross-platform discovery, behavior, baseline improvement, efficiency, trigger quality, and human review. Use only when the user explicitly asks to evaluate, benchmark, or attest a Skill; this workflow does not author or package Skills.
+description: Evaluate an existing MySkills Skill for structure, cross-platform discovery, behavior, efficiency, trigger quality, and human review. Use only when the user explicitly asks to evaluate, benchmark, or attest a Skill; this workflow does not author or package Skills.
 disable-model-invocation: true
 ---
 
@@ -28,8 +28,8 @@ recommendations and asks for a new evaluation of the resulting digest.
    naming, references, and matching invocation policy.
 2. Run harmless isolated discovery and explicit-invocation smoke tests with
    Claude (`claude -p`) and Codex (`codex exec --ephemeral`) separately.
-3. Exercise realistic cases against a no-Skill or recorded previous-version
-   baseline. Keep target results separate.
+3. Exercise realistic cases with the Skill installed. Keep target results
+   separate.
 4. Grade objective assertions, aggregate pass rate, duration, and token usage
    when the runners expose them.
 5. Evaluate trigger cases for each primary target. Claude trigger results never

@@ -171,7 +171,7 @@ belong in ADRs.
   the first version. The per-Skill manifest repeats these three targets so future compatibility
   exceptions are visible in review rather than inherited from a hidden default.
 - Claude Code and Codex are the primary, behavior-certified platforms. Skill design,
-  invocation-policy review, trigger tests, baseline comparison, and passing evaluation
+  invocation-policy review, trigger tests, and passing evaluation
   attestations cover those two targets.
 - Antigravity is a secondary compatibility-copy target. It receives the same unchanged
   canonical directory used by Codex, with no Antigravity-specific edition, overlay, creator
@@ -690,7 +690,7 @@ tools are selected only when required by the task and project.
 - The LLM Wiki source candidate `skill-creator` is transformed into the human-only
   Engineering Skill `skill-evaluator`. It does not author or package Skills. A platform
   creator or the repository-owned `scripts\new-skill.ps1` scaffolder creates or edits the
-  Skill; `skill-evaluator` then performs structural, behavioral, baseline, efficiency, trigger,
+  Skill; `skill-evaluator` then performs structural, behavioral, efficiency, trigger,
   and human-review evaluation.
 - Every MySkills creation path has an explicit creator-to-evaluator handoff. After authoring
   and basic structural validation, the creator invokes `skill-evaluator` against the new
@@ -714,10 +714,10 @@ tools are selected only when required by the task and project.
   as a substantive revision and requires the same full Claude-and-Codex evaluation as a newly
   authored Skill. Repository validation records the source and current digests so this
   distinction is mechanical rather than judgment-based.
-- Default evaluation is report-only. It validates the MySkills structure and metadata, compares
-  realistic with-Skill runs against a no-Skill or previous-version baseline, evaluates explicit
-  assertions, measures time and tokens when exposed by the runner, and renders an offline
-  static HTML review. Applying recommendations is a separate creator/editing action.
+- Default evaluation is report-only. It validates the MySkills structure and metadata, runs
+  realistic cases with the Skill installed, evaluates explicit assertions, measures time and
+  tokens when exposed by the runner, and renders an offline static HTML review. Applying
+  recommendations is a separate creator/editing action.
 - Trigger results are target-specific. Claude results never stand in for Codex. A passing
   attestation requires both the Claude `claude -p` runner and Codex `codex exec --ephemeral`
   runner to pass discovery, isolation, and harmless smoke tests and then pass the Skill's
@@ -745,7 +745,7 @@ tools are selected only when required by the task and project.
   evaluation proves the required Claude and Codex commands and fails without an attestation
   when either cannot run. The offline report requires no Node.js package, CDN asset, local web
   server, or additional browser installation.
-- Source helpers are reduced to validation, baseline/benchmark aggregation, target runners,
+- Source helpers are reduced to validation, result aggregation, target runners,
   description testing, and static report generation. `package_skill.py`, general creator
   teaching, and Claude/Cowork-only presentation instructions are removed. Pipe reading is
   ported from `select.select` to a Windows-compatible reader thread and queue; the viewer uses

@@ -493,9 +493,8 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
     skill_root = root / skill_name
     if not skill_root.is_dir():
         skill_root = root
-    configurations: dict[str, dict[str, Any]] = {}
     cases: list[dict[str, Any]] = []
-    grading_paths = sorted(skill_root.glob("*/*/*/grading.json"))
+    grading_paths = sorted(skill_root.glob("*/*/grading.json"))
     if not grading_paths:
         raise ValueError(
             f"{skill_root}: no reviewed batch grading files were found"
@@ -511,12 +510,10 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
         if not isinstance(plan, dict):
             raise ValueError(f"{result_path}: batch plan is required")
         case_name = plan.get("case_id")
-        configuration = plan.get("configuration")
         target = plan.get("target")
         if (
             plan.get("skill_name") != skill_name
-            or case_name != run_dir.parents[1].name
-            or configuration != run_dir.parent.name
+            or case_name != run_dir.parent.name
             or target != run_dir.name
         ):
             raise ValueError(
@@ -554,14 +551,14 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             str(target),
             evidence,
             execution_workspace,
-                allowed_commands=[
-                    *list(plan.get("runtime_tools") or ()),
-                    *list(plan.get("external_tools") or ()),
-                ],
-                audit_undeclared_bash=(
-                    plan.get("safety", "read-only") == "read-only"
-                ),
-            )
+            allowed_commands=[
+                *list(plan.get("runtime_tools") or ()),
+                *list(plan.get("external_tools") or ()),
+            ],
+            audit_undeclared_bash=(
+                plan.get("safety", "read-only") == "read-only"
+            ),
+        )
         if stored_isolation_valid:
             isolation_violations = list(stored_isolation)
             isolation_audit_state = (
@@ -581,7 +578,6 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             )
         case = {
             "case": case_name,
-            "configuration": configuration,
             "target": target,
             "mode": plan.get("mode"),
             "prompt": plan.get("prompt"),
@@ -591,7 +587,6 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "explicit": plan.get("explicit"),
             "skill_path": plan.get("skill_path"),
             "skill_digest": plan.get("skill_digest"),
-            "baseline": dict(plan.get("baseline") or {}),
             "fixture_sets": list(plan.get("fixture_sets") or ()),
             "fixtures": list(plan.get("fixtures") or ()),
             "git_fixture": dict(plan.get("git_fixture") or {}),
@@ -631,46 +626,42 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
         }
         cases.append(case)
 
-        bucket = configurations.setdefault(
-            configuration,
-            {
-                "passed": 0,
-                "total": 0,
-                "tokens": [],
-                "durations_ms": [],
-                "review_states": {
-                    "pending": 0,
-                    "pass": 0,
-                    "fail": 0,
-                },
-            },
-        )
-        bucket["passed"] += passed
-        bucket["total"] += total
+    bucket: dict[str, Any] = {
+        "passed": 0,
+        "total": 0,
+        "tokens": [],
+        "durations_ms": [],
+        "review_states": {
+            "pending": 0,
+            "pass": 0,
+            "fail": 0,
+        },
+    }
+    for case in cases:
+        bucket["passed"] += case["passed"]
+        bucket["total"] += case["total"]
         bucket["review_states"][case["review_state"]] += 1
         if isinstance(case["total_tokens"], (int, float)):
             bucket["tokens"].append(case["total_tokens"])
         if isinstance(case["duration_ms"], (int, float)):
             bucket["durations_ms"].append(case["duration_ms"])
 
-    summary: dict[str, dict[str, Any]] = {}
-    for name, bucket in configurations.items():
-        summary[name] = {
-            "passed": bucket["passed"],
-            "total": bucket["total"],
-            "pass_rate": (
-                bucket["passed"] / bucket["total"] if bucket["total"] else 0.0
-            ),
-            "mean_tokens": _mean(bucket["tokens"]),
-            "mean_duration_ms": _mean(bucket["durations_ms"]),
-            "review_states": dict(bucket["review_states"]),
-        }
+    summary = {
+        "passed": bucket["passed"],
+        "total": bucket["total"],
+        "pass_rate": (
+            bucket["passed"] / bucket["total"] if bucket["total"] else 0.0
+        ),
+        "mean_tokens": _mean(bucket["tokens"]),
+        "mean_duration_ms": _mean(bucket["durations_ms"]),
+        "review_states": dict(bucket["review_states"]),
+    }
 
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "skill_name": skill_name,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "configurations": summary,
+        "summary": summary,
         "cases": cases,
     }
 

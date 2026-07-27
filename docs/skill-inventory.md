@@ -361,7 +361,7 @@ Management rename:
   Skills and workflows managed by this private repository.
 - Source candidate `skill-creator` becomes the human-only Engineering Skill
   `skill-evaluator`. Platform-native creators or the MySkills scaffolder own authoring; the
-  transformed Skill owns structural, behavioral, baseline, efficiency, and trigger
+  transformed Skill owns structural, behavioral, efficiency, and trigger
   evaluation.
 - Source candidate `handoff` becomes Managed Skill `session-checkpoint` to distinguish a
   saved, non-delivered session summary from an active `ai-handoff`.

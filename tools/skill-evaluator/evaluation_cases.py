@@ -16,7 +16,6 @@ import aggregate_benchmark
 
 
 TARGETS = ("claude", "codex")
-CONFIGURATIONS = ("with_skill", "baseline")
 RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
 EXTERNAL_TOOLS = ("qmd",)
 KEBAB_CASE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
@@ -57,8 +56,8 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         return ["evaluation cases root fields are invalid"]
     if document.get("$schema") != "./cases.schema.json":
         errors.append("evaluation cases $schema is invalid")
-    if document.get("schema_version") != 2:
-        errors.append("evaluation cases schema_version must be 2")
+    if document.get("schema_version") != 3:
+        errors.append("evaluation cases schema_version must be 3")
     skills = document.get("skills")
     if not isinstance(skills, list):
         return errors + ["evaluation cases skills must be an array"]
@@ -82,7 +81,6 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         if not isinstance(entry, dict) or set(entry) != {
             "skill_name",
             "evaluation_level",
-            "baseline",
             "required_cases",
             "trigger_cases",
         }:
@@ -97,14 +95,6 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         seen.add(name)
         if entry.get("evaluation_level") != "full":
             errors.append(f"{name}: consolidated Skills require full evaluation")
-        baseline = entry.get("baseline")
-        if (
-            not isinstance(baseline, dict)
-            or set(baseline) != {"kind", "identity"}
-            or baseline.get("kind") not in {"no-skill", "previous-version"}
-            or not _nonempty(baseline.get("identity"))
-        ):
-            errors.append(f"{name}: baseline is invalid")
         errors.extend(
             _validate_required_cases(
                 name,
@@ -188,84 +178,77 @@ def build_plan(
             expanded_fixtures = _expanded_fixtures(case, fixture_sets)
             runtime_tools = case.get("runtime_tools", [])
             external_tools = case.get("external_tools", [])
-            for configuration in CONFIGURATIONS:
-                for target in TARGETS:
-                    plan.append(
-                        _plan_item(
-                            name,
-                            paths[name],
-                            case,
-                            target,
-                            configuration,
-                            evaluation_level=entry["evaluation_level"],
-                            baseline=entry["baseline"],
-                            skill_digest=skill_digest(name),
-                            companion_skill_paths={
-                                companion: paths[companion]
-                                for companion in case.get(
-                                    "companion_skills",
-                                    [],
-                                )
-                            },
-                            companion_skill_digests={
-                                companion: skill_digest(companion)
-                                for companion in case.get(
-                                    "companion_skills",
-                                    [],
-                                )
-                            },
-                            fixture_set_names=case.get("fixture_sets", []),
-                            fixtures=expanded_fixtures,
-                            runtime_tool_sources={
-                                tool: runtime_source(tool)
-                                for tool in runtime_tools
-                            },
-                            runtime_tool_digests={
-                                tool: runtime_digest(tool)
-                                for tool in runtime_tools
-                            },
-                            external_tools=external_tools,
-                            mode="required",
-                            explicit=configuration == "with_skill",
-                        )
+            for target in TARGETS:
+                plan.append(
+                    _plan_item(
+                        name,
+                        paths[name],
+                        case,
+                        target,
+                        evaluation_level=entry["evaluation_level"],
+                        skill_digest=skill_digest(name),
+                        companion_skill_paths={
+                            companion: paths[companion]
+                            for companion in case.get(
+                                "companion_skills",
+                                [],
+                            )
+                        },
+                        companion_skill_digests={
+                            companion: skill_digest(companion)
+                            for companion in case.get(
+                                "companion_skills",
+                                [],
+                            )
+                        },
+                        fixture_set_names=case.get("fixture_sets", []),
+                        fixtures=expanded_fixtures,
+                        runtime_tool_sources={
+                            tool: runtime_source(tool)
+                            for tool in runtime_tools
+                        },
+                        runtime_tool_digests={
+                            tool: runtime_digest(tool)
+                            for tool in runtime_tools
+                        },
+                        external_tools=external_tools,
+                        mode="required",
+                        explicit=True,
                     )
+                )
         for case in entry["trigger_cases"]:
             expanded_fixtures = _expanded_fixtures(case, fixture_sets)
             external_tools = case.get("external_tools", [])
-            for configuration in CONFIGURATIONS:
-                for target in TARGETS:
-                    plan.append(
-                        _plan_item(
-                            name,
-                            paths[name],
-                            case,
-                            target,
-                            configuration,
-                            evaluation_level=entry["evaluation_level"],
-                            baseline=entry["baseline"],
-                            skill_digest=skill_digest(name),
-                            companion_skill_paths={},
-                            companion_skill_digests={},
-                            fixture_set_names=case.get("fixture_sets", []),
-                            fixtures=expanded_fixtures,
-                            runtime_tool_sources={},
-                            runtime_tool_digests={},
-                            external_tools=external_tools,
-                            mode="trigger",
-                            explicit=False,
-                        )
+            for target in TARGETS:
+                plan.append(
+                    _plan_item(
+                        name,
+                        paths[name],
+                        case,
+                        target,
+                        evaluation_level=entry["evaluation_level"],
+                        skill_digest=skill_digest(name),
+                        companion_skill_paths={},
+                        companion_skill_digests={},
+                        fixture_set_names=case.get("fixture_sets", []),
+                        fixtures=expanded_fixtures,
+                        runtime_tool_sources={},
+                        runtime_tool_digests={},
+                        external_tools=external_tools,
+                        mode="trigger",
+                        explicit=False,
                     )
+                )
     return plan
 
 
 def summarize_plan(plan: list[dict[str, Any]]) -> dict[str, Any]:
     skills = sorted({item["skill_name"] for item in plan})
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "skill_count": len(skills),
         "model_run_count": len(plan),
         "targets": list(TARGETS),
-        "configurations": list(CONFIGURATIONS),
         "skills": skills,
         "runs": plan,
     }
@@ -503,7 +486,6 @@ def audit_reviewed_skill(
         run_root = (
             skill_root
             / item["case_id"]
-            / item["configuration"]
             / item["target"]
         )
         result_path = run_root / "result.json"
@@ -687,14 +669,12 @@ def audit_reviewed_skill(
             for item in expected
             if item["target"] == target
             and item["mode"] == "required"
-            and item["configuration"] == "with_skill"
         )
         trigger_total = sum(
             1
             for item in expected
             if item["target"] == target
             and item["mode"] == "trigger"
-            and item["configuration"] == "with_skill"
         )
         targets[target] = {
             "status": "pass",
@@ -731,7 +711,6 @@ def audit_reviewed_skill(
         "skill_name": skill_name,
         "skill_path": expected[0]["skill_path"],
         "evaluation_level": entry["evaluation_level"],
-        "baseline": dict(entry["baseline"]),
         "raw_run_root": relative_root,
         "assertion_count": assertion_count,
         "target_identities": {
@@ -746,15 +725,9 @@ def _grading_assertions(plan: dict[str, Any]) -> list[str]:
     assertions = list(plan.get("assertions") or ())
     if plan.get("mode") == "trigger":
         expected = plan.get("expected_invocation")
-        configuration = plan.get("configuration")
-        if configuration == "with_skill":
-            assertions = [
-                f"Target behavior matches {expected} invocation policy"
-            ]
-        else:
-            assertions = [
-                "No-Skill baseline contains no evidence of the evaluated Skill"
-            ]
+        assertions = [
+            f"Target behavior matches {expected} invocation policy"
+        ]
     if not assertions:
         assertions = ["Run satisfies the declared case contract"]
     return assertions
@@ -765,10 +738,8 @@ def _plan_item(
     skill_path: Path,
     case: dict[str, Any],
     target: str,
-    configuration: str,
     *,
     evaluation_level: str,
-    baseline: dict[str, str],
     skill_digest: str,
     companion_skill_paths: dict[str, Path],
     companion_skill_digests: dict[str, str],
@@ -786,9 +757,7 @@ def _plan_item(
         "case_id": case["id"],
         "mode": mode,
         "target": target,
-        "configuration": configuration,
         "evaluation_level": evaluation_level,
-        "baseline": dict(baseline),
         "skill_digest": skill_digest,
         "fixture_sets": list(fixture_set_names),
         "fixtures": [dict(fixture) for fixture in fixtures],

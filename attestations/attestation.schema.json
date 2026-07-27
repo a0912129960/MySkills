@@ -21,7 +21,7 @@
   ],
   "properties": {
     "$schema": {"const": "../attestation.schema.json"},
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "skill_name": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -54,7 +54,6 @@
       "required": [
         "raw_run_root",
         "structural",
-        "baseline",
         "assertions",
         "target_identities",
         "efficiency",
@@ -66,16 +65,6 @@
           "pattern": "^\\.scratch/skill-evals/"
         },
         "structural": {"$ref": "#/$defs/check"},
-        "baseline": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "identity", "summary"],
-          "properties": {
-            "kind": {"enum": ["no-skill", "previous-version"]},
-            "identity": {"type": "string", "minLength": 1},
-            "summary": {"type": "string", "minLength": 1}
-          }
-        },
         "assertions": {"$ref": "#/$defs/countSummary"},
         "target_identities": {
           "type": "object",

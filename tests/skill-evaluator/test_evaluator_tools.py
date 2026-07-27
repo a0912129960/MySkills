@@ -29,7 +29,7 @@ def load_module(name: str, filename: str):
 
 
 class SkillEvaluatorToolContractTests(unittest.TestCase):
-    def test_evaluation_case_manifest_covers_every_skill_and_full_baseline(
+    def test_evaluation_case_manifest_runs_each_skill_without_a_baseline(
         self,
     ) -> None:
         cases = load_module(
@@ -41,30 +41,22 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         summary = cases.summarize_plan(plan)
 
         self.assertEqual(summary["skill_count"], 42)
-        self.assertEqual(summary["model_run_count"], 336)
-        cases_by_name = {
-            entry["skill_name"]: entry
-            for entry in document["skills"]
-        }
+        self.assertEqual(summary["model_run_count"], 168)
         for name in summary["skills"]:
             runs = [item for item in plan if item["skill_name"] == name]
-            self.assertEqual(len(runs), 8, name)
+            self.assertEqual(len(runs), 4, name)
             self.assertTrue(
                 all(
                     item["evaluation_level"] == "full"
-                    and item["baseline"] == cases_by_name[name]["baseline"]
+                    and "baseline" not in item
+                    and "configuration" not in item
                     for item in runs
                 ),
                 name,
             )
             self.assertEqual(
-                {(item["target"], item["configuration"]) for item in runs},
-                {
-                    ("claude", "with_skill"),
-                    ("claude", "baseline"),
-                    ("codex", "with_skill"),
-                    ("codex", "baseline"),
-                },
+                {item["target"] for item in runs},
+                {"claude", "codex"},
             )
 
         qmd_trigger_runs = [
@@ -76,12 +68,24 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertTrue(
             all(item["external_tools"] == ["qmd"] for item in qmd_trigger_runs)
         )
-        self.assertEqual(len(qmd_trigger_runs), 4)
+        self.assertEqual(len(qmd_trigger_runs), 2)
         self.assertTrue(
             all(
                 item["fixture_sets"] == ["qmd-index"]
                 and item["fixtures"] == qmd_trigger_runs[0]["fixtures"]
                 for item in qmd_trigger_runs
+            )
+        )
+
+        with_baseline = copy.deepcopy(document)
+        with_baseline["skills"][0]["baseline"] = {
+            "kind": "no-skill",
+            "identity": "removed-baseline",
+        }
+        self.assertTrue(
+            any(
+                "fields are invalid" in error
+                for error in cases.validate_cases(ROOT, with_baseline)
             )
         )
 
@@ -144,7 +148,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             plan = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(plan["skill_count"], 1)
-            self.assertEqual(plan["model_run_count"], 8)
+            self.assertEqual(plan["model_run_count"], 4)
             self.assertEqual(plan["skills"], ["qmd"])
 
             preview = Path(temp_dir) / "preview.json"
@@ -606,10 +610,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     {
                         "skill_name": "fixture-skill",
                         "evaluation_level": "full",
-                        "baseline": {
-                            "kind": "no-skill",
-                            "identity": "fixture-baseline",
-                        },
                         "required_cases": [
                             {
                                 "id": "required",
@@ -676,10 +676,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     {
                         "skill_name": "fixture-skill",
                         "evaluation_level": "full",
-                        "baseline": {
-                            "kind": "no-skill",
-                            "identity": "fixture-baseline",
-                        },
                         "required_cases": [
                             {
                                 "id": "required",
@@ -705,7 +701,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     workspace
                     / item["skill_name"]
                     / item["case_id"]
-                    / item["configuration"]
                     / item["target"]
                 )
                 run.mkdir(parents=True)
@@ -762,7 +757,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 workspace
                 / "qmd"
                 / "retrieve-before-answer"
-                / "with_skill"
                 / "codex"
             )
             run.mkdir(parents=True)
@@ -865,7 +859,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     workspace
                     / item["skill_name"]
                     / item["case_id"]
-                    / item["configuration"]
                     / item["target"]
                 )
                 run.mkdir(parents=True)
@@ -882,7 +875,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 Path(tempfile.gettempdir())
                                 / "discarded-myskills-evaluation"
                                 / item["case_id"]
-                                / item["configuration"]
                                 / item["target"]
                             ),
                             "isolation_violations": [],
@@ -952,10 +944,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             draft = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(draft["status"], "pending-human-review")
             self.assertEqual(draft["human_review"]["status"], "pending")
-            self.assertEqual(
-                draft["evidence"]["baseline"]["identity"],
-                plan[0]["baseline"]["identity"],
-            )
+            self.assertNotIn("baseline", draft["evidence"])
             self.assertEqual(
                 set(draft["evidence"]["target_identities"]),
                 {"claude", "codex"},
@@ -976,7 +965,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 workspace
                 / external_item["skill_name"]
                 / external_item["case_id"]
-                / external_item["configuration"]
                 / external_item["target"]
                 / "result.json"
             )
@@ -1452,7 +1440,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             }
             data = {
                 "$schema": "../attestation.schema.json",
-                "schema_version": 1,
+                "schema_version": 2,
                 "skill_name": "fixture-skill",
                 "skill_digest": digest,
                 "source_digest": None,
@@ -1465,11 +1453,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     "structural": {
                         "status": "pass",
                         "summary": "Structure passed.",
-                    },
-                    "baseline": {
-                        "kind": "no-skill",
-                        "identity": "fixture-no-skill",
-                        "summary": "Fixture baseline compared.",
                     },
                     "assertions": {
                         "passed": 2,
@@ -1691,15 +1674,15 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             Path("C:/tmp/skill"),
             explicit=False,
         )
-        claude_baseline = runners.build_command(
-            "claude",
-            "Natural trigger prompt.",
-            Path("C:/tmp/skill"),
-            explicit=False,
-            baseline=True,
-        )
         self.assertNotIn("--disable-slash-commands", claude_trigger)
-        self.assertIn("--disable-slash-commands", claude_baseline)
+        with self.assertRaises(TypeError):
+            runners.build_command(
+                "claude",
+                "Natural trigger prompt.",
+                Path("C:/tmp/skill"),
+                explicit=False,
+                baseline=True,
+            )
         trigger = runners.build_command(
             "codex",
             "Natural trigger prompt.",
@@ -2928,264 +2911,234 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
-            for configuration, passed in (
-                ("with_skill", True),
-                ("baseline", False),
-            ):
-                for target in ("claude", "codex"):
-                    run_dir = (
-                        workspace
-                        / "example"
-                        / "case-one"
-                        / configuration
-                        / target
+            for target in ("claude", "codex"):
+                run_dir = workspace / "example" / "case-one" / target
+                run_dir.mkdir(parents=True)
+                if target == "claude":
+                    stdout = "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "type": "assistant",
+                                    "message": {
+                                        "content": [
+                                            {
+                                                "type": "tool_use",
+                                                "id": "tool-qmd",
+                                                "name": "Bash",
+                                                "input": {
+                                                    "command": (
+                                                        "qmd search fixture"
+                                                    )
+                                                },
+                                            }
+                                        ]
+                                    },
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "type": "user",
+                                    "message": {
+                                        "content": [
+                                            {
+                                                "type": "tool_result",
+                                                "tool_use_id": "tool-qmd",
+                                                "content": (
+                                                    "fixture qmd evidence"
+                                                ),
+                                                "is_error": False,
+                                            }
+                                        ]
+                                    },
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "type": "result",
+                                    "subtype": "success",
+                                    "is_error": False,
+                                    "num_turns": 2,
+                                    "result": (
+                                        "Claude final answer <unsafe>"
+                                    ),
+                                    "stop_reason": "end_turn",
+                                    "total_cost_usd": 0.01,
+                                    "usage": {"output_tokens": 12},
+                                    "permission_denials": [],
+                                    "terminal_reason": "completed",
+                                }
+                            ),
+                        ]
                     )
-                    run_dir.mkdir(parents=True)
-                    if target == "claude":
-                        stdout = "\n".join(
-                            [
-                                json.dumps(
+                else:
+                    stdout = "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "type": "item.completed",
+                                    "item": {
+                                        "type": "command_execution",
+                                        "command": "Get-Content fixture/input.txt",
+                                        "aggregated_output": "fixture evidence",
+                                        "exit_code": 0,
+                                        "status": "completed",
+                                    },
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "type": "item.completed",
+                                    "item": {
+                                        "type": "agent_message",
+                                        "text": "Codex final answer",
+                                    },
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "type": "turn.completed",
+                                    "usage": {
+                                        "input_tokens": 20,
+                                        "output_tokens": 8,
+                                    },
+                                }
+                            ),
+                        ]
+                    )
+                (run_dir / "result.json").write_text(
+                    json.dumps(
+                        {
+                            "plan": {
+                                "skill_name": "example",
+                                "case_id": "case-one",
+                                "target": target,
+                                "mode": "required",
+                                "prompt": "Use fixture/input.txt to answer.",
+                                "assertions": [
+                                    "Produces the required file"
+                                ],
+                                "safety": "read-only",
+                                "expected_invocation": None,
+                                "explicit": True,
+                                "skill_path": "C:/repo/skills/example",
+                                "fixtures": [
                                     {
-                                        "type": "assistant",
-                                        "message": {
-                                            "content": [
-                                                {
-                                                    "type": "tool_use",
-                                                    "id": "tool-qmd",
-                                                    "name": "Bash",
-                                                    "input": {
-                                                        "command": (
-                                                            "qmd search fixture"
-                                                        )
-                                                    },
-                                                }
-                                            ]
-                                        },
+                                        "path": "fixture/input.txt",
+                                        "content": "fixture evidence",
                                     }
-                                ),
-                                json.dumps(
-                                    {
-                                        "type": "user",
-                                        "message": {
-                                            "content": [
-                                                {
-                                                    "type": "tool_result",
-                                                    "tool_use_id": "tool-qmd",
-                                                    "content": (
-                                                        "fixture qmd evidence"
-                                                    ),
-                                                    "is_error": False,
-                                                }
-                                            ]
-                                        },
-                                    }
-                                ),
-                                json.dumps(
-                                    {
-                                        "type": "result",
-                                        "subtype": "success",
-                                        "is_error": False,
-                                        "num_turns": 2,
-                                        "result": (
-                                            "Claude final answer <unsafe>"
-                                        ),
-                                        "stop_reason": "end_turn",
-                                        "total_cost_usd": 0.01,
-                                        "usage": {"output_tokens": 12},
-                                        "permission_denials": [],
-                                        "terminal_reason": "completed",
-                                    }
-                                ),
-                            ]
-                        )
-                    else:
-                        stdout = "\n".join(
-                            [
-                                json.dumps(
-                                    {
-                                        "type": "item.completed",
-                                        "item": {
-                                            "type": "command_execution",
-                                            "command": "Get-Content fixture/input.txt",
-                                            "aggregated_output": "fixture evidence",
-                                            "exit_code": 0,
-                                            "status": "completed",
-                                        },
-                                    }
-                                ),
-                                json.dumps(
-                                    {
-                                        "type": "item.completed",
-                                        "item": {
-                                            "type": "agent_message",
-                                            "text": "Codex final answer",
-                                        },
-                                    }
-                                ),
-                                json.dumps(
-                                    {
-                                        "type": "turn.completed",
-                                        "usage": {
-                                            "input_tokens": 20,
-                                            "output_tokens": 8,
-                                        },
-                                    }
-                                ),
-                            ]
-                        )
-                    (run_dir / "result.json").write_text(
-                        json.dumps(
-                            {
-                                "plan": {
-                                    "skill_name": "example",
-                                    "case_id": "case-one",
-                                    "configuration": configuration,
-                                    "target": target,
-                                    "mode": "required",
-                                    "prompt": "Use fixture/input.txt to answer.",
-                                    "assertions": [
-                                        "Produces the required file"
-                                    ],
-                                    "safety": "read-only",
-                                    "expected_invocation": None,
-                                    "explicit": configuration == "with_skill",
-                                    "skill_path": "C:/repo/skills/example",
-                                    "fixtures": [
+                                ],
+                                "git_fixture": {
+                                    "baseline_files": [
                                         {
-                                            "path": "fixture/input.txt",
-                                            "content": "fixture evidence",
+                                            "path": "tracked.txt",
+                                            "content": "committed\n",
                                         }
                                     ],
-                                    "git_fixture": {
-                                        "baseline_files": [
-                                            {
-                                                "path": "tracked.txt",
-                                                "content": "committed\n",
-                                            }
-                                        ],
-                                        "working_tree_files": [
-                                            {
-                                                "path": "tracked.txt",
-                                                "content": "changed\n",
-                                            }
-                                        ],
-                                    },
-                                    "baseline": {
-                                        "kind": "no-skill",
-                                        "identity": "isolated-no-skill",
-                                    },
-                                    "fixture_sets": ["example"],
-                                    "runtime_tools": [],
-                                    "external_tools": ["qmd"],
-                                    "companion_skills": [],
-                                    "skill_digest": "sha256:fixture",
+                                    "working_tree_files": [
+                                        {
+                                            "path": "tracked.txt",
+                                            "content": "changed\n",
+                                        }
+                                    ],
                                 },
-                                "target_identity": f"{target} fixture",
-                                "target_identity_returncode": (
-                                    1
-                                    if configuration == "baseline"
-                                    and target == "codex"
-                                    else 0
-                                ),
-                                "external_tool_evidence": {
-                                    "qmd": {
-                                        "minimum_version": "2.5.3",
-                                        "identity": {
+                                "fixture_sets": ["example"],
+                                "runtime_tools": [],
+                                "external_tools": ["qmd"],
+                                "companion_skills": [],
+                                "skill_digest": "sha256:fixture",
+                            },
+                            "target_identity": f"{target} fixture",
+                            "target_identity_returncode": (
+                                1 if target == "codex" else 0
+                            ),
+                            "external_tool_evidence": {
+                                "qmd": {
+                                    "minimum_version": "2.5.3",
+                                    "identity": {
+                                        "command": [
+                                            "C:/tools/qmd.ps1",
+                                            "--version",
+                                        ],
+                                        "returncode": 0,
+                                        "timed_out": False,
+                                        "stdout": "qmd 2.5.3\n",
+                                        "stderr": "",
+                                    },
+                                    "setup": [
+                                        {
                                             "command": [
                                                 "C:/tools/qmd.ps1",
-                                                "--version",
+                                                "init",
                                             ],
                                             "returncode": 0,
                                             "timed_out": False,
-                                            "stdout": "qmd 2.5.3\n",
-                                            "stderr": "",
-                                        },
-                                        "setup": [
-                                            {
-                                                "command": [
-                                                    "C:/tools/qmd.ps1",
-                                                    "init",
-                                                ],
-                                                "returncode": 0,
-                                                "timed_out": False,
-                                            }
-                                        ],
-                                        "workspace_index": ".qmd",
-                                        "fixture_root": "fixture/qmd-notes",
-                                    }
-                                },
-                                "execution_workspace": str(
-                                    run_dir / "workspace"
-                                ),
-                                "isolation_violations": (
-                                    [
-                                        "Read accessed canonical Skill outside "
-                                        "the execution workspace"
-                                    ]
-                                    if (
-                                        target == "claude"
-                                        and configuration == "baseline"
-                                    )
-                                    else []
-                                ),
-                                "result": {
-                                    "command": [target, "fixture prompt"],
-                                    "returncode": 0,
-                                    "timed_out": False,
-                                    "duration_ms": 1000,
-                                    "stdout": stdout,
-                                    "stderr": "",
-                                },
-                            }
-                        ),
-                        encoding="utf-8",
-                    )
-                    (run_dir / "grading.json").write_text(
-                        json.dumps(
-                            {
-                                "expectations": [
-                                    {
-                                        "text": "Produces the required file",
-                                        "passed": passed,
-                                        "evidence": (
-                                            "PENDING HUMAN REVIEW"
-                                            if configuration == "with_skill"
-                                            and target == "claude"
-                                            else "fixture"
-                                        ),
-                                    }
+                                        }
+                                    ],
+                                    "workspace_index": ".qmd",
+                                    "fixture_root": "fixture/qmd-notes",
+                                }
+                            },
+                            "execution_workspace": str(
+                                run_dir / "workspace"
+                            ),
+                            "isolation_violations": (
+                                [
+                                    "Read accessed canonical Skill outside "
+                                    "the execution workspace"
                                 ]
-                            }
-                        ),
-                        encoding="utf-8",
-                    )
+                                if target == "claude"
+                                else []
+                            ),
+                            "result": {
+                                "command": [target, "fixture prompt"],
+                                "returncode": 0,
+                                "timed_out": False,
+                                "duration_ms": 1000,
+                                "stdout": stdout,
+                                "stderr": "",
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                (run_dir / "grading.json").write_text(
+                    json.dumps(
+                        {
+                            "expectations": [
+                                {
+                                    "text": "Produces the required file",
+                                    "passed": True,
+                                    "evidence": (
+                                        "PENDING HUMAN REVIEW"
+                                        if target == "claude"
+                                        else "fixture"
+                                    ),
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
 
             benchmark = aggregate.aggregate_workspace(workspace, "example")
             output = workspace / "example" / "review.html"
             report.write_static_report(benchmark, output)
 
-            self.assertEqual(benchmark["configurations"]["with_skill"]["pass_rate"], 1.0)
-            self.assertEqual(benchmark["configurations"]["baseline"]["pass_rate"], 0.0)
+            self.assertEqual(benchmark["summary"]["pass_rate"], 1.0)
             self.assertEqual(
-                {(case["configuration"], case["target"]) for case in benchmark["cases"]},
-                {
-                    ("with_skill", "claude"),
-                    ("with_skill", "codex"),
-                    ("baseline", "claude"),
-                    ("baseline", "codex"),
-                },
+                {case["target"] for case in benchmark["cases"]},
+                {"claude", "codex"},
             )
             claude_case = next(
                 case
                 for case in benchmark["cases"]
-                if case["configuration"] == "with_skill"
-                and case["target"] == "claude"
+                if case["target"] == "claude"
             )
             codex_case = next(
                 case
                 for case in benchmark["cases"]
-                if case["configuration"] == "with_skill"
-                and case["target"] == "codex"
+                if case["target"] == "codex"
             )
             self.assertEqual(
                 claude_case["model_evidence"]["final_response"],
@@ -3218,11 +3171,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             )
             self.assertIn("Codex final answer", html)
             self.assertIn("Get-Content fixture/input.txt", html)
-            self.assertIn("With Skill", html)
-            self.assertIn("Baseline", html)
+            self.assertIn("Skill run", html)
+            self.assertNotIn("Baseline kind", html)
             self.assertIn("Canonical Skill path", html)
             self.assertIn("C:/repo/skills/example", html)
-            self.assertIn("isolated-no-skill", html)
             self.assertIn("External tools</dt><dd>qmd", html)
             self.assertIn("External runtime identity and setup", html)
             self.assertIn("qmd 2.5.3", html)
@@ -3230,7 +3182,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("Committed baseline files", html)
             missing_audit_html = report._render_run(
                 {
-                    "configuration": "with_skill",
                     "process": {
                         "returncode": 0,
                         "timed_out": False,
@@ -3253,18 +3204,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("PROCESS FAIL", html)
             self.assertIn("HUMAN REVIEW: PENDING", html)
             self.assertIn(
-                'href="./case-one/with_skill/claude/result.json"',
+                'href="./case-one/claude/result.json"',
                 html,
             )
             self.assertIn(
-                'href="./case-one/with_skill/claude/grading.json"',
+                'href="./case-one/claude/grading.json"',
                 html,
             )
             self.assertTrue(
                 (
                     output.parent
                     / "case-one"
-                    / "with_skill"
                     / "claude"
                     / "result.json"
                 ).is_file()
@@ -3273,7 +3223,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 (
                     output.parent
                     / "case-one"
-                    / "with_skill"
                     / "claude"
                     / "grading.json"
                 ).is_file()

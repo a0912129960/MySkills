@@ -5,29 +5,23 @@
 - canonical Skill path and deterministic directory digest;
 - structural validation output;
 - Claude and Codex discovery and harmless invocation results;
-- cases, baseline identity, assertions, grades, and target-specific outcomes;
+- cases, assertions, grades, and target-specific outcomes;
 - elapsed time and token usage when exposed by the runner;
 - path to the offline static review and human review status;
 - evaluator version and final pass/fail result.
 
 ## Workspace shape
 
-Use one directory per case and configuration:
+Use one directory per case and target:
 
 ```text
 .scratch/skill-evals/batch-<run-id>/
   <skill>/
     <case>/
-      with_skill/
-        <target>/
-          workspace/
-          result.json
-          grading.json
-      baseline/
-        <target>/
-          workspace/
-          result.json
-          grading.json
+      <target>/
+        workspace/
+        result.json
+        grading.json
     benchmark.json
     review.html
     attestation-draft.json
@@ -40,9 +34,8 @@ when the runner does not expose it.
 Required and trigger cases may declare deterministic UTF-8 `fixtures`; required
 cases may also declare Managed `companion_skills`. The runner writes fixtures
 only below the isolated workspace, rejects Agent configuration paths and
-traversal, and stages only the declared companions. The no-Skill baseline
-receives the same fixtures, runtime capabilities, and companions but not the
-Skill under evaluation. Declared QMD access uses the verified host executable
+traversal, and stages only the declared companions. Declared QMD access uses
+the verified host executable
 against a workspace-local fixture index through a read-only command wrapper.
 Before QMD setup, the runner clears host index/config overrides and pins all
 QMD/XDG state below the workspace; the wrapper repeats that isolation and
@@ -88,7 +81,7 @@ A compact source-controlled attestation contains:
 
 - `skill_name`, `skill_digest`, `evaluator_version`, and `evaluated_at`;
 - the tested Claude and Codex target identities;
-- structural, discovery, behavior, baseline, trigger, efficiency, and review
+- structural, discovery, behavior, trigger, efficiency, and review
   results;
 - unavailable optional capabilities;
 - final `passed` status.

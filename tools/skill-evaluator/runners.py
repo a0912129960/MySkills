@@ -754,7 +754,6 @@ def build_command(
     model: str | None = None,
     *,
     explicit: bool = True,
-    baseline: bool = False,
     safety: str = "read-only",
     runtime_tools: Iterable[str] = (),
     external_tools: Iterable[str] = (),
@@ -807,8 +806,6 @@ def build_command(
         ]
         if safety == "read-only":
             command.extend(["--permission-mode", "dontAsk"])
-        if baseline:
-            command.append("--disable-slash-commands")
         if safety == "read-only":
             tools = ["Read", "Glob", "Grep"]
             allowed_tools = list(workspace_permissions)

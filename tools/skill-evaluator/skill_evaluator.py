@@ -60,13 +60,7 @@ def smoke_contract() -> dict[str, Any]:
         ]
 
         workspace = root / "workspace"
-        run_dir = (
-            workspace
-            / "fixture-skill"
-            / "case"
-            / "with_skill"
-            / "claude"
-        )
+        run_dir = workspace / "fixture-skill" / "case" / "claude"
         run_dir.mkdir(parents=True)
         (run_dir / "result.json").write_text(
             json.dumps(
@@ -74,7 +68,6 @@ def smoke_contract() -> dict[str, Any]:
                     "plan": {
                         "skill_name": "fixture-skill",
                         "case_id": "case",
-                        "configuration": "with_skill",
                         "target": "claude",
                     },
                     "result": {
@@ -98,9 +91,7 @@ def smoke_contract() -> dict[str, Any]:
             encoding="utf-8",
         )
         benchmark = aggregate_benchmark.aggregate_workspace(workspace, "fixture-skill")
-        checks["benchmark"] = (
-            benchmark["configurations"]["with_skill"]["pass_rate"] == 1.0
-        )
+        checks["benchmark"] = benchmark["summary"]["pass_rate"] == 1.0
         report_path = workspace / "review.html"
         generate_report.write_static_report(benchmark, report_path)
         checks["static_report"] = (
@@ -122,10 +113,9 @@ def _execute_batch_item(
 
     skill_path = Path(item["skill_path"])
     staged_skills = [
-        Path(path) for path in item["companion_skill_paths"]
+        skill_path,
+        *(Path(path) for path in item["companion_skill_paths"]),
     ]
-    if item["configuration"] == "with_skill":
-        staged_skills.insert(0, skill_path)
     with runners.isolated_execution_workspace(repo_root) as execution_root:
         runners.prepare_evaluation_workspace(
             staged_skills,
@@ -140,7 +130,6 @@ def _execute_batch_item(
             skill_path,
             model,
             explicit=item["explicit"],
-            baseline=item["configuration"] == "baseline",
             safety=item["safety"],
             runtime_tools=item["runtime_tools"],
             external_tools=item["external_tools"],
@@ -563,7 +552,6 @@ def main(argv: list[str] | None = None) -> int:
                 workspace
                 / item["skill_name"]
                 / item["case_id"]
-                / item["configuration"]
                 / item["target"]
             )
             record = _execute_batch_item(
@@ -583,7 +571,6 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "skill_name": item["skill_name"],
                     "case_id": item["case_id"],
-                    "configuration": item["configuration"],
                     "target": item["target"],
                     "returncode": result["returncode"],
                     "timed_out": result["timed_out"],

@@ -11,7 +11,7 @@ import struct
 from typing import Any
 
 
-EVALUATOR_VERSION = "myskills-skill-evaluator/1"
+EVALUATOR_VERSION = "myskills-skill-evaluator/2"
 TARGETS = ("claude", "codex")
 
 
@@ -44,10 +44,9 @@ def build_pending_draft(
 
     skill = Path(skill_path).resolve()
     assertion_count = review["assertion_count"]
-    baseline = review["baseline"]
     return {
         "$schema": "../attestation.schema.json",
-        "schema_version": 1,
+        "schema_version": 2,
         "skill_name": skill.name,
         "skill_digest": directory_digest(skill),
         "source_digest": None,
@@ -60,14 +59,6 @@ def build_pending_draft(
             "structural": {
                 "status": "pass",
                 "summary": structural_summary,
-            },
-            "baseline": {
-                "kind": baseline["kind"],
-                "identity": baseline["identity"],
-                "summary": (
-                    f"Reviewed {baseline['kind']} baseline "
-                    f"{baseline['identity']} for both targets."
-                ),
             },
             "assertions": {
                 "passed": assertion_count,
@@ -148,7 +139,7 @@ def validate_attestation(
     expected_digest = directory_digest(skill)
     expected_values = {
         "$schema": "../attestation.schema.json",
-        "schema_version": 1,
+        "schema_version": 2,
         "skill_name": skill.name,
         "skill_digest": expected_digest,
         "evaluator_version": EVALUATOR_VERSION,
@@ -215,7 +206,6 @@ def _validate_evidence(path: Path, value: object) -> list[str]:
     required = {
         "raw_run_root",
         "structural",
-        "baseline",
         "assertions",
         "target_identities",
         "efficiency",
@@ -239,23 +229,6 @@ def _validate_evidence(path: Path, value: object) -> list[str]:
         or not structural["summary"].strip()
     ):
         errors.append(f"{prefix}.structural must record a passing summary")
-
-    baseline = value.get("baseline")
-    if not isinstance(baseline, dict) or set(baseline) != {
-        "kind",
-        "identity",
-        "summary",
-    }:
-        errors.append(f"{prefix}.baseline fields are invalid")
-    else:
-        if baseline.get("kind") not in {"no-skill", "previous-version"}:
-            errors.append(f"{prefix}.baseline.kind is invalid")
-        for field in ("identity", "summary"):
-            if (
-                not isinstance(baseline.get(field), str)
-                or not baseline[field].strip()
-            ):
-                errors.append(f"{prefix}.baseline.{field} is required")
 
     assertions = value.get("assertions")
     if not isinstance(assertions, dict) or set(assertions) != {

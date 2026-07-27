@@ -47,9 +47,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    permission in read-only Claude cases. The launchers reject mutating
    subcommands and paths outside the evaluation workspace.
 
-   A complete 42-Skill run currently contains 336 target/configuration calls:
-   Claude and Codex, with-Skill and no-Skill baseline, for one required and one
-   trigger case per Skill. Execution is deliberately gated:
+   A complete 42-Skill run currently contains 168 target calls: Claude and
+   Codex for one required and one trigger case per Skill. Execution is
+   deliberately gated:
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py run-batch . `
@@ -73,9 +73,8 @@ current directory digest of every Managed Skill. Raw model output stays under
    isolation results, and model output are written under the ignored batch
    workspace; credentials are never written there.
 
-3. Grade the raw results, compare required cases with a no-Skill or recorded
-   previous-version baseline, and review the offline report. Claude evidence
-   cannot substitute for Codex evidence or vice versa.
+3. Grade the raw results and review the offline report. Claude evidence cannot
+   substitute for Codex evidence or vice versa.
 
    Generate fail-closed grading templates without overwriting prior human work:
 
@@ -96,8 +95,8 @@ current directory digest of every Managed Skill. Raw model output stays under
    ```
 
    The report shows the declared prompt, exact logical launch command, ordinary
-   and Git-backed fixtures, canonical Skill and baseline identities, target
-   identity and process status, external-runtime identity/setup evidence,
+   and Git-backed fixtures, canonical Skill identity, target identity and
+   process status, external-runtime identity/setup evidence,
    normalized final response, structured model/tool trace, raw streams, and
    current grading. Claude runs use verbose stream JSON so Bash/Read tool use
    and tool results remain reviewable rather than being collapsed into only the
@@ -105,9 +104,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    a successful out-of-workspace file tool, or an undeclared Bash command in a
    read-only case, blocks attestation. Missing or malformed audit data is a
    failure, not a pass. The
-   report places With-Skill and Baseline runs side by side for each target. A
-   process pass is not a behavior pass; the human records a specific reason for
-   every assertion in the linked `grading.json`.
+   report places Claude and Codex runs in separate target sections. A process
+   pass is not a behavior pass; the human records a specific reason for every
+   assertion in the linked `grading.json`.
 
 4. After completing every grading template, audit the reviewed evidence and
    create a pending draft:
