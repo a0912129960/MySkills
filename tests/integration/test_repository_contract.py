@@ -24,7 +24,7 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Validated 42 Managed Skill(s)", result.stdout)
 
-    def test_release_validation_rejects_missing_attestations(self) -> None:
+    def test_release_validation_rejects_missing_release_pointers(self) -> None:
         result = subprocess.run(
             [sys.executable, str(VALIDATOR)],
             cwd=ROOT,
@@ -36,7 +36,9 @@ class RepositoryContractTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
-            result.stderr.count("missing passing current-digest attestation"),
+            result.stderr.count(
+                "missing passing current-digest release pointer"
+            ),
             42,
         )
 

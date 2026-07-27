@@ -26,6 +26,18 @@ def load_records_module():
     return module
 
 
+def load_attestations_module():
+    path = TOOLS_ROOT / "attestations.py"
+    spec = importlib.util.spec_from_file_location(
+        "skill_evaluator_release_pointers",
+        path,
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def valid_record() -> dict[str, object]:
     digest = "sha256:" + ("a" * 64)
     case = {
@@ -250,6 +262,134 @@ class EvaluationRecordContractTests(unittest.TestCase):
             self.assertEqual(
                 json.loads((output / "record.json").read_text(encoding="utf-8")),
                 record,
+            )
+
+    def test_release_pointer_binds_current_skill_to_passing_record(self) -> None:
+        attestations = load_attestations_module()
+        records = load_records_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            skill = root / "skills" / "engineering" / "fixture-skill"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\n"
+                "name: fixture-skill\n"
+                "description: Exercise release pointer validation.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            record = valid_record()
+            record["skill_digest"] = attestations.directory_digest(skill)
+            record_root = records.write_record(root, record)
+            pointer = attestations.build_release_pointer(
+                root,
+                skill,
+                record_root / "record.json",
+                selected_at="2026-07-27T12:02:00Z",
+            )
+            pointer_path = (
+                root / "attestations" / "skills" / "fixture-skill.json"
+            )
+            pointer_path.parent.mkdir(parents=True)
+            pointer_path.write_text(
+                json.dumps(pointer, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(pointer["schema_version"], 3)
+            self.assertEqual(
+                pointer["record_path"],
+                "evaluations/records/fixture-skill/"
+                "20260727T120000Z-fixture/record.json",
+            )
+            self.assertEqual(
+                attestations.validate_release_pointer(
+                    root,
+                    skill,
+                    pointer_path,
+                ),
+                [],
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ENTRY_POINT),
+                    "verify-attestation",
+                    str(skill),
+                    str(pointer_path),
+                ],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            (skill / "SKILL.md").write_text(
+                "---\n"
+                "name: fixture-skill\n"
+                "description: Changed after evaluation.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            errors = attestations.validate_release_pointer(
+                root,
+                skill,
+                pointer_path,
+            )
+            self.assertTrue(
+                any("skill_digest does not match" in error for error in errors),
+                errors,
+            )
+
+    def test_select_record_cli_writes_current_release_pointer(self) -> None:
+        attestations = load_attestations_module()
+        records = load_records_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            skill = root / "skills" / "engineering" / "fixture-skill"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\n"
+                "name: fixture-skill\n"
+                "description: Exercise release pointer selection.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            record = valid_record()
+            record["skill_digest"] = attestations.directory_digest(skill)
+            record_path = records.write_record(root, record) / "record.json"
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ENTRY_POINT),
+                    "select-record",
+                    str(root),
+                    str(skill),
+                    str(record_path),
+                    "--selected-at",
+                    "2026-07-27T12:02:00Z",
+                ],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            pointer_path = (
+                root / "attestations" / "skills" / "fixture-skill.json"
+            )
+            self.assertEqual(Path(completed.stdout.strip()), pointer_path)
+            self.assertEqual(
+                attestations.validate_release_pointer(
+                    root,
+                    skill,
+                    pointer_path,
+                ),
+                [],
             )
 
     def test_failed_case_requires_observable_failure_location(self) -> None:

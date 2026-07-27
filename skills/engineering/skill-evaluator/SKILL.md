@@ -17,7 +17,7 @@ recommendations and asks for a new evaluation of the resulting digest.
   clone or a globally installed evaluator.
 - Require the evaluator launcher and both `claude` and `codex` target
   capabilities declared by MySkills. Missing either target prevents a passing
-  attestation.
+  evaluation record.
 - Place raw runs under
   `.scratch\skill-evals\<skill-name>\<run-id>\`; this location is disposable
   and ignored.
@@ -36,23 +36,28 @@ recommendations and asks for a new evaluation of the resulting digest.
    stand in for Codex results.
 6. Generate the offline static HTML review and present it for human inspection.
    Do not require a CDN, web server, or Node.js.
+7. Produce a sanitized machine-readable record and concise Markdown summary for
+   every run, including failed and invalid runs.
 
 Read [references/evaluation-contract.md](references/evaluation-contract.md)
 before constructing cases or recording results.
 
-## Report and attest
+## Report and release
 
 Default evaluation is report-only. List failures, unavailable capabilities, and
 recommendations without modifying the Skill.
 
-After completing human grading, use the evaluator's `draft-attestation`
-command. It must reject incomplete or failed raw evidence and leave report
-review, reviewer identity, notes, and overall status pending.
+After completing grading, create a record draft that satisfies
+`evaluations/record.schema.json`, then use `publish-record` to write its
+append-only `record.json` and `summary.md`. Do not commit credentials, personal
+data, private machine paths, or unsanitized raw output.
 
-Create a passing attestation only when structural checks, both primary target
-runs, required cases, and human review pass for the exact current digest.
-Record the digest, evaluator version, tested targets, result summary, and any
-unavailable optional capability. A changed digest requires a new evaluation.
+Use `select-record` only when the published record passes for the exact current
+Skill digest and both primary platforms. This writes the current release pointer
+under `attestations/skills/`; `verify-attestation` validates the pointer, record
+digest, Skill digest, and referenced evidence. Human review may classify a
+failure or invalid evaluation but must not convert a platform failure directly
+to a pass. A changed Skill digest requires a new evaluation.
 
 An unchanged imported snapshot may use structural validation plus discovery and
 explicit-invocation smoke tests. Any rename, shortening, Windows port, merge,

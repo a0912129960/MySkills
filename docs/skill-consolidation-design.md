@@ -699,9 +699,10 @@ tools are selected only when required by the task and project.
 - Every MySkills creation path has an explicit creator-to-evaluator handoff. After authoring
   and basic structural validation, the creator invokes `skill-evaluator` against the new
   Managed Skill and does not report creation as complete until the evaluator has produced a
-  passing attestation for the current Skill digest. If evaluation recommends changes, the
-  creator applies only the accepted changes and evaluates the new digest again. If evaluation
-  cannot run or still fails, creation is reported as incomplete rather than silently accepted.
+  passing evaluation record and release pointer for the current Skill digest. If evaluation
+  recommends changes, the creator applies only the accepted changes and evaluates the new
+  digest again. If evaluation cannot run or still fails, creation is reported as incomplete
+  rather than silently accepted.
   Repository instructions enforce this final creator step for platform-native creators; the
   deterministic scaffolder also prints the same required next action but does not pretend that
   an empty scaffold has been evaluated.

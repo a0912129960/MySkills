@@ -798,7 +798,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(second["preserved_grading_count"], 1)
             self.assertTrue(preserved["expectations"][0]["passed"])
 
-    def test_complete_reviewed_batch_produces_pending_attestation_draft(self) -> None:
+    def test_complete_reviewed_batch_passes_fail_closed_audit(self) -> None:
         cases = load_module(
             "skill_evaluator_draft_cases",
             "evaluation_cases.py",
@@ -911,49 +911,20 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-            output = workspace / "qmd-attestation-draft.json"
-            completed = subprocess.run(
-                [
-                    "python",
-                    str(ENTRY_POINT),
-                    "draft-attestation",
-                    str(ROOT),
-                    str(workspace),
-                    "qmd",
-                    "--output",
-                    str(output),
-                ],
-                cwd=ROOT,
-                text=True,
-                encoding="utf-8",
-                capture_output=True,
-                check=False,
+            review = cases.audit_reviewed_skill(
+                ROOT,
+                workspace,
+                document,
+                "qmd",
             )
-
             self.assertEqual(
-                completed.returncode,
-                0,
-                completed.stdout
-                + completed.stderr
-                + (
-                    output.read_text(encoding="utf-8")
-                    if output.is_file()
-                    else ""
-                ),
-            )
-            draft = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(draft["status"], "pending-human-review")
-            self.assertEqual(draft["human_review"]["status"], "pending")
-            self.assertNotIn("baseline", draft["evidence"])
-            self.assertEqual(
-                set(draft["evidence"]["target_identities"]),
+                set(review["target_identities"]),
                 {"claude", "codex"},
             )
             self.assertEqual(
-                draft["targets"]["claude"]["required_cases"],
+                review["targets"]["claude"]["required_cases"],
                 {"passed": 1, "total": 1},
             )
-            self.assertTrue((workspace / "qmd" / "review.html").is_file())
 
             external_item = next(
                 item
@@ -1143,29 +1114,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 json.dumps(grading, indent=2) + "\n",
                 encoding="utf-8",
             )
-            rejected = subprocess.run(
-                [
-                    "python",
-                    str(ENTRY_POINT),
-                    "draft-attestation",
-                    str(ROOT),
-                    str(workspace),
-                    "qmd",
-                    "--output",
-                    str(output),
-                ],
-                cwd=ROOT,
-                text=True,
-                encoding="utf-8",
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(rejected.returncode, 1)
-            failure = json.loads(output.read_text(encoding="utf-8"))
-            self.assertIn(
+            with self.assertRaisesRegex(
+                ValueError,
                 "every expectation must pass",
-                failure["errors"][0],
-            )
+            ):
+                cases.audit_reviewed_skill(
+                    ROOT,
+                    workspace,
+                    document,
+                    "qmd",
+                )
 
     def test_runner_isolates_skills_and_cleans_ephemeral_auth(self) -> None:
         runners = load_module(
@@ -1398,9 +1356,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 [],
             )
 
-    def test_attestation_digest_matches_installer_and_rejects_stale_content(
-        self,
-    ) -> None:
+    def test_evaluation_digest_matches_installer(self) -> None:
         attestations = load_module(
             "skill_evaluator_attestations",
             "attestations.py",
@@ -1429,121 +1385,31 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(digest, f"sha256:{completed.stdout.strip()}")
 
-            target = {
-                "status": "pass",
-                "discovery": True,
-                "explicit_invocation": True,
-                "isolation": True,
-                "required_cases": {"passed": 1, "total": 1},
-                "trigger_results": {"passed": 1, "total": 1},
-                "summary": "Fixture target checks passed.",
-            }
-            data = {
-                "$schema": "../attestation.schema.json",
-                "schema_version": 2,
-                "skill_name": "fixture-skill",
-                "skill_digest": digest,
-                "source_digest": None,
-                "evaluation_level": "full",
-                "evaluator_version": attestations.EVALUATOR_VERSION,
-                "evaluated_at": "2026-07-24T00:00:00+00:00",
-                "targets": {"claude": target, "codex": target},
-                "evidence": {
-                    "raw_run_root": ".scratch/skill-evals/fixture-skill/run",
-                    "structural": {
-                        "status": "pass",
-                        "summary": "Structure passed.",
-                    },
-                    "assertions": {
-                        "passed": 2,
-                        "total": 2,
-                        "summary": "Fixture assertions passed.",
-                    },
-                    "target_identities": {
-                        "claude": "claude fixture",
-                        "codex": "codex fixture",
-                    },
-                    "efficiency": {
-                        "claude": {"duration_ms": 1, "total_tokens": 1},
-                        "codex": {"duration_ms": 1, "total_tokens": None},
-                    },
-                    "static_review": {
-                        "status": "pass",
-                        "path": (
-                            ".scratch/skill-evals/fixture-skill/run/review.html"
-                        ),
-                        "summary": "Fixture static review passed.",
-                    },
-                },
-                "human_review": {
-                    "status": "pass",
-                    "reviewer": "fixture reviewer",
-                    "reviewed_at": "2026-07-24T00:00:00+00:00",
-                    "notes": "Fixture review passed.",
-                },
-                "unavailable_capabilities": [],
-                "status": "pass",
-            }
-            attestation = Path(temp_dir) / "fixture-skill.json"
-            attestation.write_text(
-                json.dumps(data, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                attestations.validate_attestation(skill, attestation),
-                [],
-            )
-            data["evaluation_level"] = "snapshot-smoke"
-            data["source_digest"] = digest
-            attestation.write_text(
-                json.dumps(data, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            snapshot_errors = attestations.validate_attestation(
-                skill,
-                attestation,
-            )
-            self.assertTrue(
-                any("recorded source" in error for error in snapshot_errors),
-                snapshot_errors,
-            )
-            self.assertEqual(
-                attestations.validate_attestation(
-                    skill,
-                    attestation,
-                    recorded_source_digest=digest,
-                ),
-                [],
-            )
-            data["evaluation_level"] = "full"
-            data["source_digest"] = None
-            attestation.write_text(
-                json.dumps(data, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            (skill / "SKILL.md").write_text(
-                "---\nname: fixture-skill\ndescription: Changed.\n---\n",
-                encoding="utf-8",
-            )
-            errors = attestations.validate_attestation(skill, attestation)
-            self.assertTrue(
-                any("skill_digest" in error for error in errors),
-                errors,
-            )
-
-    def test_attestation_schema_requires_both_primary_targets_and_human_review(
-        self,
-    ) -> None:
+    def test_attestation_schema_is_a_release_record_pointer(self) -> None:
         schema = json.loads(
             (
                 ROOT / "attestations" / "attestation.schema.json"
             ).read_text(encoding="utf-8")
         )
         self.assertEqual(
-            schema["properties"]["targets"]["required"],
-            ["claude", "codex"],
+            schema["properties"]["schema_version"]["const"],
+            3,
         )
-        self.assertIn("human_review", schema["required"])
+        self.assertEqual(
+            set(schema["required"]),
+            {
+                "$schema",
+                "schema_version",
+                "skill_name",
+                "skill_digest",
+                "record_path",
+                "record_digest",
+                "selected_at",
+                "status",
+            },
+        )
+        self.assertNotIn("targets", schema["properties"])
+        self.assertNotIn("human_review", schema["properties"])
 
     def test_single_entry_point_runs_installer_smoke_contract(self) -> None:
         completed = subprocess.run(

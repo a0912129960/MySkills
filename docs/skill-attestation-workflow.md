@@ -1,11 +1,9 @@
 # Skill attestation workflow
 
-> **Revision notice:** This runbook describes the currently implemented attestation workflow.
-> The revised acceptance policy in
-> [`skill-evaluation-design.md`](skill-evaluation-design.md) additionally requires sanitized,
-> reviewable process evidence to be retained in Git. Until this workflow and its tooling are
-> updated to produce that record, its existing attestations are historical evidence rather
-> than proof of conformance with the revised evaluation model.
+> **Migration notice:** Record publishing and v3 release pointers below implement
+> [`skill-evaluation-design.md`](skill-evaluation-design.md). The case-manifest and batch-run
+> sections still describe the v3 one-required/one-trigger profile until the next migration
+> slice replaces them with the accepted core and invocation profiles.
 
 Release validation requires one passing, source-controlled attestation for the
 current directory digest of every Managed Skill. Raw model output stays under
@@ -116,28 +114,34 @@ current directory digest of every Managed Skill. Raw model output stays under
    assertion in the linked `grading.json`.
 
 4. After completing every grading template, audit the reviewed evidence and
-   create a pending draft:
+   create a sanitized `record-draft.json` that satisfies
+   `evaluations/record.schema.json`. Publish it without overwriting any earlier
+   run:
 
    ```powershell
-   python tools/skill-evaluator/skill_evaluator.py draft-attestation . `
-     .scratch/skill-evals/batch-<run-id> <name> `
-     --output attestations/skills/<name>.json
+   python tools/skill-evaluator/skill_evaluator.py publish-record . `
+     .scratch/skill-evals/batch-<run-id>/<name>/record-draft.json
    ```
 
-   The draft intentionally remains non-passing until a human records the final
-   review fields required by `attestations/attestation.schema.json`. Do not mark
-   an unavailable, failed, unreviewed, stale, or partially run target as
-   passing. Draft audit reparses each raw model trace, recomputes its isolation
-   result, and rejects a stored result that was removed or changed.
+   The command writes
+   `evaluations/records/<name>/<run-id>/record.json` and `summary.md`. Every
+   pass, failure, and invalid run is retained. Do not mark unavailable, failed,
+   unreviewed, stale, or partially run evidence as passing.
 
-5. Verify the attestation and the release gate:
+5. If and only if the published record passes for both platforms and the exact
+   current Skill digest, select it as the current release record and verify the
+   repository gate:
 
    ```powershell
+   python tools/skill-evaluator/skill_evaluator.py select-record . `
+     skills/<bucket>/<name> `
+     evaluations/records/<name>/<run-id>/record.json
    python tools/skill-evaluator/skill_evaluator.py verify-attestation `
      skills/<bucket>/<name> attestations/skills/<name>.json
    python scripts/validate_repo.py
    ```
 
 Any change inside the Skill directory changes its digest and makes the previous
-attestation stale. `python scripts/validate_repo.py --structural-only` is only
-for authoring before evaluation; it is not a release pass.
+release pointer stale. Changing a selected `record.json` also invalidates its
+record digest. `python scripts/validate_repo.py --structural-only` is only for
+authoring before evaluation; it is not a release pass.

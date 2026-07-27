@@ -99,7 +99,8 @@ policy:
     Write-Output (
         "Next: add the candidate and its targets to inventory/skills.json, sync the " +
         "repository manifests, then run skill-evaluator against the current directory " +
-        "digest. Creation is incomplete until a passing source-controlled attestation exists."
+        "digest. Creation is incomplete until a passing source-controlled " +
+        "evaluation record and release pointer exist."
     )
     exit 0
 }

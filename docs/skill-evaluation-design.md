@@ -227,9 +227,9 @@ reason; it is not silently omitted. The record schema determines whether that un
 value permits a valid result for the case.
 
 `attestations/skills/<skill>.json` identifies the currently selected passing record for the
-Skill and its digest. It is a release pointer, not the evaluation history. The existing
-attestation schema implements the earlier compact-attestation model and must be migrated when
-the revised evaluation model is implemented.
+Skill and its digest. It is a release pointer, not the evaluation history. The v3 attestation
+schema validates that pointer and the referenced record rather than duplicating evaluation
+evidence.
 
 Every record must be sanitized before it is staged: credentials, personal data,
 machine-specific private paths, and other secrets are never committed. Unsanitized runner

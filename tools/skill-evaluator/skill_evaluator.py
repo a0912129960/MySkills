@@ -304,15 +304,15 @@ def main(argv: list[str] | None = None) -> int:
     prepare_review_parser.add_argument("--overwrite", action="store_true")
     prepare_review_parser.add_argument("--output", type=Path)
 
-    draft_parser = subparsers.add_parser("draft-attestation")
-    draft_parser.add_argument("repo_root", type=Path)
-    draft_parser.add_argument("workspace", type=Path)
-    draft_parser.add_argument("skill_name")
-    draft_parser.add_argument("--output", type=Path, required=True)
-
     publish_record_parser = subparsers.add_parser("publish-record")
     publish_record_parser.add_argument("repo_root", type=Path)
     publish_record_parser.add_argument("record_draft", type=Path)
+
+    select_record_parser = subparsers.add_parser("select-record")
+    select_record_parser.add_argument("repo_root", type=Path)
+    select_record_parser.add_argument("skill_path", type=Path)
+    select_record_parser.add_argument("record_path", type=Path)
+    select_record_parser.add_argument("--selected-at")
 
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -610,52 +610,24 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(result, args.output)
         return 0
 
-    if args.command == "draft-attestation":
-        try:
-            repo_root = args.repo_root.resolve()
-            document = evaluation_cases.load_cases(repo_root)
-            review = evaluation_cases.audit_reviewed_skill(
-                repo_root,
-                args.workspace,
-                document,
-                args.skill_name,
-            )
-            skill_path = Path(review["skill_path"])
-            structural = validate_skill.validate_skill(skill_path)
-            if not structural["valid"]:
-                raise ValueError(
-                    "structural validation failed: "
-                    + "; ".join(structural["errors"])
-                )
-            skill_review_root = args.workspace.resolve() / args.skill_name
-            benchmark = aggregate_benchmark.aggregate_workspace(
-                args.workspace,
-                args.skill_name,
-            )
-            benchmark_path = skill_review_root / "benchmark.json"
-            _write_json(benchmark, benchmark_path)
-            report_path = skill_review_root / "review.html"
-            generate_report.write_static_report(benchmark, report_path)
-            relative_report = report_path.relative_to(repo_root).as_posix()
-            draft = attestations.build_pending_draft(
-                skill_path,
-                review,
-                static_review_path=relative_report,
-                structural_summary=(
-                    "MySkills structural validation passed for the current "
-                    "Skill directory."
-                ),
-            )
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            _write_json({"valid": False, "errors": [str(error)]}, args.output)
-            return 1
-        _write_json(draft, args.output)
-        return 0
-
     if args.command == "publish-record":
         try:
             document = evaluation_records.read_record_document(args.record_draft)
             output = evaluation_records.write_record(args.repo_root, document)
+        except (OSError, ValueError) as error:
+            print(f"ERROR: {error}")
+            return 1
+        print(output)
+        return 0
+
+    if args.command == "select-record":
+        try:
+            output = attestations.write_release_pointer(
+                args.repo_root,
+                args.skill_path,
+                args.record_path,
+                selected_at=args.selected_at,
+            )
         except (OSError, ValueError) as error:
             print(f"ERROR: {error}")
             return 1

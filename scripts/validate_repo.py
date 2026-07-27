@@ -56,7 +56,13 @@ def _validate_attestations(root: Path) -> list[str]:
     if spec is None or spec.loader is None:
         return [f"Cannot load attestation validator: {module_path}"]
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    tool_path = str(module_path.parent)
+    sys.path.insert(0, tool_path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if sys.path[0] == tool_path:
+            sys.path.pop(0)
     return module.validate_repository(root)
 
 
