@@ -707,10 +707,11 @@ tools are selected only when required by the task and project.
   an empty scaffold has been evaluated.
 - MySkills repository instructions require every newly authored Managed Skill to run
   `skill-evaluator` before completion. The evaluator writes raw runs under the ignored
-  `.scratch\skill-evals\<skill>\<run-id>\` and records a compact, source-controlled attestation
-  containing the evaluated Skill digest, evaluator version, test targets, results, and
-  unavailable capabilities. Repository validation rejects a new Managed Skill whose current
-  digest lacks a passing attestation.
+  `.scratch\skill-evals\<skill>\<run-id>\` and records sanitized, source-controlled evaluation
+  evidence as required by `skill-evaluation-design.md`. The Git-tracked record contains enough
+  process and result evidence for independent review; a compact result without its reviewable
+  evidence is insufficient. Repository validation rejects a new Managed Skill whose current
+  digest lacks a passing evaluation record.
 - Provenance alone does not exempt an import from behavioral evaluation. A snapshot whose
   complete directory digest is unchanged from its recorded source receives structural
   validation plus Claude and Codex discovery and explicit-invocation smoke tests. Any import

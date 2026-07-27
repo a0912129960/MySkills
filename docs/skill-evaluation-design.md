@@ -71,12 +71,29 @@ a reviewer determine what was tested, what happened during the run, what result 
 and why the evaluator classified it as a pass, failure, or invalid result. A bare result value
 or a `PENDING HUMAN REVIEW` marker without reviewable process evidence is insufficient.
 
+Each evaluation record contains at least:
+
+- the Skill identity and evaluated digest;
+- the evaluation specification or case version;
+- the target platform and available runner or model version;
+- the test input and relevant fixture or context;
+- whether and how the Skill was invoked;
+- relevant tool calls, parameters, ordering, and returned status;
+- the final output or externally observable final state;
+- the assertions, scores, and reasons for the classification; and
+- elapsed time and token usage when the runner exposes them.
+
+The reviewable evaluation record is retained in the MySkills Git repository. It must be
+sanitized before it is staged: credentials, personal data, machine-specific private paths,
+and other secrets are never committed. Unsanitized runner output may exist only as ignored,
+temporary execution data and is not the repository's acceptance evidence.
+
 ## Unresolved decisions
 
 The following items remain under discussion and are not yet acceptance rules:
 
-- The required evidence fields, redaction rules, and retention policy for recorded test
-  processes.
+- The source-controlled evidence path, schema, representation of unavailable fields, and
+  retention policy for superseded evaluations.
 - Case counts, sampling protocol, and platform-specific thresholds.
 - The result oracle for objective and subjective outcomes.
 - Which trajectory constraints are acceptance-critical.

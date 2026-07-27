@@ -1,5 +1,12 @@
 # Skill attestation workflow
 
+> **Revision notice:** This runbook describes the currently implemented attestation workflow.
+> The revised acceptance policy in
+> [`skill-evaluation-design.md`](skill-evaluation-design.md) additionally requires sanitized,
+> reviewable process evidence to be retained in Git. Until this workflow and its tooling are
+> updated to produce that record, its existing attestations are historical evidence rather
+> than proof of conformance with the revised evaluation model.
+
 Release validation requires one passing, source-controlled attestation for the
 current directory digest of every Managed Skill. Raw model output stays under
 `.scratch/skill-evals/` and is never committed.
