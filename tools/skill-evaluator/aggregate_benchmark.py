@@ -473,16 +473,21 @@ def _review_state(expectations: list[dict[str, Any]]) -> str:
     if not expectations:
         return "pending"
     if any(
-        not isinstance(item.get("evidence"), str)
+        item.get("status") == "pending"
+        or not isinstance(item.get("evidence"), str)
         or not item["evidence"].strip()
         or item["evidence"].strip() == PENDING_EVIDENCE
         for item in expectations
     ):
         return "pending"
     return (
-        "pass"
-        if all(item.get("passed") is True for item in expectations)
-        else "fail"
+        "fail"
+        if any(
+            item.get("required") is True
+            and item.get("status") != "pass"
+            for item in expectations
+        )
+        else "pass"
     )
 
 
@@ -525,13 +530,55 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             raise ValueError(f"{grading_path} expectations must be an array")
 
         for item in expectations:
-            if set(item) != {"text", "passed", "evidence"}:
+            if set(item) != {
+                "assertion_id",
+                "kind",
+                "description",
+                "required",
+                "status",
+                "evidence",
+            }:
                 raise ValueError(
-                    f"{grading_path} expectations require text/passed/evidence"
+                    f"{grading_path} expectations require the v2 typed "
+                    "grading fields"
+                )
+            if item.get("status") not in (
+                "pending",
+                "pass",
+                "fail",
+                "invalid",
+            ):
+                raise ValueError(
+                    f"{grading_path} expectation status is invalid"
+                )
+            if (
+                not isinstance(item.get("assertion_id"), str)
+                or not item["assertion_id"].strip()
+                or item.get("kind")
+                not in ("deterministic", "human-rubric", "trajectory")
+                or not isinstance(item.get("description"), str)
+                or not item["description"].strip()
+                or not isinstance(item.get("required"), bool)
+            ):
+                raise ValueError(
+                    f"{grading_path} expectation contract is invalid"
                 )
 
-        passed = sum(1 for item in expectations if item["passed"] is True)
-        total = len(expectations)
+        required_expectations = [
+            item for item in expectations if item["required"] is True
+        ]
+        passed = sum(
+            1
+            for item in required_expectations
+            if item["status"] == "pass"
+        )
+        total = len(required_expectations)
+        warning_count = sum(
+            1
+            for item in expectations
+            if item["required"] is False
+            and item["status"] in ("fail", "invalid")
+        )
         result = record.get("result")
         if not isinstance(result, dict):
             raise ValueError(f"{result_path}: process result is required")
@@ -620,6 +667,7 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             "passed": passed,
             "total": total,
             "pass_rate": passed / total if total else 0.0,
+            "warning_count": warning_count,
             "total_tokens": result.get("total_tokens"),
             "duration_ms": result.get("duration_ms"),
             "expectations": expectations,

@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "health-audit",
+      "version": 1,
       "role": "normal",
       "prompt": "Run the default read-only audit on the configured temporary Wiki for broken links, missing provenance, invalid lifecycle fields, and taxonomy drift; report evidence without repairing files.",
       "oracle": {
@@ -45,6 +46,7 @@
     },
     {
       "id": "health-audit-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this wiki lint task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -74,6 +76,7 @@
     },
     {
       "id": "health-audit-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second wiki lint core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -114,18 +117,21 @@
   "invocation_cases": [
     {
       "id": "explicit-policy-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Proofread one paragraph for grammar only.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Proofread one paragraph for grammar only.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Proofread one paragraph for grammar only.",
       "expected_invocation": "not-invoked"

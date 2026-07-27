@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+from datetime import datetime
 from typing import Any, Iterable
 
 import aggregate_benchmark
@@ -438,8 +439,11 @@ def prepare_review_templates(
         grading = {
             "expectations": [
                 {
-                    "text": assertion,
-                    "passed": False,
+                    "assertion_id": assertion["id"],
+                    "kind": assertion["kind"],
+                    "description": assertion["description"],
+                    "required": assertion["required"],
+                    "status": "pending",
                     "evidence": "PENDING HUMAN REVIEW",
                 }
                 for assertion in assertions
@@ -451,7 +455,7 @@ def prepare_review_templates(
         )
         created.append(str(grading_path))
     index = {
-        "schema_version": 1,
+        "schema_version": 2,
         "workspace": str(root),
         "raw_result_count": len(results),
         "created_grading_count": len(created),
@@ -790,18 +794,43 @@ def audit_reviewed_skill(
         ):
             errors.append(f"{grading_path}: expectations do not match the plan")
             continue
-        for expected_text, grade in zip(expected_assertions, expectations):
+        for expected_assertion, grade in zip(
+            expected_assertions,
+            expectations,
+        ):
             if not isinstance(grade, dict) or set(grade) != {
-                "text",
-                "passed",
+                "assertion_id",
+                "kind",
+                "description",
+                "required",
+                "status",
                 "evidence",
             }:
                 errors.append(f"{grading_path}: grading fields are invalid")
                 continue
-            if grade.get("text") != expected_text:
-                errors.append(f"{grading_path}: expectation text was changed")
-            if grade.get("passed") is not True:
-                errors.append(f"{grading_path}: every expectation must pass")
+            immutable_fields = {
+                "assertion_id": "id",
+                "kind": "kind",
+                "description": "description",
+                "required": "required",
+            }
+            if any(
+                grade.get(grade_field)
+                != expected_assertion.get(assertion_field)
+                for grade_field, assertion_field in immutable_fields.items()
+            ):
+                errors.append(
+                    f"{grading_path}: assertion contract was changed"
+                )
+            status = grade.get("status")
+            if status not in ("pending", "pass", "fail", "invalid"):
+                errors.append(f"{grading_path}: grading status is invalid")
+            elif status == "pending":
+                errors.append(f"{grading_path}: reviewed status is required")
+            if grade.get("required") is True and status != "pass":
+                errors.append(
+                    f"{grading_path}: every required expectation must pass"
+                )
             evidence = grade.get("evidence")
             if (
                 not _nonempty(evidence)
@@ -881,21 +910,20 @@ def audit_reviewed_skill(
     }
 
 
-def _grading_assertions(plan: dict[str, Any]) -> list[str]:
-    assertions = [
-        assertion["description"]
-        for assertion in plan.get("assertions", [])
-        if isinstance(assertion, dict)
-        and _nonempty(assertion.get("description"))
-    ]
-    if plan.get("mode") == "invocation":
-        expected = plan.get("expected_invocation")
-        assertions = [
-            f"Target behavior matches {expected} invocation policy"
-        ]
-    if not assertions:
-        assertions = ["Run satisfies the declared case contract"]
-    return assertions
+def _grading_assertions(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    assertions = plan.get("assertions")
+    required_fields = {"id", "kind", "description", "required"}
+    if (
+        not isinstance(assertions, list)
+        or not assertions
+        or not all(
+            isinstance(assertion, dict)
+            and set(assertion) == required_fields
+            for assertion in assertions
+        )
+    ):
+        raise ValueError("run plan assertions are missing or malformed")
+    return [dict(assertion) for assertion in assertions]
 
 
 def _plan_item(
@@ -920,6 +948,7 @@ def _plan_item(
         "skill_name": name,
         "skill_path": str(skill_path),
         "case_id": case["id"],
+        "case_version": case["version"],
         "mode": mode,
         "case_role": case.get("role") or case.get("variant"),
         "target": target,
@@ -992,6 +1021,7 @@ def _validate_core_cases(
     for case in value:
         required_fields = {
             "id",
+            "version",
             "role",
             "prompt",
             "oracle",
@@ -1021,6 +1051,8 @@ def _validate_core_cases(
             errors.append(f"{name}: core case id is invalid or duplicated")
         if isinstance(case_id, str):
             seen.add(case_id)
+        if not _valid_version(case.get("version")):
+            errors.append(f"{name}/{case_id}: version must be a positive integer")
         role = case.get("role")
         if role not in ("normal", "boundary", "safety-or-core"):
             errors.append(f"{name}/{case_id}: core role is invalid")
@@ -1277,6 +1309,7 @@ def _validate_invocation_cases(
     for case in value:
         required_fields = {
             "id",
+            "version",
             "variant",
             "prompt",
             "expected_invocation",
@@ -1305,6 +1338,8 @@ def _validate_invocation_cases(
             )
         if isinstance(case_id, str):
             seen.add(case_id)
+        if not _valid_version(case.get("version")):
+            errors.append(f"{name}/{case_id}: version must be a positive integer")
         variant = case.get("variant")
         expected_invocation = case.get("expected_invocation")
         if variant not in ("direct", "paraphrase", "boundary"):
@@ -1395,6 +1430,7 @@ def _validate_golden_cases(
     for case in value:
         required_fields = {
             "id",
+            "version",
             "prompt",
             "oracle",
             "safety",
@@ -1427,14 +1463,18 @@ def _validate_golden_cases(
             errors.append(f"{name}: golden case id is invalid or duplicated")
         if isinstance(case_id, str):
             seen.add(case_id)
+        if not _valid_version(case.get("version")):
+            errors.append(f"{name}/{case_id}: version must be a positive integer")
         if not _nonempty(case.get("prompt")) or len(case["prompt"]) < 20:
             errors.append(f"{name}/{case_id}: golden prompt is too short")
         errors.extend(_validate_oracle(name, case_id, case.get("oracle")))
         if case.get("safety") not in ("read-only", "temporary-workspace"):
             errors.append(f"{name}/{case_id}: safety is invalid")
-        for field in ("provenance", "approved_by", "approved_at"):
+        for field in ("provenance", "approved_by"):
             if not _nonempty(case.get(field)):
                 errors.append(f"{name}/{case_id}: {field} is required")
+        if not _valid_datetime(case.get("approved_at")):
+            errors.append(f"{name}/{case_id}: approved_at is invalid")
         if case.get("deidentified") is not True:
             errors.append(f"{name}/{case_id}: deidentified must be true")
         fixtures = case.get("fixtures", [])
@@ -1491,6 +1531,20 @@ def _validate_golden_cases(
 
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _valid_version(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+def _valid_datetime(value: object) -> bool:
+    if not _nonempty(value):
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
 
 
 def _unique_strings(value: object) -> bool:

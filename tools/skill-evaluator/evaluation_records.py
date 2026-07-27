@@ -44,6 +44,7 @@ TARGET_FIELDS = {
 }
 CASE_FIELDS = {
     "case_id",
+    "case_version",
     "kind",
     "prompt",
     "expected",
@@ -399,6 +400,11 @@ def _validate_target(target: str, value: object) -> list[str]:
     else:
         for index, case in enumerate(cases):
             errors.extend(_validate_case(f"{prefix}.cases[{index}]", case))
+        if status == "pass" and any(
+            not isinstance(case, dict) or case.get("status") != "pass"
+            for case in cases
+        ):
+            errors.append(f"{prefix}: passing target requires every case to pass")
     return errors
 
 
@@ -408,6 +414,12 @@ def _validate_case(prefix: str, value: object) -> list[str]:
     errors: list[str] = []
     if not _matches(value.get("case_id"), KEBAB_CASE):
         errors.append(f"{prefix}.case_id is invalid")
+    if (
+        not isinstance(value.get("case_version"), int)
+        or isinstance(value.get("case_version"), bool)
+        or value["case_version"] < 1
+    ):
+        errors.append(f"{prefix}.case_version is invalid")
     if value.get("kind") not in {"core", "invocation", "golden"}:
         errors.append(f"{prefix}.kind is invalid")
     if not _nonempty(value.get("prompt")):
@@ -415,6 +427,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
 
     expected = value.get("expected")
     assertion_ids: set[str] = set()
+    assertion_requirements: dict[str, bool] = {}
     if not isinstance(expected, dict) or set(expected) != {
         "invocation",
         "outcome",
@@ -461,6 +474,8 @@ def _validate_case(prefix: str, value: object) -> list[str]:
                     errors.append(f"{assertion_prefix}.description is required")
                 if not isinstance(assertion.get("required"), bool):
                     errors.append(f"{assertion_prefix}.required must be boolean")
+                elif isinstance(assertion_id, str):
+                    assertion_requirements[assertion_id] = assertion["required"]
 
     observed = value.get("observed")
     if not isinstance(observed, dict) or set(observed) != {
@@ -497,6 +512,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
 
     results = value.get("assertion_results")
     result_ids: set[str] = set()
+    result_statuses: dict[str, object] = {}
     if not isinstance(results, list) or not results:
         errors.append(f"{prefix}.assertion_results must be non-empty")
     else:
@@ -514,6 +530,7 @@ def _validate_case(prefix: str, value: object) -> list[str]:
                 errors.append(f"{result_prefix}.assertion_id is invalid")
             else:
                 result_ids.add(assertion_id)
+                result_statuses[assertion_id] = result.get("status")
             if result.get("status") not in RESULT_STATUSES:
                 errors.append(f"{result_prefix}.status is invalid")
             if not _nonempty(result.get("evidence")):
@@ -524,6 +541,13 @@ def _validate_case(prefix: str, value: object) -> list[str]:
     status = value.get("status")
     if status not in RESULT_STATUSES:
         errors.append(f"{prefix}.status is invalid")
+    elif status == "pass" and any(
+        required and result_statuses.get(assertion_id) != "pass"
+        for assertion_id, required in assertion_requirements.items()
+    ):
+        errors.append(
+            f"{prefix}: passing case requires all required assertions to pass"
+        )
     failure = value.get("failure")
     if not isinstance(failure, dict) or set(failure) != {
         "stage",

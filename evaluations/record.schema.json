@@ -232,6 +232,7 @@
       "additionalProperties": false,
       "required": [
         "case_id",
+        "case_version",
         "kind",
         "prompt",
         "expected",
@@ -242,6 +243,7 @@
       ],
       "properties": {
         "case_id": {"$ref": "#/$defs/kebab"},
+        "case_version": {"type": "integer", "minimum": 1},
         "kind": {"enum": ["core", "invocation", "golden"]},
         "prompt": {"type": "string", "minLength": 1},
         "expected": {"$ref": "#/$defs/expected"},

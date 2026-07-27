@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "stress-test",
+      "version": 1,
       "role": "normal",
       "prompt": "Stress-test my plan to launch a paid beta before adding audit logs. Ask one incisive question at a time and surface assumptions rather than writing the plan for me.",
       "oracle": {
@@ -36,6 +37,7 @@
     },
     {
       "id": "stress-test-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this grilling task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -65,6 +67,7 @@
     },
     {
       "id": "stress-test-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second grilling core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -96,18 +99,21 @@
   "invocation_cases": [
     {
       "id": "implicit-trigger-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Grill me on my plan to launch a paid beta before adding audit logs.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Grill me on my plan to launch a paid beta before adding audit logs.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Grill me on my plan to launch a paid beta before adding audit logs.",
       "expected_invocation": "not-invoked"

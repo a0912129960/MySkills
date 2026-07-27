@@ -111,7 +111,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    failure, not a pass. The
    report places Claude and Codex runs in separate target sections. A process
    pass is not a behavior pass; the human records a specific reason for every
-   assertion in the linked `grading.json`.
+   assertion in the linked `grading.json`. The v2 grading contract preserves
+   each assertion's ID, kind, description, and required/optional flag. Optional
+   failures remain visible warnings; required failures block acceptance.
 
 4. After completing every grading template, audit the reviewed evidence and
    create a sanitized `record-draft.json` that satisfies

@@ -63,6 +63,7 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
             )
             self.assertEqual(len(entry["invocation_cases"]), 3, name)
             for case in entry["core_cases"]:
+                self.assertEqual(case["version"], 1)
                 self.assertTrue(case["oracle"]["expected_outcome"].strip())
                 self.assertTrue(case["oracle"]["assertions"])
                 self.assertTrue(
@@ -167,6 +168,38 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
         boundary["expected_invocation"] = "implicit"
         errors = self.cases.validate_cases(ROOT, wrong_boundary)
         self.assertTrue(any("boundary" in error for error in errors), errors)
+
+        invalid_version = copy.deepcopy(document)
+        invalid_version["skills"][0]["core_cases"][0]["version"] = 0
+        errors = self.cases.validate_cases(ROOT, invalid_version)
+        self.assertTrue(any("version" in error for error in errors), errors)
+
+    def test_golden_cases_require_versioned_human_approval(self) -> None:
+        document = self.cases.load_cases(ROOT)
+        skill = document["skills"][0]
+        golden = copy.deepcopy(skill["core_cases"][0])
+        golden.pop("role")
+        golden.update(
+            {
+                "id": "reviewed-real-case",
+                "provenance": "support-case-2026-07",
+                "approved_by": "reviewer@example.invalid",
+                "approved_at": "2026-07-27T12:00:00+08:00",
+                "deidentified": True,
+            }
+        )
+        skill["golden_cases"] = [golden]
+        self.assertEqual(self.cases.validate_cases(ROOT, document), [])
+
+        invalid = copy.deepcopy(document)
+        invalid["skills"][0]["golden_cases"][0][
+            "approved_at"
+        ] = "not-a-date"
+        errors = self.cases.validate_cases(ROOT, invalid)
+        self.assertTrue(
+            any("approved_at is invalid" in error for error in errors),
+            errors,
+        )
 
     def test_loader_rejects_invalid_catalog_sources_and_duplicate_keys(
         self,

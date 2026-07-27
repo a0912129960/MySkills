@@ -112,10 +112,15 @@ invocation cases, and any approved Golden cases. This split permits independent 
 ownership while the loader returns one deterministic merged plan.
 
 Every plan item records its expected observable outcome or invocation classification,
-predeclared typed assertions, case role, current Skill and dependency digests, fixtures,
-tools, target platform, and `max_attempts: 1`. The validator rejects missing Managed Skills,
+predeclared typed assertions, case role and version, current Skill and dependency digests,
+fixtures, tools, target platform, and `max_attempts: 1`. The validator rejects missing Managed Skills,
 extra or duplicate entries, weakened case counts, invocation policy mismatches, baseline
 configuration, unsafe fixture paths, and undeclared tools before any model tokens are spent.
+
+The grading artifact preserves each assertion's ID, kind, description, and required flag.
+All assertions receive an explicit reviewed status and evidence. A non-passing required
+assertion blocks the case; a non-passing optional assertion is retained as a warning and
+cannot silently become a release failure.
 
 ### Human review
 

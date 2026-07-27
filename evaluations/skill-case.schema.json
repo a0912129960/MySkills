@@ -125,9 +125,10 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id", "role", "prompt", "oracle", "safety"],
+          "required": ["id", "version", "role", "prompt", "oracle", "safety"],
           "properties": {
             "id": {"$ref": "#/$defs/kebab"},
+            "version": {"type": "integer", "minimum": 1},
             "role": {
               "enum": ["normal", "boundary", "safety-or-core"]
             },
@@ -173,12 +174,14 @@
           "additionalProperties": false,
           "required": [
             "id",
+            "version",
             "variant",
             "prompt",
             "expected_invocation"
           ],
           "properties": {
             "id": {"$ref": "#/$defs/kebab"},
+            "version": {"type": "integer", "minimum": 1},
             "variant": {"enum": ["direct", "paraphrase", "boundary"]},
             "prompt": {"type": "string", "minLength": 20},
             "expected_invocation": {
@@ -215,6 +218,7 @@
           "additionalProperties": false,
           "required": [
             "id",
+            "version",
             "prompt",
             "oracle",
             "safety",
@@ -225,6 +229,7 @@
           ],
           "properties": {
             "id": {"$ref": "#/$defs/kebab"},
+            "version": {"type": "integer", "minimum": 1},
             "prompt": {"type": "string", "minLength": 20},
             "oracle": {"$ref": "#/$defs/oracle"},
             "safety": {"enum": ["read-only", "temporary-workspace"]},

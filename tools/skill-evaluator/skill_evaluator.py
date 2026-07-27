@@ -85,7 +85,14 @@ def smoke_contract() -> dict[str, Any]:
             json.dumps(
                 {
                     "expectations": [
-                        {"text": "fixture", "passed": True, "evidence": "smoke"}
+                        {
+                            "assertion_id": "fixture",
+                            "kind": "deterministic",
+                            "description": "fixture",
+                            "required": True,
+                            "status": "pass",
+                            "evidence": "smoke",
+                        }
                     ]
                 }
             ),

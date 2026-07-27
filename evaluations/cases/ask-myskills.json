@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "route-request",
+      "version": 1,
       "role": "normal",
       "prompt": "A user wants to debug a slow API and later save durable findings to their Wiki. Recommend the smallest sequence of Managed Skills without inventing unavailable names.",
       "oracle": {
@@ -36,6 +37,7 @@
     },
     {
       "id": "route-request-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this ask myskills task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -65,6 +67,7 @@
     },
     {
       "id": "route-request-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second ask myskills core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -96,18 +99,21 @@
   "invocation_cases": [
     {
       "id": "explicit-policy-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Help me debug a slow API response.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Help me debug a slow API response.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Help me debug a slow API response.",
       "expected_invocation": "not-invoked"

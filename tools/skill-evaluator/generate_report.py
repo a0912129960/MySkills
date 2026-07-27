@@ -32,21 +32,28 @@ def _relative_href(value: object) -> str:
 def _render_expectations(case: dict[str, Any]) -> str:
     items: list[str] = []
     for expectation in case.get("expectations") or ():
-        passed = expectation.get("passed")
+        status = expectation.get("status")
+        required = expectation.get("required") is True
         evidence = str(expectation.get("evidence") or "")
-        if evidence == "PENDING HUMAN REVIEW":
+        if status == "pending" or evidence == "PENDING HUMAN REVIEW":
             state = "PENDING"
             css_class = "pending"
-        elif passed is True:
+        elif status == "pass":
             state = "PASS"
             css_class = "pass"
+        elif not required:
+            state = "WARN"
+            css_class = "warning"
         else:
-            state = "FAIL"
+            state = str(status or "FAIL").upper()
             css_class = "fail"
         items.append(
             "<li>"
             f'<span class="badge {css_class}">{state}</span> '
-            f"<strong>{_escape(expectation.get('text'))}</strong>"
+            f"<strong>{_escape(expectation.get('assertion_id'))}</strong>: "
+            f"{_escape(expectation.get('description'))} "
+            f"({_escape(expectation.get('kind'))}, "
+            f"{'required' if required else 'optional'})"
             f"<div class=\"evidence\">{_escape(evidence)}</div>"
             "</li>"
         )
@@ -388,6 +395,7 @@ code {{ overflow-wrap: anywhere; }}
 .badge.pass {{ color: #22543d; background: #c6f6d5; }}
 .badge.fail {{ color: #742a2a; background: #fed7d7; }}
 .badge.pending {{ color: #744210; background: #fefcbf; }}
+.badge.warning {{ color: #744210; background: #feebc8; }}
 dl {{ display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }}
 dt {{ font-weight: 700; }}
 dd {{ margin: 0; min-width: 0; overflow-wrap: anywhere; }}

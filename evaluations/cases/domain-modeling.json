@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "ubiquitous-language",
+      "version": 1,
       "role": "normal",
       "prompt": "Sharpen a subscription system vocabulary where account, customer, member, plan, and entitlement are currently used inconsistently.",
       "oracle": {
@@ -36,6 +37,7 @@
     },
     {
       "id": "ubiquitous-language-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this domain modeling task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -65,6 +67,7 @@
     },
     {
       "id": "ubiquitous-language-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second domain modeling core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -96,18 +99,21 @@
   "invocation_cases": [
     {
       "id": "implicit-trigger-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Help us define a ubiquitous language for accounts, members, plans, and entitlements.",
       "expected_invocation": "not-invoked"

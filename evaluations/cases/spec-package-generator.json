@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "spec-package",
+      "version": 1,
       "role": "normal",
       "prompt": "Begin a specification package for the requirement in fixture/requirements/bookmark-importer.md. Create only the intake and earliest Gate 1 artifacts justified by the supplied requirement, surface blocking questions, and stop at the first required human gate without claiming final readiness or implementing product code.",
       "oracle": {
@@ -42,6 +43,7 @@
     },
     {
       "id": "spec-package-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this spec package generator task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -71,6 +73,7 @@
     },
     {
       "id": "spec-package-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Perform a second spec package generator core task using only the supplied temporary workspace. Produce the smallest valid outcome, preserve unrelated files, and stop before any action outside the stated authorization.",
       "oracle": {
@@ -108,18 +111,21 @@
   "invocation_cases": [
     {
       "id": "implicit-trigger-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Create an AI-ready PRD, EARS requirements, BDD scenarios, and task package for an offline bookmark importer.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Create an AI-ready PRD, EARS requirements, BDD scenarios, and task package for an offline bookmark importer.",
       "expected_invocation": "implicit"
     },
     {
       "id": "implicit-trigger-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Create an AI-ready PRD, EARS requirements, BDD scenarios, and task package for an offline bookmark importer.",
       "expected_invocation": "not-invoked"

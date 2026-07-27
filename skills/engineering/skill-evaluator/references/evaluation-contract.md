@@ -23,16 +23,18 @@ inventory membership, invocation classification, duplicate identifiers,
 fixtures, tools, and complete coverage.
 
 Every Skill source declares exactly three core cases and three invocation
-cases. Each plan item has `max_attempts: 1` and is run once on Claude and once
-on Codex. Core cases contain a predeclared expected outcome and typed required
+cases. Every case has a positive integer version that binds its prompt and
+oracle. Each plan item has `max_attempts: 1` and is run once on Claude and once
+on Codex. Core cases contain a predeclared expected outcome and typed
 assertions. Explicit Skills expect `not-invoked` in all three invocation cases;
 Implicit Skills require direct and paraphrase invocation plus a non-invoking
 boundary case. Baseline comparisons and automatic retries are not part of the
 contract.
 
 Golden cases are optional. A Golden case must be de-identified and record its
-provenance, human approver, approval time, expected outcome, and assertions
-before it enters a plan.
+provenance, version, human approver, timezone-qualified approval time, expected
+outcome, and assertions before it enters a plan. Changing its prompt or oracle
+increments the case version rather than rewriting earlier evidence.
 
 ## Raw workspace
 
@@ -51,7 +53,11 @@ Use one ignored directory per case and target:
     record-draft.json
 ```
 
-`grading.json` expectations use exactly `text`, `passed`, and `evidence`.
+`grading.json` schema v2 expectations preserve `assertion_id`, `kind`,
+`description`, and `required` from the plan, plus the reviewer-controlled
+`status` and `evidence`. Status is `pending`, `pass`, `fail`, or `invalid`.
+Every assertion must be reviewed. A non-passing required assertion blocks the
+case; a non-passing optional assertion is retained as a warning.
 Each `result.json` records `duration_ms` and records `total_tokens` as `null`
 when the runner does not expose it.
 

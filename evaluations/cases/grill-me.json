@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "decision-interview",
+      "version": 1,
       "role": "normal",
       "prompt": "Interview me one decision at a time to sharpen a non-code launch plan, maintaining explicit decisions and unresolved risks.",
       "oracle": {
@@ -36,6 +37,7 @@
     },
     {
       "id": "decision-interview-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this grill me task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -65,6 +67,7 @@
     },
     {
       "id": "decision-interview-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second grill me core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -96,18 +99,21 @@
   "invocation_cases": [
     {
       "id": "explicit-policy-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Summarize my launch idea in three bullets.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Summarize my launch idea in three bullets.",
       "expected_invocation": "not-invoked"
     },
     {
       "id": "explicit-policy-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Summarize my launch idea in three bullets.",
       "expected_invocation": "not-invoked"

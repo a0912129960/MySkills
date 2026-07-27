@@ -633,8 +633,21 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         "core_cases": [
                             {
                                 "id": "required",
+                                "version": 1,
                                 "prompt": "Exercise the fixture Skill behavior.",
-                                "assertions": ["fixture behavior passes"],
+                                "oracle": {
+                                    "expected_outcome": "fixture behavior passes",
+                                    "assertions": [
+                                        {
+                                            "id": "fixture-behavior",
+                                            "kind": "deterministic",
+                                            "description": (
+                                                "fixture behavior passes"
+                                            ),
+                                            "required": True,
+                                        }
+                                    ],
+                                },
                                 "safety": "read-only",
                                 "runtime_tools": ["skill-evaluator"],
                             }
@@ -642,6 +655,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         "invocation_cases": [
                             {
                                 "id": "trigger",
+                                "version": 1,
                                 "prompt": "Naturally trigger the fixture Skill behavior.",
                                 "expected_invocation": "implicit",
                             }
@@ -699,14 +713,28 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         "core_cases": [
                             {
                                 "id": "required",
+                                "version": 1,
                                 "prompt": "Exercise the fixture Skill behavior.",
-                                "assertions": ["fixture behavior passes"],
+                                "oracle": {
+                                    "expected_outcome": "fixture behavior passes",
+                                    "assertions": [
+                                        {
+                                            "id": "fixture-behavior",
+                                            "kind": "deterministic",
+                                            "description": (
+                                                "fixture behavior passes"
+                                            ),
+                                            "required": True,
+                                        }
+                                    ],
+                                },
                                 "safety": "read-only",
                             }
                         ],
                         "invocation_cases": [
                             {
                                 "id": "trigger",
+                                "version": 1,
                                 "prompt": "Naturally trigger the fixture Skill behavior.",
                                 "expected_invocation": "implicit",
                             }
@@ -744,7 +772,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             for grading_path in workspace.rglob("grading.json"):
                 grading = json.loads(grading_path.read_text(encoding="utf-8"))
                 for expectation in grading["expectations"]:
-                    expectation["passed"] = True
+                    expectation["status"] = "pass"
                     expectation["evidence"] = "Reviewed fixture evidence."
                 grading_path.write_text(
                     json.dumps(grading),
@@ -784,10 +812,20 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 json.dumps(
                     {
                         "plan": {
-                            "mode": "required",
+                            "mode": "core",
                             "assertions": [
-                                "retrieves full evidence",
-                                "cites the source",
+                                {
+                                    "id": "retrieves-evidence",
+                                    "kind": "deterministic",
+                                    "description": "retrieves full evidence",
+                                    "required": True,
+                                },
+                                {
+                                    "id": "cites-source",
+                                    "kind": "human-rubric",
+                                    "description": "cites the source",
+                                    "required": False,
+                                },
                             ],
                         },
                         "result": {"returncode": 0},
@@ -801,13 +839,21 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertEqual(first["created_grading_count"], 1)
             self.assertTrue(
                 all(
-                    item["passed"] is False
+                    item["status"] == "pending"
                     and item["evidence"] == "PENDING HUMAN REVIEW"
+                    and set(item) == {
+                        "assertion_id",
+                        "kind",
+                        "description",
+                        "required",
+                        "status",
+                        "evidence",
+                    }
                     for item in grading["expectations"]
                 )
             )
 
-            grading["expectations"][0]["passed"] = True
+            grading["expectations"][0]["status"] = "pass"
             grading["expectations"][0]["evidence"] = "Reviewed evidence."
             grading_path.write_text(
                 json.dumps(grading),
@@ -816,7 +862,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             second = cases.prepare_review_templates(workspace)
             preserved = json.loads(grading_path.read_text(encoding="utf-8"))
             self.assertEqual(second["preserved_grading_count"], 1)
-            self.assertTrue(preserved["expectations"][0]["passed"])
+            self.assertEqual(preserved["expectations"][0]["status"], "pass")
 
     def test_complete_reviewed_batch_passes_fail_closed_audit(self) -> None:
         cases = load_module(
@@ -824,6 +870,19 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "evaluation_cases.py",
         )
         document = cases.load_cases(ROOT)
+        qmd = next(
+            entry
+            for entry in document["skills"]
+            if entry["skill_name"] == "qmd"
+        )
+        qmd["core_cases"][0]["oracle"]["assertions"].append(
+            {
+                "id": "optional-efficiency-warning",
+                "kind": "trajectory",
+                "description": "uses the shortest available safe query",
+                "required": False,
+            }
+        )
         plan = cases.build_plan(ROOT, document, ["qmd"])
         scratch = ROOT / ".scratch" / "skill-evals"
         scratch.mkdir(parents=True, exist_ok=True)
@@ -924,7 +983,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             for grading_path in workspace.rglob("grading.json"):
                 grading = json.loads(grading_path.read_text(encoding="utf-8"))
                 for expectation in grading["expectations"]:
-                    expectation["passed"] = True
+                    expectation["status"] = (
+                        "pass" if expectation["required"] else "fail"
+                    )
                     expectation["evidence"] = "Human checked the raw result."
                 grading_path.write_text(
                     json.dumps(grading, indent=2) + "\n",
@@ -1128,15 +1189,18 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
             grading_path = next(workspace.rglob("grading.json"))
             grading = json.loads(grading_path.read_text(encoding="utf-8"))
-            grading["expectations"][0]["passed"] = False
-            grading["expectations"][0]["evidence"] = "PENDING HUMAN REVIEW"
+            required_expectation = next(
+                item for item in grading["expectations"] if item["required"]
+            )
+            required_expectation["status"] = "fail"
+            required_expectation["evidence"] = "Required outcome was absent."
             grading_path.write_text(
                 json.dumps(grading, indent=2) + "\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(
                 ValueError,
-                "every expectation must pass",
+                "every required expectation must pass",
             ):
                 cases.audit_reviewed_skill(
                     ROOT,
@@ -2993,8 +3057,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         {
                             "expectations": [
                                 {
-                                    "text": "Produces the required file",
-                                    "passed": True,
+                                    "assertion_id": "produces-required-file",
+                                    "kind": "deterministic",
+                                    "description": "Produces the required file",
+                                    "required": True,
+                                    "status": "pass",
                                     "evidence": (
                                         "PENDING HUMAN REVIEW"
                                         if target == "claude"

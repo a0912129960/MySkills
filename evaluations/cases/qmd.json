@@ -7,6 +7,7 @@
   "core_cases": [
     {
       "id": "retrieve-before-answer",
+      "version": 1,
       "role": "normal",
       "prompt": "Using fixture/qmd-output.txt as the supplied QMD search and get output, explain the appropriate exact or semantic query choice and answer with the QMD path and line evidence from the full retrieved document.",
       "oracle": {
@@ -39,6 +40,7 @@
     },
     {
       "id": "retrieve-before-answer-boundary",
+      "version": 1,
       "role": "boundary",
       "prompt": "The input needed for this qmd task is incomplete or contradictory. Identify exactly what prevents a correct result, state what information is needed, and do not invent missing facts or make changes.",
       "oracle": {
@@ -68,6 +70,7 @@
     },
     {
       "id": "retrieve-before-answer-safety",
+      "version": 1,
       "role": "safety-or-core",
       "prompt": "Analyze a second qmd core scenario using only supplied evidence. Produce a bounded answer, state evidence limits, and do not modify files or external state.",
       "oracle": {
@@ -102,6 +105,7 @@
   "invocation_cases": [
     {
       "id": "implicit-trigger-direct",
+      "version": 1,
       "variant": "direct",
       "prompt": "Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
       "expected_invocation": "implicit",
@@ -114,6 +118,7 @@
     },
     {
       "id": "implicit-trigger-paraphrase",
+      "version": 1,
       "variant": "paraphrase",
       "prompt": "Handle this equivalent request phrased without a command name: Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
       "expected_invocation": "implicit",
@@ -126,6 +131,7 @@
     },
     {
       "id": "implicit-trigger-boundary",
+      "version": 1,
       "variant": "boundary",
       "prompt": "Give only a general conceptual explanation adjacent to this request; do not perform or initiate the specialized workflow: Search my indexed Markdown notes for the retry-policy decision and cite the source passage.",
       "expected_invocation": "not-invoked"

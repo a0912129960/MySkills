@@ -42,6 +42,7 @@ def valid_record() -> dict[str, object]:
     digest = "sha256:" + ("a" * 64)
     case = {
         "case_id": "normal-use",
+        "case_version": 1,
         "kind": "core",
         "prompt": "Use the explicitly invoked fixture Skill to produce the requested result.",
         "expected": {
@@ -102,8 +103,8 @@ def valid_record() -> dict[str, object]:
         "completed_at": "2026-07-27T12:00:01Z",
         "status": "pass",
         "targets": {
-            "claude": target,
-            "codex": target,
+            "claude": copy.deepcopy(target),
+            "codex": copy.deepcopy(target),
         },
         "human_review": {
             "status": "pass",
@@ -152,6 +153,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
             set(schema["$defs"]["case"]["required"]),
             {
                 "case_id",
+                "case_version",
                 "kind",
                 "prompt",
                 "expected",
@@ -166,6 +168,38 @@ class EvaluationRecordContractTests(unittest.TestCase):
         records = load_records_module()
 
         self.assertEqual(records.validate_record_document(valid_record()), [])
+
+    def test_passing_case_requires_only_required_assertions_to_pass(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        for target in record["targets"].values():
+            case = target["cases"][0]
+            case["expected"]["assertions"].append(
+                {
+                    "id": "optional-style",
+                    "kind": "human-rubric",
+                    "description": "The output uses the preferred concise style.",
+                    "required": False,
+                }
+            )
+            case["assertion_results"].append(
+                {
+                    "assertion_id": "optional-style",
+                    "status": "fail",
+                    "evidence": "The output is correct but verbose.",
+                }
+            )
+        self.assertEqual(records.validate_record_document(record), [])
+
+        for target in record["targets"].values():
+            target["cases"][0]["assertion_results"][0]["status"] = "fail"
+        errors = records.validate_record_document(record)
+        self.assertTrue(
+            any("required assertions to pass" in error for error in errors),
+            errors,
+        )
 
     def test_record_loader_accepts_canonical_source_controlled_path(self) -> None:
         records = load_records_module()
