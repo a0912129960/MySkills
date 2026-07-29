@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 import aggregate_benchmark
+import yaml
 
 
 TARGETS = ("claude", "codex")
@@ -1448,17 +1449,18 @@ def _fixture_skill_directory_errors(
         )
         if header is None:
             continue
-        declared = re.search(
-            r"(?m)^name:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$",
-            header.group("header"),
-        )
-        if declared is None:
+        try:
+            metadata = yaml.safe_load(header.group("header"))
+        except yaml.YAMLError:
+            continue
+        declared = metadata.get("name") if isinstance(metadata, dict) else None
+        if not isinstance(declared, str) or KEBAB_CASE.fullmatch(declared) is None:
             continue
         directory = path.rsplit("/", 2)[-2]
-        if directory != declared.group(1):
+        if directory != declared:
             errors.append(
                 f"{name}/{case_id}: fixture Skill directory must match "
-                f"name {declared.group(1)!r}: {path}"
+                f"name {declared!r}: {path}"
             )
     return errors
 

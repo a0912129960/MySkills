@@ -173,6 +173,13 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
         evaluator["core_cases"][0]["fixtures"][0][
             "path"
         ] = "fixture/not-release-notes/SKILL.md"
+        evaluator["core_cases"][0]["fixtures"][0]["content"] = evaluator[
+            "core_cases"
+        ][0]["fixtures"][0]["content"].replace(
+            "name: release-notes",
+            'name: "release-notes"',
+            1,
+        )
 
         errors = self.cases.validate_cases(ROOT, invalid)
 
