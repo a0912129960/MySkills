@@ -92,6 +92,27 @@ class InstallerCoreTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), expected)
 
+    def test_target_plan_line_discloses_reparse_type_and_destination(self) -> None:
+        result = self.run_powershell(
+            "Format-SkillTargetPlanLine "
+            "-PlatformId 'claude-code' "
+            "-SkillName 'example' "
+            "-Status 'UNOWNED' "
+            "-TargetPath 'C:\\skills\\example' "
+            "-IsReparsePoint $true "
+            "-LinkType 'Junction' "
+            "-LinkTarget 'C:\\source\\example'"
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            (
+                "TARGET\tclaude-code\texample\tUNOWNED\t"
+                "C:\\skills\\example\tLINK\tJunction\tC:\\source\\example"
+            ),
+        )
+
     def test_snapshot_copy_is_exact_and_refuses_an_existing_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -156,6 +177,204 @@ class InstallerCoreTests(unittest.TestCase):
                 list((root / "destination").glob(".myskills-*")),
                 [],
             )
+
+    def test_reparse_replacement_preserves_link_target_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            linked = root / "linked-source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            linked.mkdir()
+            target.parent.mkdir()
+            (source / "SKILL.md").write_text("managed\n", encoding="utf-8")
+            (linked / "SKILL.md").write_text("preexisting\n", encoding="utf-8")
+            (linked / "keep.txt").write_text("keep\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "New-Item -ItemType Junction "
+                "-Path $env:MYSKILLS_TEST_TARGET "
+                "-Target $env:MYSKILLS_TEST_LINKED | Out-Null; "
+                "$hash = Set-ReparsePointDirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET; "
+                "$item = Get-Item -LiteralPath $env:MYSKILLS_TEST_TARGET -Force; "
+                "$isReparse = (($item.Attributes -band "
+                "[IO.FileAttributes]::ReparsePoint) -ne 0); "
+                'Write-Output "HASH=$hash"; '
+                'Write-Output "REPARSE=$isReparse"',
+                environment={
+                    "MYSKILLS_TEST_LINKED": str(linked),
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("REPARSE=False", result.stdout)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                "managed\n",
+            )
+            self.assertEqual(
+                (linked / "SKILL.md").read_text(encoding="utf-8"),
+                "preexisting\n",
+            )
+            self.assertEqual(
+                (linked / "keep.txt").read_text(encoding="utf-8"),
+                "keep\n",
+            )
+            self.assertEqual(list(target.parent.glob(".myskills-*")), [])
+
+    def test_reparse_replacement_restores_link_after_verification_failure(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            linked = root / "linked-source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            linked.mkdir()
+            target.parent.mkdir()
+            (source / "SKILL.md").write_text("managed\n", encoding="utf-8")
+            (linked / "SKILL.md").write_text("preexisting\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "New-Item -ItemType Junction "
+                "-Path $env:MYSKILLS_TEST_TARGET "
+                "-Target $env:MYSKILLS_TEST_LINKED | Out-Null; "
+                "Set-ReparsePointDirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET "
+                "-Verify { param($Path) return $false }",
+                environment={
+                    "MYSKILLS_TEST_LINKED": str(linked),
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+            observation = self.run_powershell(
+                "$item = Get-Item "
+                "-LiteralPath $env:MYSKILLS_TEST_TARGET -Force; "
+                "$isReparse = (($item.Attributes -band "
+                "[IO.FileAttributes]::ReparsePoint) -ne 0); "
+                "$linkTarget = @($item.Target) -join ';'; "
+                'Write-Output "REPARSE=$isReparse"; '
+                'Write-Output "LINK_TYPE=$($item.LinkType)"; '
+                'Write-Output "LINK_TARGET=$linkTarget"',
+                environment={"MYSKILLS_TEST_TARGET": str(target)},
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Post-copy verification failed", result.stderr)
+            self.assertEqual(observation.returncode, 0, observation.stderr)
+            self.assertIn("REPARSE=True", observation.stdout)
+            self.assertIn("LINK_TYPE=Junction", observation.stdout)
+            self.assertIn(f"LINK_TARGET={linked}", observation.stdout)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                "preexisting\n",
+            )
+            self.assertEqual(
+                (linked / "SKILL.md").read_text(encoding="utf-8"),
+                "preexisting\n",
+            )
+            self.assertEqual(list(target.parent.glob(".myskills-*")), [])
+
+    def test_reparse_replacement_restores_exact_link_when_verifier_throws(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            linked = root / "linked-source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            linked.mkdir()
+            target.parent.mkdir()
+            (source / "SKILL.md").write_text("managed\n", encoding="utf-8")
+            (linked / "SKILL.md").write_text("preexisting\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "New-Item -ItemType Junction "
+                "-Path $env:MYSKILLS_TEST_TARGET "
+                "-Target $env:MYSKILLS_TEST_LINKED | Out-Null; "
+                "Set-ReparsePointDirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET "
+                "-Verify { param($Path) throw 'discovery exploded' }",
+                environment={
+                    "MYSKILLS_TEST_LINKED": str(linked),
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+            observation = self.run_powershell(
+                "$item = Get-Item "
+                "-LiteralPath $env:MYSKILLS_TEST_TARGET -Force; "
+                "$linkTarget = @($item.Target) -join ';'; "
+                'Write-Output "LINK_TYPE=$($item.LinkType)"; '
+                'Write-Output "LINK_TARGET=$linkTarget"',
+                environment={"MYSKILLS_TEST_TARGET": str(target)},
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("discovery exploded", result.stderr)
+            self.assertEqual(observation.returncode, 0, observation.stderr)
+            self.assertIn("LINK_TYPE=Junction", observation.stdout)
+            self.assertIn(f"LINK_TARGET={linked}", observation.stdout)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                "preexisting\n",
+            )
+            self.assertEqual(list(target.parent.glob(".myskills-*")), [])
+
+    def test_symbolic_link_replacement_preserves_link_target_contents(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            linked = root / "linked-source"
+            target = root / "destination" / "example"
+            source.mkdir()
+            linked.mkdir()
+            target.parent.mkdir()
+            (source / "SKILL.md").write_text("managed\n", encoding="utf-8")
+            (linked / "SKILL.md").write_text("preexisting\n", encoding="utf-8")
+
+            result = self.run_powershell(
+                "New-Item -ItemType SymbolicLink "
+                "-Path $env:MYSKILLS_TEST_TARGET "
+                "-Target $env:MYSKILLS_TEST_LINKED | Out-Null; "
+                "Set-ReparsePointDirectorySnapshot "
+                "-Source $env:MYSKILLS_TEST_SOURCE "
+                "-Target $env:MYSKILLS_TEST_TARGET",
+                environment={
+                    "MYSKILLS_TEST_LINKED": str(linked),
+                    "MYSKILLS_TEST_SOURCE": str(source),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            if (
+                result.returncode != 0
+                and "privilege required" in result.stderr.lower()
+            ):
+                self.skipTest(
+                    "creating a symbolic link requires elevated Windows privileges"
+                )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                "managed\n",
+            )
+            self.assertEqual(
+                (linked / "SKILL.md").read_text(encoding="utf-8"),
+                "preexisting\n",
+            )
+            self.assertEqual(list(target.parent.glob(".myskills-*")), [])
 
     def test_backup_snapshot_verifies_an_exact_recoverable_copy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

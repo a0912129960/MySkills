@@ -1202,8 +1202,12 @@ tools are selected only when required by the task and project.
 - Backup metadata is recorded in machine state and backups are never committed to the
   repository. The initial implementation does not delete backups automatically; cleanup is a
   separate explicit operation.
-- Installation is atomic per Managed Skill within each eligible platform target. An absent
-  target Agent receives no copy and does not prevent installation to other eligible targets.
+- Normal copied-snapshot installation is atomic per Managed Skill within each eligible
+  platform target. Explicit link migration is exception-safe but not power-loss atomic:
+  forced process termination can leave the original link at a
+  `.myskills-previous-link-*` sibling. That recovery artifact must be preserved and reviewed
+  before rerunning installation. An absent target Agent receives no copy and does not prevent
+  installation to other eligible targets.
 - MySkills validates and, when authorized, installs all required dependencies before copying
   any platform copy. If a required dependency remains unavailable, that Skill is copied to no
   target, while unrelated Skills in the batch continue.
@@ -1229,6 +1233,12 @@ tools are selected only when required by the task and project.
 - An existing same-name target not recorded as MySkills-managed is never overwritten.
 - Identical unowned installations may be explicitly adopted.
 - Different unowned installations require comparison and an explicit backup-and-replace action.
+- A pre-existing Junction or symbolic link remains blocked unless the human reviews the
+  displayed link target and explicitly supplies `-ReplaceLinks`. The installer moves the link
+  object to a temporary sibling, installs and verifies the copied snapshot, and removes only
+  the preserved link object after success. Copy or Agent-discovery failure restores the exact
+  original link; the linked destination contents are never modified. Unsupported
+  reparse-point types remain blocked.
 - `-Yes` does not bypass an unowned same-name conflict.
 - Batch operations continue independent installations after an item is blocked.
 - Any blocked requested item makes the final result `INCOMPLETE` and returns a nonzero exit code.

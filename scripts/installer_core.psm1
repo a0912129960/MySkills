@@ -562,6 +562,134 @@ function Update-DirectorySnapshot {
     }
 }
 
+function Set-ReparsePointDirectorySnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Source,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Target,
+
+        [scriptblock]$Verify
+    )
+
+    $resolvedTarget = [IO.Path]::GetFullPath($Target)
+    if (-not (Test-Path -LiteralPath $resolvedTarget -PathType Container)) {
+        throw "Reparse-point target does not exist: $resolvedTarget"
+    }
+    $targetItem = Get-Item -LiteralPath $resolvedTarget -Force
+    if (
+        ($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0
+    ) {
+        throw "Target is not a reparse point: $resolvedTarget"
+    }
+    $linkTypeProperty = $targetItem.PSObject.Properties["LinkType"]
+    $linkType = if ($null -ne $linkTypeProperty) {
+        [string]$linkTypeProperty.Value
+    }
+    else {
+        ""
+    }
+    if ($linkType -notin @("Junction", "SymbolicLink")) {
+        throw "Unsupported reparse-point type '$linkType': $resolvedTarget"
+    }
+
+    $parent = Split-Path -Parent $resolvedTarget
+    $preservedLink = Join-Path $parent (
+        ".myskills-previous-link-" + [Guid]::NewGuid().ToString("N")
+    )
+    $movedLink = $false
+    try {
+        Move-Item -LiteralPath $resolvedTarget -Destination $preservedLink
+        $movedLink = $true
+        $sourceHash = Install-DirectorySnapshot `
+            -Source $Source `
+            -Target $resolvedTarget `
+            -Verify $Verify
+
+        $preservedItem = Get-Item -LiteralPath $preservedLink -Force
+        if (
+            ($preservedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq
+                0
+        ) {
+            throw "Preserved target is not a reparse point: $preservedLink"
+        }
+        [IO.Directory]::Delete($preservedLink, $false)
+        $movedLink = $false
+        return $sourceHash
+    }
+    catch {
+        $failure = $_
+        if ($movedLink) {
+            try {
+                $null = Get-Item `
+                    -LiteralPath $preservedLink `
+                    -Force `
+                    -ErrorAction Stop
+            }
+            catch {
+                throw (
+                    "Recovery required: original link is unavailable at " +
+                    $preservedLink
+                )
+            }
+            if (Test-Path -LiteralPath $resolvedTarget) {
+                $replacement = Get-Item -LiteralPath $resolvedTarget -Force
+                if (
+                    ($replacement.Attributes -band
+                        [IO.FileAttributes]::ReparsePoint) -ne 0
+                ) {
+                    throw (
+                        "Recovery required: unexpected reparse point remains at " +
+                        $resolvedTarget
+                    )
+                }
+                Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+            }
+            Move-Item -LiteralPath $preservedLink -Destination $resolvedTarget
+            $movedLink = $false
+        }
+        throw $failure
+    }
+    finally {
+        if ($movedLink) {
+            throw "Recovery required: original link remains at $preservedLink"
+        }
+    }
+}
+
+function Format-SkillTargetPlanLine {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PlatformId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SkillName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Status,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath,
+
+        [bool]$IsReparsePoint = $false,
+
+        [AllowEmptyString()]
+        [string]$LinkType = "",
+
+        [AllowEmptyString()]
+        [string]$LinkTarget = ""
+    )
+
+    $line = "TARGET`t$PlatformId`t$SkillName`t$Status`t$TargetPath"
+    if ($IsReparsePoint) {
+        $line += "`tLINK`t$LinkType`t$LinkTarget"
+    }
+    return $line
+}
+
 function Backup-DirectorySnapshot {
     [CmdletBinding()]
     param(
@@ -582,9 +710,11 @@ function Backup-DirectorySnapshot {
 
 Export-ModuleMember -Function @(
     "Backup-DirectorySnapshot",
+    "Format-SkillTargetPlanLine",
     "Get-DirectoryDigest",
     "Get-SkillDeploymentState",
     "Install-DirectorySnapshot",
+    "Set-ReparsePointDirectorySnapshot",
     "Test-ClaudeSkillDiscovery",
     "Test-CodexSkillDiscovery",
     "Update-DirectorySnapshot"

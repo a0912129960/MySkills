@@ -280,6 +280,49 @@ class InstallerCommandTests(unittest.TestCase):
             self.assertIn("PREFLIGHT", result.stdout)
             self.assertIn("ai-handoff", result.stdout)
 
+    def test_replace_links_parameter_preserves_dry_run_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "state.json"
+            result = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(INSTALLER),
+                    "-Action",
+                    "Install",
+                    "-Skills",
+                    "ai-handoff",
+                    "-DryRun",
+                    "-ReplaceLinks",
+                    "-StatePath",
+                    str(state_path),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "NO_COLOR": "1"},
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertIn(
+                result.returncode,
+                (0, 1),
+                result.stderr + "\n" + result.stdout,
+            )
+            self.assertFalse(state_path.exists())
+            self.assertIn(
+                "DryRun: no dependency, Skill, configuration, or state "
+                "changes will occur.",
+                result.stdout,
+            )
+            self.assertIn("SUMMARY", result.stdout)
+
     def test_unknown_skill_is_rejected_without_writing_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = Path(temp_dir) / "state.json"
@@ -314,7 +357,6 @@ class InstallerCommandTests(unittest.TestCase):
     def test_installer_exposes_copy_only_operations(self) -> None:
         content = INSTALLER.read_text(encoding="utf-8")
 
-        self.assertNotIn('"Junction"', content)
         self.assertNotIn("ItemType Junction", content)
         self.assertIn('"Install", "Status", "Verify", "Uninstall"', content)
         self.assertNotIn('$dependencyBlocks["qmd"] = @(', content)

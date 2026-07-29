@@ -13,6 +13,8 @@ param(
 
     [switch]$BackupAndReplace,
 
+    [switch]$ReplaceLinks,
+
     [switch]$RegisterQmdMcp,
 
     [Parameter(DontShow = $true)]
@@ -258,11 +260,23 @@ function Get-TargetObservation {
     $actualHash = $null
     $isDirectory = Test-Path -LiteralPath $Target -PathType Container
     $isReparsePoint = $false
+    $linkType = $null
+    $linkTarget = $null
     if ($exists) {
         $item = Get-Item -LiteralPath $Target -Force
         $isReparsePoint = (
             ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
         )
+        if ($isReparsePoint) {
+            $linkTypeProperty = $item.PSObject.Properties["LinkType"]
+            $targetProperty = $item.PSObject.Properties["Target"]
+            if ($null -ne $linkTypeProperty) {
+                $linkType = [string]$linkTypeProperty.Value
+            }
+            if ($null -ne $targetProperty) {
+                $linkTarget = @($targetProperty.Value) -join ";"
+            }
+        }
     }
     if ($isDirectory -and -not $isReparsePoint) {
         $actualHash = Get-DirectoryDigest -Path $Target
@@ -284,6 +298,8 @@ function Get-TargetObservation {
         SourceHash = $sourceHash
         ActualHash = $actualHash
         IsReparsePoint = $isReparsePoint
+        LinkType = $linkType
+        LinkTarget = $linkTarget
     }
 }
 
@@ -1637,7 +1653,8 @@ try {
 
     Write-Output "PLAN"
     Write-Output (
-        "Action=$Action Skills=$($selectedSkills.Count) DryRun=$([bool]$DryRun)"
+        "Action=$Action Skills=$($selectedSkills.Count) " +
+        "DryRun=$([bool]$DryRun) ReplaceLinks=$([bool]$ReplaceLinks)"
     )
     foreach ($skill in $selectedSkills) {
         Write-Output "Skill`t$($skill.managed_name)"
@@ -1703,10 +1720,14 @@ try {
                 Available = $true
                 Observation = $observation
             }
-            Write-Output (
-                "TARGET`t$targetId`t$($skill.managed_name)`t" +
-                "$($observation.Status)`t$target"
-            )
+            Write-Output (Format-SkillTargetPlanLine `
+                -PlatformId $targetId `
+                -SkillName $skill.managed_name `
+                -Status $observation.Status `
+                -TargetPath $target `
+                -IsReparsePoint $observation.IsReparsePoint `
+                -LinkType $observation.LinkType `
+                -LinkTarget $observation.LinkTarget)
         }
     }
 
@@ -2344,11 +2365,60 @@ try {
                         }
                         $installed++
                     }
+                    elseif (
+                        $ReplaceLinks -and
+                        $observation.IsReparsePoint -and
+                        $observation.LinkType -in @("Junction", "SymbolicLink")
+                    ) {
+                        $linkDetails = (
+                            "$($observation.LinkType)`t$($observation.LinkTarget)"
+                        )
+                        if ($DryRun) {
+                            Write-Output (
+                                "WOULD_REPLACE_LINK`t$targetId`t" +
+                                "$($skill.managed_name)`t$linkDetails"
+                            )
+                        }
+                        else {
+                            $hash = Set-ReparsePointDirectorySnapshot `
+                                -Source $source `
+                                -Target $target `
+                                -Verify $discoveryCheck
+                            $records[$key] = New-StateRecord `
+                                -Platform $targetId `
+                                -Skill $skill.managed_name `
+                                -Target $target `
+                                -Hash $hash
+                            $stateChanged = $true
+                            Write-Output (
+                                "REPLACED_LINK`t$targetId`t" +
+                                "$($skill.managed_name)`t$linkDetails"
+                            )
+                        }
+                        $installed++
+                    }
                     else {
-                        Write-Output (
-                            "BLOCKED`t$targetId`t$($skill.managed_name)`t" +
+                        $guidance = if ($observation.IsReparsePoint) {
+                            if (
+                                $observation.LinkType -in
+                                    @("Junction", "SymbolicLink")
+                            ) {
+                                "unowned $($observation.LinkType) -> " +
+                                    "$($observation.LinkTarget); review its target " +
+                                    "and use -ReplaceLinks"
+                            }
+                            else {
+                                "unsupported reparse-point type " +
+                                    "'$($observation.LinkType)' -> " +
+                                    "$($observation.LinkTarget)"
+                            }
+                        }
+                        else {
                             "unowned target; use -AdoptExact for an exact copy or " +
-                            "-BackupAndReplace after review"
+                                "-BackupAndReplace after review"
+                        }
+                        Write-Output (
+                            "BLOCKED`t$targetId`t$($skill.managed_name)`t$guidance"
                         )
                         $blocked++
                     }
