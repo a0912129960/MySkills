@@ -101,11 +101,16 @@ identical unowned copy after explicit review. `-BackupAndReplace` backs up and v
 drifted or different unowned copy before replacement. After its displayed target is reviewed,
 `-ReplaceLinks` replaces a pre-existing Junction or symbolic link with a verified copied
 snapshot. The link's destination contents are never modified; the original link is restored
-if copy or Agent discovery fails. Other reparse-point types remain blocked. `-Yes` approves
+if copy verification fails. Other reparse-point types remain blocked. `-Yes` approves
 allowlisted pinned dependency installs only; it does not bypass ownership or compatibility
 checks. Link migration is exception-safe but cannot be power-loss atomic; if forced
 termination leaves a `.myskills-previous-link-*` sibling, preserve it for recovery review
 before rerunning installation.
+
+Normal `Install` and `Verify` operations do not start Agent sessions or perform Skill
+discovery. They verify platform CLI availability with `--version`, copied file integrity,
+MySkills ownership state, and source/installed hashes. Model-based evaluation remains a
+separate explicit diagnostic workflow.
 
 Machine-specific ownership and hashes live outside Git at
 `%LOCALAPPDATA%\MySkills\state.json`. Backups live below

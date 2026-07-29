@@ -275,9 +275,9 @@ belong in ADRs.
   configuration mechanism can be verified. An absent Agent is
   `SKIPPED_NOT_INSTALLED`; MySkills does not pre-create or guess that Agent's MCP configuration.
   A later `install` run offers the missing registration after the Agent becomes available.
-- Skill files follow the same verified-Agent boundary: MySkills does not copy Skills or write
+- Skill files follow the same installed-Agent boundary: MySkills does not copy Skills or write
   MCP configuration for an absent Agent CLI. A later installer run handles both after that
-  Agent passes discovery and harmless smoke tests.
+  Agent passes its noninteractive version preflight.
 
 ### Existing platform-copy audit
 
@@ -1214,31 +1214,23 @@ tools are selected only when required by the task and project.
   any platform copy. If a required dependency remains unavailable, that Skill is copied to no
   target, while unrelated Skills in the batch continue.
 - Every installation verifies copied file integrity against the Managed Skill source.
-- MySkills copies a Skill to Claude or Codex after preflight confirms that the target
-  executable exists, then verifies after copying that the CLI discovers the installed Skill.
-  Antigravity follows the explicitly lower compatibility-copy policy: its CLI/version and
-  target path must be validated, and copied hashes must match, but model behavior is not a
-  release gate.
-- Codex discovery uses the local app-server `skills/list` method with a forced disk reload and
-  requires the returned Skill name and path to match the installed target. Claude discovery
-  reads the CLI's `system/init` Skill inventory while its API base URL and dummy credential are
-  confined to a newly selected loopback endpoint; the process is terminated after the init
-  event, so installation discovery sends no request to a remote model and spends no model
-  tokens. Neither installation check grades model output or activates the optional evaluation
-  workflow.
+- Standard `Install` and `Verify` operations do not start Claude, Codex, or Antigravity Agent
+  sessions and do not perform Skill discovery. Platform preflight is limited to
+  noninteractive version probes. Installation verifies the copied snapshot digest; `Verify`
+  compares the canonical source, machine ownership record, and installed digest.
+- Agent discovery, trigger behavior, and model output belong only to the separate evaluation
+  workflow. That workflow remains disabled unless the human explicitly authorizes it and its
+  model-call budget.
 - An absent or unverifiable target CLI receives no Skill files and is reported as
   `SKIPPED_NOT_INSTALLED` or `BLOCKED` with installation or repair guidance. Other verified
   platform targets remain eligible and do not receive an `UNVERIFIED` copy.
-- When a verified CLI cannot discover a copied Skill, that platform installation is rolled
-  back, the result is `BLOCKED`, the overall result is `INCOMPLETE`, and the command returns a
-  nonzero exit code.
 - An existing same-name target not recorded as MySkills-managed is never overwritten.
 - Identical unowned installations may be explicitly adopted.
 - Different unowned installations require comparison and an explicit backup-and-replace action.
 - A pre-existing Junction or symbolic link remains blocked unless the human reviews the
   displayed link target and explicitly supplies `-ReplaceLinks`. The installer moves the link
   object to a temporary sibling, installs and verifies the copied snapshot, and removes only
-  the preserved link object after success. Copy or Agent-discovery failure restores the exact
+  the preserved link object after success. Copy verification failure restores the exact
   original link; the linked destination contents are never modified. Unsupported
   reparse-point types remain blocked.
 - `-Yes` does not bypass an unowned same-name conflict.

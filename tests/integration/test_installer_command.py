@@ -360,6 +360,18 @@ class InstallerCommandTests(unittest.TestCase):
 
         self.assertNotIn("ItemType Junction", content)
         self.assertIn('"Install", "Status", "Verify", "Uninstall"', content)
+        self.assertNotIn("Test-AgentSkillDiscovery", content)
+        self.assertNotIn("Test-ClaudeSkillDiscovery", content)
+        self.assertNotIn("Test-CodexSkillDiscovery", content)
+        self.assertNotIn("$discoveryCheck", content)
+        self.assertIn(
+            'Write-Output "HASH_VERIFIED`t$targetId`t$($skill.managed_name)"',
+            content,
+        )
+        self.assertNotIn(
+            'Write-Output "VERIFIED`t$targetId`t$($skill.managed_name)"',
+            content,
+        )
         self.assertNotIn('$dependencyBlocks["qmd"] = @(', content)
         self.assertIn('"MCP_STATUS`tqmd`tCLI_ONLY"', content)
         self.assertIn("Set-PythonRequirementLock", content)

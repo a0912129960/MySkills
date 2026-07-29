@@ -1469,70 +1469,6 @@ function Register-QmdMcp {
     }
 }
 
-function Test-AgentSkillDiscovery {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$Platform,
-        [Parameter(Mandatory = $true)]
-        [string]$SkillName,
-        [Parameter(Mandatory = $true)]
-        [string]$TargetPath
-    )
-
-    if (-not (Test-Path -LiteralPath (Join-Path $TargetPath "SKILL.md"))) {
-        return $false
-    }
-    if ($Platform.Id -eq "antigravity-cli") {
-        return $true
-    }
-    if ($Platform.Id -eq "codex") {
-        try {
-            $discovered = Test-CodexSkillDiscovery `
-                -Executable $Platform.Executable `
-                -SkillName $SkillName `
-                -TargetPath $TargetPath `
-                -WorkingDirectory $repoRoot
-        }
-        catch {
-            throw (
-                "Codex discovery probe failed for '$SkillName': " +
-                "$($_.Exception.Message) Run 'codex doctor', repair Skill " +
-                "discovery, then rerun install."
-            )
-        }
-        if (-not $discovered) {
-            throw (
-                "Codex did not list '$SkillName' at '$TargetPath'. " +
-                "Run 'codex doctor', repair Skill discovery, then rerun install."
-            )
-        }
-        return $true
-    }
-    if ($Platform.Id -eq "claude-code") {
-        try {
-            $discovered = Test-ClaudeSkillDiscovery `
-                -Executable $Platform.Executable `
-                -SkillName $SkillName `
-                -TargetPath $TargetPath
-        }
-        catch {
-            throw (
-                "Claude Code discovery probe failed for '$SkillName': " +
-                "$($_.Exception.Message) Run /doctor and /reload-skills in " +
-                "Claude Code, then rerun install."
-            )
-        }
-        if (-not $discovered) {
-            throw (
-                "Claude Code did not report '$SkillName' in system/init. " +
-                "Run /doctor and /reload-skills in Claude Code, then rerun install."
-            )
-        }
-        return $true
-    }
-    return $false
-}
-
 try {
     if ($PSVersionTable.PSVersion -lt [version]"5.1") {
         throw "Windows PowerShell 5.1 or later is required."
@@ -2194,19 +2130,10 @@ try {
                 $skipped++
                 continue
             }
-            $platform = $deployment.Platform
             $source = $deployment.Source
             $target = $deployment.Target
             $key = $deployment.Key
             $observation = $deployment.Observation
-            $discoveryCheck = {
-                param($InstalledPath)
-                return Test-AgentSkillDiscovery `
-                    -Platform $platform `
-                    -SkillName $skill.managed_name `
-                    -TargetPath $InstalledPath
-            }
-
             if ($Action -eq "Status") {
                 Write-Output (
                     "$($observation.Status)`t$targetId`t$($skill.managed_name)`t$target"
@@ -2214,18 +2141,15 @@ try {
                 continue
             }
             if ($Action -eq "Verify") {
-                if (
-                    $observation.Status -eq "CURRENT" -and
-                    (& $discoveryCheck $target)
-                ) {
-                    Write-Output "VERIFIED`t$targetId`t$($skill.managed_name)"
+                if ($observation.Status -eq "CURRENT") {
+                    Write-Output "HASH_VERIFIED`t$targetId`t$($skill.managed_name)"
                     $installed++
                 }
                 else {
                     Write-Output (
                         "BLOCKED`t$targetId`t$($skill.managed_name)`t" +
-                        "expected CURRENT with Agent discovery; found " +
-                        "$($observation.Status) or discovery failure"
+                        "expected CURRENT source, recorded, and installed hashes; " +
+                        "found $($observation.Status)"
                     )
                     $blocked++
                 }
@@ -2275,8 +2199,7 @@ try {
                     else {
                         $hash = Install-DirectorySnapshot `
                             -Source $source `
-                            -Target $target `
-                            -Verify $discoveryCheck
+                            -Target $target
                         $records[$key] = New-StateRecord `
                             -Platform $targetId `
                             -Skill $skill.managed_name `
@@ -2294,8 +2217,7 @@ try {
                     else {
                         $hash = Update-DirectorySnapshot `
                             -Source $source `
-                            -Target $target `
-                            -Verify $discoveryCheck
+                            -Target $target
                         $records[$key] = New-StateRecord `
                             -Platform $targetId `
                             -Skill $skill.managed_name `
@@ -2316,12 +2238,6 @@ try {
                             Write-Output "WOULD_ADOPT`t$targetId`t$($skill.managed_name)"
                         }
                         else {
-                            if (-not (& $discoveryCheck $target)) {
-                                throw (
-                                    "Agent discovery failed for adopted target " +
-                                    "$targetId/$($skill.managed_name)"
-                                )
-                            }
                             $records[$key] = New-StateRecord `
                                 -Platform $targetId `
                                 -Skill $skill.managed_name `
@@ -2349,8 +2265,7 @@ try {
                                 -Backup $backup
                             $hash = Update-DirectorySnapshot `
                                 -Source $source `
-                                -Target $target `
-                                -Verify $discoveryCheck
+                                -Target $target
                             $backups += [ordered]@{
                                 platform = $targetId
                                 skill = $skill.managed_name
@@ -2387,8 +2302,7 @@ try {
                         else {
                             $hash = Set-ReparsePointDirectorySnapshot `
                                 -Source $source `
-                                -Target $target `
-                                -Verify $discoveryCheck
+                                -Target $target
                             $records[$key] = New-StateRecord `
                                 -Platform $targetId `
                                 -Skill $skill.managed_name `
@@ -2446,8 +2360,7 @@ try {
                                 -Backup $backup
                             $hash = Update-DirectorySnapshot `
                                 -Source $source `
-                                -Target $target `
-                                -Verify $discoveryCheck
+                                -Target $target
                             $backups += [ordered]@{
                                 platform = $targetId
                                 skill = $skill.managed_name
