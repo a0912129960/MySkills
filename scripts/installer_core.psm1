@@ -118,6 +118,7 @@ function Install-DirectorySnapshot {
     New-Item -ItemType Directory -Path $parent -Force | Out-Null
 
     $staging = Join-Path $parent (".myskills-stage-" + [Guid]::NewGuid().ToString("N"))
+    $installedTarget = $false
     try {
         Copy-Item -LiteralPath $resolvedSource -Destination $staging -Recurse
         $sourceHash = Get-DirectoryDigest -Path $resolvedSource
@@ -126,11 +127,19 @@ function Install-DirectorySnapshot {
             throw "Copied snapshot digest mismatch for $resolvedTarget"
         }
         Move-Item -LiteralPath $staging -Destination $resolvedTarget
+        $installedTarget = $true
         if ($null -ne $Verify -and -not (& $Verify $resolvedTarget)) {
             Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+            $installedTarget = $false
             throw "Post-copy verification failed for $resolvedTarget"
         }
         return $sourceHash
+    }
+    catch {
+        if ($installedTarget -and (Test-Path -LiteralPath $resolvedTarget)) {
+            Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+        }
+        throw
     }
     finally {
         if (Test-Path -LiteralPath $staging) {
