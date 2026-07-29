@@ -1105,7 +1105,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     for assertion in item["assertions"]
                 )
                 if item["target"] == "claude":
-                    events = []
+                    events = [
+                        {
+                            "type": "system",
+                            "subtype": "init",
+                            "skills": [
+                                item["skill_name"],
+                                *item["companion_skills"],
+                            ],
+                        }
+                    ]
                     if needs_tool:
                         events.extend(
                             [
@@ -1238,6 +1247,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 if item["target"] == "claude"
                                 else None
                             ),
+                            "host_skill_names": [],
                             "isolation_violations": [],
                             "result": {
                                 "command": (
@@ -1759,9 +1769,125 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         )
         with runners.isolated_execution_workspace(ROOT) as workspace:
             self.assertTrue(workspace.is_dir())
+            for ancestor in (workspace, *workspace.parents):
+                self.assertFalse(
+                    (ancestor / ".claude" / "skills").is_dir(),
+                    (
+                        "execution workspace inherits Claude Skills from "
+                        f"{ancestor}"
+                    ),
+                )
             with self.assertRaises(ValueError):
                 workspace.relative_to(ROOT)
         self.assertFalse(workspace.exists())
+
+    def test_unverifiable_claude_skill_ancestor_is_rejected(self) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_unverifiable_ancestor",
+            "runners.py",
+        )
+        candidate = Path(Path.cwd().anchor) / "__myskills_unverifiable__"
+        with patch.object(
+            runners.Path,
+            "stat",
+            side_effect=PermissionError("denied"),
+        ):
+            self.assertTrue(
+                runners._has_claude_discovery_ancestor(candidate)
+            )
+
+    def test_claude_host_skill_names_collects_only_installed_skills(
+        self,
+    ) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_host_skills",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = root / "config"
+            home = root / "home"
+            profile = root / "profile"
+            fallback = root / "fallback"
+            for skill_root, names in (
+                (config / "skills", ("config-skill", "shared-skill")),
+                (
+                    home / ".claude" / "skills",
+                    ("home-skill", "shared-skill"),
+                ),
+                (
+                    profile / ".claude" / "skills",
+                    ("profile-skill",),
+                ),
+                (
+                    fallback / ".claude" / "skills",
+                    ("fallback-skill",),
+                ),
+            ):
+                for name in names:
+                    skill = skill_root / name
+                    skill.mkdir(parents=True, exist_ok=True)
+                    (skill / "SKILL.md").write_text(
+                        f"# {name}\n",
+                        encoding="utf-8",
+                    )
+            ignored = config / "skills" / "not-a-skill"
+            ignored.mkdir(parents=True)
+
+            with patch.object(runners.Path, "home", return_value=fallback):
+                names = runners.claude_host_skill_names(
+                    {
+                        "CLAUDE_CONFIG_DIR": str(config),
+                        "HOME": str(home),
+                        "USERPROFILE": str(profile),
+                    }
+                )
+
+        self.assertEqual(
+            names,
+            [
+                "config-skill",
+                "fallback-skill",
+                "home-skill",
+                "profile-skill",
+                "shared-skill",
+            ],
+        )
+
+    def test_claude_host_skill_inventory_fails_when_root_is_unreadable(
+        self,
+    ) -> None:
+        runners = load_module(
+            "skill_evaluator_runners_unreadable_host_skills",
+            "runners.py",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = root / "config"
+            (config / "skills").mkdir(parents=True)
+            with (
+                patch.object(
+                    runners.Path,
+                    "home",
+                    return_value=root / "fallback",
+                ),
+                patch.object(
+                    runners.Path,
+                    "iterdir",
+                    side_effect=PermissionError("denied"),
+                ),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "cannot inventory Claude host Skill root",
+                ),
+            ):
+                runners.claude_host_skill_names(
+                    {
+                        "CLAUDE_CONFIG_DIR": str(config),
+                        "HOME": "",
+                        "USERPROFILE": "",
+                    }
+                )
 
     @unittest.skipUnless(os.name == "nt", "Codex execpolicy CLI contract")
     def test_codex_runtime_rule_allows_only_the_guarded_launcher_name(
@@ -2240,6 +2366,113 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             [],
         )
 
+    def test_claude_isolation_rejects_visible_host_skills(self) -> None:
+        aggregate = load_module(
+            "skill_evaluator_aggregate_skill_discovery",
+            "aggregate_benchmark.py",
+        )
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "system",
+                        "subtype": "init",
+                        "skills": [
+                            "fixture-skill",
+                            "host-skill",
+                            "host-skill",
+                            "design-sync",
+                        ],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "done",
+                        "permission_denials": [],
+                    }
+                ),
+            ]
+        )
+        evidence = aggregate.model_evidence(
+            "claude",
+            {
+                "stdout": stdout,
+                "stderr": "",
+            },
+        )
+
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                evidence,
+                Path("C:/evaluation/workspace"),
+                allowed_skills=["fixture-skill"],
+                host_skill_names=["host-skill"],
+            ),
+            ["Claude loaded host Skill(s): host-skill"],
+        )
+
+    def test_claude_skill_discovery_evidence_fails_closed(self) -> None:
+        aggregate = load_module(
+            "skill_evaluator_aggregate_skill_discovery_fail_closed",
+            "aggregate_benchmark.py",
+        )
+        missing_init = aggregate.model_evidence(
+            "claude",
+            {
+                "stdout": json.dumps(
+                    {
+                        "type": "result",
+                        "result": "done",
+                    }
+                ),
+                "stderr": "",
+            },
+        )
+        self.assertEqual(
+            aggregate.claude_skill_discovery_violations(
+                missing_init,
+                ["fixture-skill"],
+                [],
+            ),
+            ["Claude system init Skill evidence is missing or malformed"],
+        )
+
+        wrong_skill = aggregate.model_evidence(
+            "claude",
+            {
+                "stdout": "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "system",
+                                "subtype": "init",
+                                "skills": ["other-skill"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "result",
+                                "result": "done",
+                            }
+                        ),
+                    ]
+                ),
+                "stderr": "",
+            },
+        )
+        self.assertEqual(
+            aggregate.claude_skill_discovery_violations(
+                wrong_skill,
+                ["fixture-skill"],
+                [],
+            ),
+            ["Claude did not load declared Skill(s): fixture-skill"],
+        )
+
     def test_claude_environment_isolation_evidence_fails_closed(self) -> None:
         aggregate = load_module(
             "skill_evaluator_aggregate_environment_isolation",
@@ -2442,6 +2675,8 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "Set-Content -LiteralPath $configPath "
                 "-Value '{\"mcpServers\":{\"host\":"
                 "{\"command\":\"host\"}}}' -Encoding UTF8\n"
+                "Write-Output '{\"type\":\"system\","
+                "\"subtype\":\"init\",\"skills\":[\"fixture-skill\"]}'\n"
                 "Write-Output '{\"type\":\"result\","
                 "\"subtype\":\"success\",\"is_error\":false,"
                 "\"num_turns\":1,\"result\":\"done\","
@@ -3693,6 +3928,13 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                         [
                             json.dumps(
                                 {
+                                    "type": "system",
+                                    "subtype": "init",
+                                    "skills": ["example", "host-skill"],
+                                }
+                            ),
+                            json.dumps(
+                                {
                                     "type": "assistant",
                                     "message": {
                                         "content": [
@@ -3890,14 +4132,8 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 if target == "claude"
                                 else None
                             ),
-                            "isolation_violations": (
-                                [
-                                    "Read accessed canonical Skill outside "
-                                    "the execution workspace"
-                                ]
-                                if target == "claude"
-                                else []
-                            ),
+                            "host_skill_names": ["host-skill"],
+                            "isolation_violations": [],
                             "result": {
                                 "command": (
                                     runners.build_command(
@@ -3978,6 +4214,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             )
             self.assertEqual(claude_case["review_state"], "pending")
             self.assertEqual(
+                claude_case["isolation_audit_state"],
+                "invalid",
+            )
+            self.assertEqual(
                 codex_case["model_evidence"]["final_response"],
                 "Codex final answer",
             )
@@ -3996,9 +4236,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             self.assertIn("Tool</strong>: Bash", html)
             self.assertIn("qmd search fixture", html)
             self.assertIn("fixture qmd evidence", html)
-            self.assertIn("ISOLATION FAIL", html)
+            self.assertIn("ISOLATION INVALID", html)
             self.assertIn(
-                "Read accessed canonical Skill outside",
+                "Claude loaded host Skill(s): host-skill",
                 html,
             )
             self.assertIn("Codex final answer", html)
@@ -4025,7 +4265,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     "target_identity_returncode": 0,
                 }
             )
-            self.assertIn("ISOLATION FAIL", missing_audit_html)
+            self.assertIn("ISOLATION INVALID", missing_audit_html)
             self.assertNotIn("ISOLATION PASS", missing_audit_html)
             self.assertIn("Audit state: missing", missing_audit_html)
             self.assertIn("Working-tree changes", html)

@@ -72,9 +72,11 @@ current directory digest of every Managed Skill. Raw model output stays under
 
    The runner copies only the target CLI authentication file into an OS
    temporary directory and removes that directory after each call. The
-   execution workspace is a second OS temporary directory outside the
-   repository; only declared Skills and fixtures are staged there, and it is
-   removed after its result is captured. For Codex the clean profile disables
+   execution workspace is a second disposable directory outside the repository.
+   Before staging, none of its external parent directories may contain
+   `.claude/skills`; only declared Skills and fixtures are then staged inside
+   the workspace, and it is removed after its result is captured.
+   For Codex the clean profile disables
    every discovered user Skill and contains evaluator-owned exec-policy rules
    that allow only case-declared guarded launcher names. Codex uses `untrusted`
    approval, so absolute host executables and undeclared commands are rejected
@@ -114,6 +116,17 @@ current directory digest of every Managed Skill. Raw model output stays under
    the referenced execution workspace; only `run` and `run-batch --execute`
    create the evaluator-owned MCP file before launch.
 
+   Before staging a Claude execution workspace, no external parent may contain
+   `.claude/skills`; otherwise Claude can discover host Skills even when its
+   profile is isolated. The workspace-local `.claude/skills` root is then
+   populated only with evaluator-staged Skills. Before launch, the evaluator
+   records the names of installed host Skills. After launch, it parses the single
+   `system/init.skills` list and requires every staged Skill to be visible while
+   rejecting any non-staged name found in that host inventory. The raw result
+   retains this name-only inventory so later aggregation and publication can
+   recompute the check. Missing or contradictory Skill-discovery evidence is an
+   invalid measurement.
+
 3. Grade the raw results and review the offline report. Claude evidence cannot
    substitute for Codex evidence or vice versa.
 
@@ -144,7 +157,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    final answer. Each run also has a visible machine isolation PASS/FAIL badge;
    a successful out-of-workspace file tool, or an undeclared Bash command in a
    read-only case, blocks attestation. Missing or malformed audit data is a
-   failure, not a pass. The
+   failure, not a pass. The report labels observable Skill trajectory
+   violations as `ISOLATION FAIL`, while evaluator-boundary contamination and
+   missing, malformed, or contradictory evidence are `ISOLATION INVALID`. The
    report places Claude and Codex runs in separate target sections. A process
    pass is not a behavior pass; the human records a specific reason for every
    assertion in the linked `grading.json`. The v3 grading contract preserves
@@ -197,8 +212,10 @@ current directory digest of every Managed Skill. Raw model output stays under
    remains `fail` or `invalid`, never `pass`. Private paths and credential-like
    values are redacted; raw streams remain ignored. Publishing is append-only.
    A residual sensitive-data scan fails closed even after human confirmation.
-   Observable isolation or authorization violations are Skill failures, while
-   missing or contradictory audit evidence is invalid measurement.
+   Observable actions by the evaluated Skill that violate isolation or
+   authorization are Skill failures. Evaluator-boundary failures such as host
+   Skill contamination, and missing or contradictory audit evidence, are
+   invalid measurements.
 
    The builder reads the fixed plans stored in each raw result. If the Skill or
    case manifest has changed, the invalid record retains the digest, prompt, and

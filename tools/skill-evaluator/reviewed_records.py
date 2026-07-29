@@ -608,6 +608,15 @@ def _build_case(
             if item["target"] == "claude"
             else []
         )
+        skill_discovery_violations = (
+            aggregate_benchmark.claude_skill_discovery_violations(
+                evidence,
+                aggregate_benchmark.declared_skill_names(item),
+                raw.get("host_skill_names"),
+            )
+            if item["target"] == "claude"
+            else []
+        )
         recomputed = aggregate_benchmark.model_isolation_violations(
             item["target"],
             evidence,
@@ -621,9 +630,15 @@ def _build_case(
             ),
             command=command,
             environment_isolation=environment_isolation,
+            allowed_skills=aggregate_benchmark.declared_skill_names(item),
+            host_skill_names=raw.get("host_skill_names"),
         )
         if recomputed:
-            if command_violations or environment_violations:
+            if (
+                command_violations
+                or environment_violations
+                or skill_discovery_violations
+            ):
                 technical_failure = technical_failure or (
                     "invalid",
                     "isolation",

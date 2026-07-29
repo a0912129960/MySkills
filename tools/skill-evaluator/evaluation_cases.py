@@ -849,6 +849,10 @@ def audit_reviewed_skill(
                     environment_isolation=record.get(
                         "environment_isolation"
                     ),
+                    allowed_skills=(
+                        aggregate_benchmark.declared_skill_names(item)
+                    ),
+                    host_skill_names=record.get("host_skill_names"),
                 )
             )
             if (

@@ -11,6 +11,7 @@ from pathlib import Path
 import queue
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -1075,24 +1076,135 @@ def claude_environment_isolation_evidence(
     }
 
 
+def claude_host_skill_names(
+    source_env: dict[str, str] | None = None,
+) -> list[str]:
+    """Return installed Claude Skill names visible before isolation."""
+
+    environment = os.environ if source_env is None else source_env
+    roots: list[Path] = []
+    config_root = environment.get("CLAUDE_CONFIG_DIR")
+    if config_root:
+        roots.append(Path(config_root) / "skills")
+    for variable in ("HOME", "USERPROFILE"):
+        home_root = environment.get(variable)
+        if home_root:
+            roots.append(Path(home_root) / ".claude" / "skills")
+    roots.append(Path.home() / ".claude" / "skills")
+
+    names: set[str] = set()
+    checked: set[Path] = set()
+    for root in roots:
+        try:
+            resolved = root.resolve()
+        except OSError as error:
+            raise RuntimeError(
+                f"cannot inventory Claude host Skill root: {root}"
+            ) from error
+        if resolved in checked:
+            continue
+        checked.add(resolved)
+        try:
+            root_mode = resolved.stat().st_mode
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise RuntimeError(
+                f"cannot inventory Claude host Skill root: {resolved}"
+            ) from error
+        if not stat.S_ISDIR(root_mode):
+            continue
+        try:
+            children = list(resolved.iterdir())
+        except OSError as error:
+            raise RuntimeError(
+                f"cannot inventory Claude host Skill root: {resolved}"
+            ) from error
+        for child in children:
+            if child.name.startswith("."):
+                continue
+            try:
+                child_mode = child.stat().st_mode
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise RuntimeError(
+                    f"cannot inventory Claude host Skill root: {resolved}"
+                ) from error
+            if not stat.S_ISDIR(child_mode):
+                continue
+            try:
+                skill_mode = (child / "SKILL.md").stat().st_mode
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise RuntimeError(
+                    f"cannot inventory Claude host Skill root: {resolved}"
+                ) from error
+            if stat.S_ISREG(skill_mode):
+                names.add(child.name)
+    return sorted(names)
+
+
 @contextmanager
 def isolated_execution_workspace(repository: Path | str):
     """Create a disposable evaluation workspace outside the repository."""
 
     repo = Path(repository).resolve()
-    with tempfile.TemporaryDirectory(
-        prefix="myskills-eval-workspace-"
-    ) as temp_dir:
-        workspace = Path(temp_dir).resolve()
+    candidates = [repo.parent, Path(tempfile.gettempdir())]
+    if os.name == "nt":
+        public_root = os.environ.get("PUBLIC")
+        if public_root:
+            candidates.append(Path(public_root) / "Documents")
+        program_data = os.environ.get("PROGRAMDATA")
+        if program_data:
+            candidates.append(Path(program_data))
+    checked: set[Path] = set()
+    for candidate in candidates:
+        base = candidate.resolve()
+        if base in checked or not base.is_dir():
+            continue
+        checked.add(base)
+        if _has_claude_discovery_ancestor(base):
+            continue
+        try:
+            temporary = tempfile.TemporaryDirectory(
+                prefix="myskills-eval-workspace-",
+                dir=base,
+            )
+        except OSError:
+            continue
+        workspace = Path(temporary.name).resolve()
         try:
             workspace.relative_to(repo)
         except ValueError:
             pass
         else:
-            raise RuntimeError(
-                "evaluation execution workspace must be outside the repository"
-            )
-        yield workspace
+            temporary.cleanup()
+            continue
+        try:
+            yield workspace
+        finally:
+            temporary.cleanup()
+        return
+    raise RuntimeError(
+        "no writable execution workspace avoids Claude Skill discovery "
+        "ancestors and the source repository"
+    )
+
+
+def _has_claude_discovery_ancestor(path: Path) -> bool:
+    for ancestor in (path, *path.parents):
+        discovery_root = ancestor / ".claude" / "skills"
+        try:
+            mode = discovery_root.stat().st_mode
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+        if stat.S_ISDIR(mode):
+            return True
+    return False
 
 
 @contextmanager

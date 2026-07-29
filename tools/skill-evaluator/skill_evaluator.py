@@ -256,6 +256,12 @@ def _execute_batch_item(
         skill_path,
         *(Path(path) for path in item["companion_skill_paths"]),
     ]
+    allowed_skills = aggregate_benchmark.declared_skill_names(item)
+    host_skill_names = (
+        runners.claude_host_skill_names()
+        if item["target"] == "claude"
+        else []
+    )
     with runners.isolated_execution_workspace(repo_root) as execution_root:
         runners.prepare_evaluation_workspace(
             staged_skills,
@@ -351,6 +357,8 @@ def _execute_batch_item(
                 ),
                 command=result.get("command", []),
                 environment_isolation=environment_isolation,
+                allowed_skills=allowed_skills,
+                host_skill_names=host_skill_names,
             )
         )
     completed_at = datetime.now(timezone.utc).isoformat()
@@ -362,6 +370,7 @@ def _execute_batch_item(
         "target_identity_returncode": identity["returncode"],
         "external_tool_evidence": external_tool_evidence,
         "environment_isolation": environment_isolation,
+        "host_skill_names": host_skill_names,
         "workspace_changes": _workspace_changes(
             workspace_before,
             workspace_after,
@@ -550,6 +559,11 @@ def main(argv: list[str] | None = None) -> int:
         targets = runners.TARGETS if args.target == "all" else (args.target,)
         results: dict[str, Any] = {}
         for target in targets:
+            host_skill_names = (
+                runners.claude_host_skill_names()
+                if target == "claude"
+                else []
+            )
             with runners.isolated_execution_workspace(
                 source_boundary
             ) as execution_root:
@@ -603,6 +617,8 @@ def main(argv: list[str] | None = None) -> int:
                         execution_root,
                         command=result.get("command", []),
                         environment_isolation=environment_isolation,
+                        allowed_skills=[skill.name],
+                        host_skill_names=host_skill_names,
                     )
                 )
             record = {
@@ -610,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
                 "target": target,
                 "execution_workspace": execution_workspace,
                 "environment_isolation": environment_isolation,
+                "host_skill_names": host_skill_names,
                 "isolation_violations": isolation_violations,
                 "result": result,
             }

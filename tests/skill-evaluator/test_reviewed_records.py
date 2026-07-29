@@ -197,14 +197,25 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
             )
             run.mkdir(parents=True)
             if target == "claude":
-                stdout = json.dumps(
-                    {
-                        "type": "result",
-                        "result": (
-                            f"Correct result from {execution}; "
-                            "Authorization: Bearer secret-token"
+                stdout = "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "system",
+                                "subtype": "init",
+                                "skills": ["fixture-skill"],
+                            }
                         ),
-                    }
+                        json.dumps(
+                            {
+                                "type": "result",
+                                "result": (
+                                    f"Correct result from {execution}; "
+                                    "Authorization: Bearer secret-token"
+                                ),
+                            }
+                        ),
+                    ]
                 )
                 grading = claude_grade or reviewed_grading()
             else:
@@ -259,6 +270,7 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
                             if target == "claude"
                             else None
                         ),
+                        "host_skill_names": [],
                         "isolation_violations": [],
                         "result": {
                             "command": (
@@ -320,6 +332,52 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
             self.assertEqual(calls[0]["sequence"], 1)
             self.assertEqual(calls[0]["status"], "success")
 
+    def test_host_skill_contamination_is_invalid_evaluator_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            workspace, plan = self.make_workspace(repo)
+            result_path = (
+                workspace
+                / "fixture-skill"
+                / "normal-use"
+                / "claude"
+                / "result.json"
+            )
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
+            events = [
+                json.loads(line)
+                for line in raw["result"]["stdout"].splitlines()
+            ]
+            events[0]["skills"].append("host-skill")
+            raw["result"]["stdout"] = "\n".join(
+                json.dumps(event) for event in events
+            )
+            raw["host_skill_names"] = ["host-skill"]
+            result_path.write_text(
+                json.dumps(raw),
+                encoding="utf-8",
+            )
+
+            record = self.builder.build_record_from_plan(
+                repo,
+                workspace,
+                "fixture-skill",
+                "20260727T120000Z-host-contamination",
+                plan,
+                human_review=final_review(),
+            )
+
+        case = record["targets"]["claude"]["cases"][0]
+        self.assertEqual(record["status"], "invalid")
+        self.assertEqual(case["status"], "invalid")
+        self.assertEqual(case["failure"]["stage"], "isolation")
+        self.assertIn(
+            "Claude loaded host Skill(s): host-skill",
+            case["failure"]["reason"],
+        )
+
     def test_required_assertion_failure_is_retained_at_assertion_stage(
         self,
     ) -> None:
@@ -362,6 +420,13 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
             outside = str(repo / "private.txt")
             raw["result"]["stdout"] = "\n".join(
                 [
+                    json.dumps(
+                        {
+                            "type": "system",
+                            "subtype": "init",
+                            "skills": ["fixture-skill"],
+                        }
+                    ),
                     json.dumps(
                         {
                             "type": "assistant",
@@ -1050,7 +1115,16 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
                     for assertion in item["assertions"]
                 )
                 if target == "claude":
-                    events = []
+                    events = [
+                        {
+                            "type": "system",
+                            "subtype": "init",
+                            "skills": [
+                                item["skill_name"],
+                                *item["companion_skills"],
+                            ],
+                        }
+                    ]
                     if needs_tool:
                         events.extend(
                             [
@@ -1148,6 +1222,7 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
                                 if target == "claude"
                                 else None
                             ),
+                            "host_skill_names": [],
                             "isolation_violations": [],
                             "result": {
                                 "command": (

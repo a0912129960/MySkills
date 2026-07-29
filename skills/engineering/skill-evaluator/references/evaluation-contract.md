@@ -78,9 +78,10 @@ when the runner does not expose it.
 
 Cases may declare deterministic UTF-8 fixtures, Managed companion Skills,
 repository-owned runtimes, and allowlisted external tools. The runner stages
-only declared content inside a disposable OS temporary workspace outside the
-repository. It rejects Agent configuration paths, traversal, undeclared
-commands, and out-of-workspace access.
+only declared content inside a disposable filesystem workspace outside the
+repository. Before staging, no external parent of that workspace may contain a
+Claude Skill-discovery root. It rejects Agent configuration paths, traversal,
+undeclared commands, and out-of-workspace access.
 
 Declared QMD access uses the verified host executable against a workspace-local
 fixture index through a read-only wrapper. The runner clears host index/config
@@ -108,6 +109,17 @@ project settings so the declared setting sources load them; QMD may relocate
 XDG state only to its declared workspace-local runtime directories. Missing,
 malformed, or changed launch or environment evidence is an invalid
 measurement, not a Skill failure.
+
+Before staging, every parent outside the Claude execution workspace must be
+free of a `.claude/skills` directory. The evaluator then populates the
+workspace-local `.claude/skills` root with only the declared primary and
+companion Skills. Before isolation, it captures a name-only inventory of
+installed host Skills. The raw Claude stream must contain exactly one
+`system/init` event whose `skills` list includes every staged Skill. Any
+non-staged visible Skill that also occurs in the captured host inventory
+invalidates the measurement. Raw results retain the host inventory so review
+and aggregation recompute this check; missing, malformed, or contradictory
+Skill-discovery evidence fails closed.
 
 `commands` previews logical commands without staging their referenced
 workspace. Only an executing `run` or `run-batch --execute` invocation creates
@@ -153,7 +165,11 @@ The builder compares invocation classifications, reparses Tool trajectories,
 recomputes isolation evidence, verifies declared external tools, localizes
 failures, and redacts machine paths plus credential-like values. It does not
 infer hidden reasoning. A missing or malformed measurement is `invalid`; a
-required behavioral mismatch or observable isolation violation is `fail`.
+required behavioral mismatch or observable Skill action that violates
+isolation is `fail`. Host Skill contamination is an evaluator-boundary failure
+and therefore `invalid`, not a failure attributed to the evaluated Skill.
+Human-readable reports must preserve this distinction with separate
+`ISOLATION INVALID` and `ISOLATION FAIL` labels.
 Residual private paths, common personal identifiers, private keys, and token
 formats fail closed instead of being marked sanitized. This scan covers the
 entire prospective record, including prompts, expected outcomes, observations,

@@ -21,6 +21,7 @@ from isolation_contract import (
 PENDING_EVIDENCE = "PENDING HUMAN REVIEW"
 _COMMAND_NOT_AUDITED = object()
 _ENVIRONMENT_NOT_AUDITED = object()
+_SKILLS_NOT_AUDITED = object()
 _CLAUDE_EMPTY_MCP_CONFIG_EVIDENCE = {
     "path": CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
     "sha256": CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
@@ -165,7 +166,24 @@ def _claude_evidence(stdout: str) -> dict[str, Any]:
                     )
             continue
         if event_type == "system":
-            evidence["metadata"]["system_subtype"] = event.get("subtype")
+            subtype = event.get("subtype")
+            evidence["metadata"]["system_subtype"] = subtype
+            if subtype == "init":
+                init_count = evidence["metadata"].get(
+                    "system_init_count",
+                    0,
+                )
+                evidence["metadata"]["system_init_count"] = init_count + 1
+                skills = event.get("skills")
+                evidence["metadata"]["visible_skills"] = (
+                    list(skills)
+                    if isinstance(skills, list)
+                    and all(
+                        isinstance(name, str) and name
+                        for name in skills
+                    )
+                    else None
+                )
             continue
         evidence["events"].append(
             {
@@ -533,6 +551,71 @@ def claude_environment_isolation_violations(
     return violations
 
 
+def claude_skill_discovery_violations(
+    evidence: dict[str, Any],
+    allowed_skills: object,
+    host_skill_names: object,
+) -> list[str]:
+    """Return violations in Claude's observable Skill discovery metadata."""
+
+    if (
+        not isinstance(allowed_skills, (list, tuple))
+        or not allowed_skills
+        or not all(
+            isinstance(name, str) and name
+            for name in allowed_skills
+        )
+        or len(allowed_skills) != len(set(allowed_skills))
+        or not isinstance(host_skill_names, (list, tuple))
+        or not all(
+            isinstance(name, str) and name
+            for name in host_skill_names
+        )
+        or len(host_skill_names) != len(set(host_skill_names))
+    ):
+        return ["Claude Skill discovery isolation evidence is malformed"]
+    metadata = evidence.get("metadata")
+    visible_skills = (
+        metadata.get("visible_skills")
+        if isinstance(metadata, dict)
+        else None
+    )
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("system_init_count") != 1
+        or not isinstance(visible_skills, list)
+    ):
+        return ["Claude system init Skill evidence is missing or malformed"]
+
+    violations: list[str] = []
+    declared = set(allowed_skills)
+    missing = sorted(declared - set(visible_skills))
+    if missing:
+        violations.append(
+            "Claude did not load declared Skill(s): "
+            + ", ".join(missing)
+        )
+    contaminated = sorted(
+        (set(visible_skills) & set(host_skill_names))
+        - declared
+    )
+    if contaminated:
+        violations.append(
+            "Claude loaded host Skill(s): "
+            + ", ".join(contaminated)
+        )
+    return violations
+
+
+def declared_skill_names(plan: dict[str, Any]) -> list[object]:
+    """Return primary and companion Skill names without hiding bad types."""
+
+    companions = plan.get("companion_skills")
+    if not isinstance(companions, (list, tuple)):
+        return [plan.get("skill_name"), companions]
+    return [plan.get("skill_name"), *companions]
+
+
 def model_isolation_violations(
     target: str,
     evidence: dict[str, Any],
@@ -542,6 +625,8 @@ def model_isolation_violations(
     audit_undeclared_bash: bool = True,
     command: object = _COMMAND_NOT_AUDITED,
     environment_isolation: object = _ENVIRONMENT_NOT_AUDITED,
+    allowed_skills: object = _SKILLS_NOT_AUDITED,
+    host_skill_names: object = _SKILLS_NOT_AUDITED,
 ) -> list[str]:
     """Return successful Claude tool actions outside the declared boundary."""
 
@@ -562,6 +647,17 @@ def model_isolation_violations(
         violations.extend(
             claude_environment_isolation_violations(
                 environment_isolation
+            )
+        )
+    if (
+        allowed_skills is not _SKILLS_NOT_AUDITED
+        or host_skill_names is not _SKILLS_NOT_AUDITED
+    ):
+        violations.extend(
+            claude_skill_discovery_violations(
+                evidence,
+                allowed_skills,
+                host_skill_names,
             )
         )
     violations.extend(
@@ -1005,6 +1101,16 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
                 for violation in stored_isolation
             )
         )
+        declared_skills = declared_skill_names(plan)
+        skill_discovery_violations = (
+            claude_skill_discovery_violations(
+                evidence,
+                declared_skills,
+                record.get("host_skill_names"),
+            )
+            if target == "claude"
+            else []
+        )
         recomputed_isolation = model_isolation_violations(
             str(target),
             evidence,
@@ -1020,14 +1126,26 @@ def aggregate_workspace(workspace: Path | str, skill_name: str) -> dict[str, Any
             environment_isolation=record.get(
                 "environment_isolation"
             ),
+            allowed_skills=declared_skills,
+            host_skill_names=record.get("host_skill_names"),
         )
         if stored_isolation_valid:
             isolation_violations = list(stored_isolation)
             isolation_audit_state = (
-                "fail" if isolation_violations else "pass"
+                (
+                    "invalid"
+                    if skill_discovery_violations
+                    else "fail"
+                )
+                if isolation_violations
+                else "pass"
             )
             if isolation_violations != recomputed_isolation:
-                isolation_audit_state = "mismatch"
+                isolation_audit_state = (
+                    "invalid"
+                    if skill_discovery_violations
+                    else "mismatch"
+                )
                 isolation_violations = (
                     recomputed_isolation or list(stored_isolation)
                 )

@@ -207,10 +207,15 @@ def _render_run(case: dict[str, Any]) -> str:
         else []
     )
     isolation_passed = audit_state == "pass" and not isolation_violations
-    isolation_state = (
-        "ISOLATION PASS" if isolation_passed else "ISOLATION FAIL"
-    )
-    isolation_class = "pass" if isolation_passed else "fail"
+    if isolation_passed:
+        isolation_state = "ISOLATION PASS"
+        isolation_class = "pass"
+    elif audit_state == "fail":
+        isolation_state = "ISOLATION FAIL"
+        isolation_class = "fail"
+    else:
+        isolation_state = "ISOLATION INVALID"
+        isolation_class = "warning"
     isolation_details = (
         "<ul>"
         + "".join(
