@@ -1213,6 +1213,13 @@ tools are selected only when required by the task and project.
   Antigravity follows the explicitly lower compatibility-copy policy: its CLI/version and
   target path must be validated, and copied hashes must match, but model behavior is not a
   release gate.
+- Codex discovery uses the local app-server `skills/list` method with a forced disk reload and
+  requires the returned Skill name and path to match the installed target. Claude discovery
+  reads the CLI's `system/init` Skill inventory while its API base URL and dummy credential are
+  confined to a newly selected loopback endpoint; the process is terminated after the init
+  event, so installation discovery sends no request to a remote model and spends no model
+  tokens. Neither installation check grades model output or activates the optional evaluation
+  workflow.
 - An absent or unverifiable target CLI receives no Skill files and is reported as
   `SKIPPED_NOT_INSTALLED` or `BLOCKED` with installation or repair guidance. Other verified
   platform targets remain eligible and do not receive an `UNVERIFIED` copy.

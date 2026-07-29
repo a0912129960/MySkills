@@ -227,6 +227,179 @@ class InstallerCoreTests(unittest.TestCase):
             self.assertIn("discovery probe crashed", result.stderr)
             self.assertFalse(target.exists())
 
+    def test_codex_discovery_lists_an_explicit_skill_by_installed_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "skills" / "ai-handoff"
+            fake_bin = root / "bin"
+            target.mkdir(parents=True)
+            fake_bin.mkdir()
+            skill_file = target / "SKILL.md"
+            skill_file.write_text("---\nname: ai-handoff\n---\n", encoding="utf-8")
+            fake_script = fake_bin / "fake-codex-server.ps1"
+            fake_script.write_text(
+                "$init = [Console]::In.ReadLine() | ConvertFrom-Json\n"
+                "$notification = @{\n"
+                "  method = 'remoteControl/status/changed'\n"
+                "  params = @{ status = 'disabled' }\n"
+                "} | ConvertTo-Json -Compress -Depth 8\n"
+                "[Console]::Out.WriteLine($notification)\n"
+                "$initResponse = @{\n"
+                "  id = $init.id\n"
+                "  result = @{ codexHome = $env:MYSKILLS_TEST_CODEX_HOME }\n"
+                "} | ConvertTo-Json -Compress -Depth 8\n"
+                "[Console]::Out.WriteLine($initResponse)\n"
+                "[Console]::Out.Flush()\n"
+                "$null = [Console]::In.ReadLine()\n"
+                "$request = [Console]::In.ReadLine() | ConvertFrom-Json\n"
+                "$response = @{\n"
+                "  id = $request.id\n"
+                "  result = @{ data = @(@{\n"
+                "    cwd = $env:MYSKILLS_TEST_CWD\n"
+                "    errors = @()\n"
+                "    skills = @(@{\n"
+                "      name = 'ai-handoff'\n"
+                "      path = $env:MYSKILLS_TEST_SKILL_FILE\n"
+                "      description = 'Explicit handoff'\n"
+                "      enabled = $true\n"
+                "      scope = 'user'\n"
+                "    })\n"
+                "  }) }\n"
+                "} | ConvertTo-Json -Compress -Depth 12\n"
+                "[Console]::Out.WriteLine($response)\n"
+                "[Console]::Out.Flush()\n",
+                encoding="utf-8",
+            )
+            fake_ps1 = fake_bin / "codex.ps1"
+            fake_ps1.write_text("exit 99\n", encoding="utf-8")
+            fake_cmd = fake_bin / "codex.cmd"
+            fake_cmd.write_text(
+                "@echo off\r\n"
+                "powershell -NoLogo -NoProfile -NonInteractive "
+                '-File "%~dp0fake-codex-server.ps1"\r\n',
+                encoding="ascii",
+            )
+
+            result = self.run_powershell(
+                "if (-not (Test-CodexSkillDiscovery "
+                "-Executable $env:MYSKILLS_TEST_CODEX "
+                "-SkillName 'ai-handoff' "
+                "-TargetPath $env:MYSKILLS_TEST_TARGET "
+                "-WorkingDirectory $env:MYSKILLS_TEST_CWD)) { "
+                "throw 'Codex did not discover the explicit Skill' }",
+                environment={
+                    "MYSKILLS_TEST_CODEX": str(fake_ps1),
+                    "MYSKILLS_TEST_CODEX_HOME": str(root / "codex-home"),
+                    "MYSKILLS_TEST_CWD": str(ROOT),
+                    "MYSKILLS_TEST_SKILL_FILE": str(skill_file),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_claude_discovery_reads_init_from_a_local_only_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "skills" / "ai-handoff"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text(
+                "---\nname: ai-handoff\n---\n",
+                encoding="utf-8",
+            )
+            fake_script = root / "fake-claude.ps1"
+            fake_script.write_text(
+                "$arguments = $args -join ' '\n"
+                "[IO.File]::WriteAllText(\n"
+                "  $env:MYSKILLS_TEST_CLAUDE_ARGS,\n"
+                "  $arguments\n"
+                ")\n"
+                "$safeEndpoint =\n"
+                "  $env:ANTHROPIC_BASE_URL.StartsWith('http://127.0.0.1:')\n"
+                "$safeKey =\n"
+                "  $env:ANTHROPIC_API_KEY -eq 'myskills-local-discovery-probe'\n"
+                "$skills = if ($safeEndpoint -and $safeKey) {\n"
+                "  @('ai-handoff')\n"
+                "} else {\n"
+                "  @()\n"
+                "}\n"
+                "@{\n"
+                "  type = 'system'\n"
+                "  subtype = 'init'\n"
+                "  skills = $skills\n"
+                "  slash_commands = @('same-name-command')\n"
+                "} | ConvertTo-Json -Compress -Depth 6\n",
+                encoding="utf-8",
+            )
+            fake_claude = root / "claude.cmd"
+            argument_log = root / "claude-arguments.txt"
+            fake_claude.write_text(
+                "@echo off\r\n"
+                "powershell -NoLogo -NoProfile -NonInteractive "
+                '-File "%~dp0fake-claude.ps1" %*\r\n',
+                encoding="ascii",
+            )
+
+            result = self.run_powershell(
+                "if (-not (Test-ClaudeSkillDiscovery "
+                "-Executable $env:MYSKILLS_TEST_CLAUDE "
+                "-SkillName 'ai-handoff' "
+                "-TargetPath $env:MYSKILLS_TEST_TARGET)) { "
+                "throw 'Claude did not receive the discovery prompt' }",
+                environment={
+                    "MYSKILLS_TEST_CLAUDE_ARGS": str(argument_log),
+                    "MYSKILLS_TEST_CLAUDE": str(fake_claude),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = argument_log.read_text(encoding="utf-8")
+            self.assertIn("/ai-handoff", arguments, arguments)
+            self.assertLess(arguments.index("--print"), arguments.index("/ai-handoff"))
+            self.assertIn("--output-format stream-json", arguments)
+
+    def test_claude_discovery_rejects_a_same_name_slash_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "skills" / "ai-handoff"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text(
+                "---\nname: ai-handoff\n---\n",
+                encoding="utf-8",
+            )
+            fake_script = root / "fake-claude.ps1"
+            fake_script.write_text(
+                "@{\n"
+                "  type = 'system'\n"
+                "  subtype = 'init'\n"
+                "  skills = @()\n"
+                "  slash_commands = @('ai-handoff')\n"
+                "} | ConvertTo-Json -Compress -Depth 6\n",
+                encoding="utf-8",
+            )
+            fake_claude = root / "claude.cmd"
+            fake_claude.write_text(
+                "@echo off\r\n"
+                "powershell -NoLogo -NoProfile -NonInteractive "
+                '-File "%~dp0fake-claude.ps1"\r\n',
+                encoding="ascii",
+            )
+
+            result = self.run_powershell(
+                "if (Test-ClaudeSkillDiscovery "
+                "-Executable $env:MYSKILLS_TEST_CLAUDE "
+                "-SkillName 'ai-handoff' "
+                "-TargetPath $env:MYSKILLS_TEST_TARGET) { "
+                "throw 'Claude slash command was accepted as Skill evidence' }",
+                environment={
+                    "MYSKILLS_TEST_CLAUDE": str(fake_claude),
+                    "MYSKILLS_TEST_TARGET": str(target),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_failed_update_verification_restores_the_previous_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -1467,37 +1467,49 @@ function Test-AgentSkillDiscovery {
         return $true
     }
     if ($Platform.Id -eq "codex") {
-        $prompt = "Use `$" + $SkillName + " for this discovery check."
-        $output = (
-            & $Platform.Executable debug prompt-input $prompt 2>&1 | Out-String
-        )
-        if ($LASTEXITCODE -ne 0) {
-            return $false
+        try {
+            $discovered = Test-CodexSkillDiscovery `
+                -Executable $Platform.Executable `
+                -SkillName $SkillName `
+                -TargetPath $TargetPath `
+                -WorkingDirectory $repoRoot
         }
-        return (
-            $output.Contains("- $SkillName`:") -and
-            $output.Contains("$SkillName/SKILL.md")
-        )
+        catch {
+            throw (
+                "Codex discovery probe failed for '$SkillName': " +
+                "$($_.Exception.Message) Run 'codex doctor', repair Skill " +
+                "discovery, then rerun install."
+            )
+        }
+        if (-not $discovered) {
+            throw (
+                "Codex did not list '$SkillName' at '$TargetPath'. " +
+                "Run 'codex doctor', repair Skill discovery, then rerun install."
+            )
+        }
+        return $true
     }
     if ($Platform.Id -eq "claude-code") {
-        $prompt = (
-            "/{0} This is an installation discovery smoke test. " +
-            "Do not use tools; reply exactly MYSKILLS_DISCOVERY_OK." -f $SkillName
-        )
-        $output = (
-            & $Platform.Executable `
-                --bare `
-                --print `
-                --no-session-persistence `
-                --tools "" `
-                --max-budget-usd 0.05 `
-                $prompt 2>&1 |
-                Out-String
-        )
-        return (
-            $LASTEXITCODE -eq 0 -and
-            $output.Contains("MYSKILLS_DISCOVERY_OK")
-        )
+        try {
+            $discovered = Test-ClaudeSkillDiscovery `
+                -Executable $Platform.Executable `
+                -SkillName $SkillName `
+                -TargetPath $TargetPath
+        }
+        catch {
+            throw (
+                "Claude Code discovery probe failed for '$SkillName': " +
+                "$($_.Exception.Message) Run /doctor and /reload-skills in " +
+                "Claude Code, then rerun install."
+            )
+        }
+        if (-not $discovered) {
+            throw (
+                "Claude Code did not report '$SkillName' in system/init. " +
+                "Run /doctor and /reload-skills in Claude Code, then rerun install."
+            )
+        }
+        return $true
     }
     return $false
 }
