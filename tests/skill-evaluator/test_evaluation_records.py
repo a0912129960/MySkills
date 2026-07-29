@@ -96,7 +96,7 @@ def valid_record() -> dict[str, object]:
         },
         "cases": [case],
     }
-    return {
+    record = {
         "$schema": "../../../record.schema.json",
         "schema_version": 2,
         "run_id": "20260727T120000Z-fixture",
@@ -125,6 +125,32 @@ def valid_record() -> dict[str, object]:
             "human_confirmed": True,
         },
     }
+    record["targets"]["claude"]["cases"][0]["observed"][
+        "environment_isolation"
+    ] = {
+        "schema_version": 2,
+        "paths": {
+            "USERPROFILE": "profile-root",
+            "HOME": "profile-root",
+            "CLAUDE_CONFIG_DIR": "profile-root",
+            "APPDATA": "profile/AppData/Roaming",
+            "LOCALAPPDATA": "profile/AppData/Local",
+            "XDG_CONFIG_HOME": "profile/.config",
+            "XDG_CACHE_HOME": "profile/.cache",
+        },
+        "mcp_config": {
+            "path": "workspace/.claude/empty-mcp.json",
+            "sha256": (
+                "sha256:"
+                "d8e397af03b5b032f21d0aa967086f0c"
+                "78b33c87b76f2e9898ae0a144df7de02"
+            ),
+        },
+        "windows_home_matches_profile": (
+            True if sys.platform == "win32" else None
+        ),
+    }
+    return record
 
 
 class EvaluationRecordContractTests(unittest.TestCase):
@@ -173,6 +199,16 @@ class EvaluationRecordContractTests(unittest.TestCase):
             "environment_isolation",
             schema["$defs"]["observed"]["required"],
         )
+        self.assertEqual(
+            schema["$defs"]["environmentIsolation"]["properties"][
+                "schema_version"
+            ],
+            {"enum": [1, 2]},
+        )
+        self.assertNotIn(
+            "mcp_config",
+            schema["$defs"]["environmentIsolation"]["required"],
+        )
 
     def test_record_validator_accepts_reviewable_git_record(self) -> None:
         records = load_records_module()
@@ -187,7 +223,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
         record["targets"]["claude"]["cases"][0]["observed"][
             "environment_isolation"
         ] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "paths": {
                 "USERPROFILE": "profile-root",
                 "HOME": "profile-root",
@@ -197,10 +233,74 @@ class EvaluationRecordContractTests(unittest.TestCase):
                 "XDG_CONFIG_HOME": "workspace/.runtime/qmd/xdg-config",
                 "XDG_CACHE_HOME": "workspace/.runtime/qmd/cache",
             },
+            "mcp_config": {
+                "path": "workspace/.claude/empty-mcp.json",
+                "sha256": (
+                    "sha256:"
+                    "d8e397af03b5b032f21d0aa967086f0c"
+                    "78b33c87b76f2e9898ae0a144df7de02"
+                ),
+            },
             "windows_home_matches_profile": True,
         }
 
         self.assertEqual(records.validate_record_document(record), [])
+
+    def test_record_validator_preserves_v1_environment_evidence(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        record["targets"]["claude"]["cases"][0]["observed"][
+            "environment_isolation"
+        ] = {
+            "schema_version": 1,
+            "paths": {
+                "USERPROFILE": "profile-root",
+                "HOME": "profile-root",
+                "CLAUDE_CONFIG_DIR": "profile-root",
+                "APPDATA": "profile/AppData/Roaming",
+                "LOCALAPPDATA": "profile/AppData/Local",
+                "XDG_CONFIG_HOME": "profile/.config",
+                "XDG_CACHE_HOME": "profile/.cache",
+            },
+            "windows_home_matches_profile": True,
+        }
+
+        self.assertEqual(records.validate_record_document(record), [])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            historical_path = Path(temp_dir) / "record.json"
+            historical_path.write_text(
+                json.dumps(record),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                records.read_record_document(historical_path),
+                record,
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "new evaluation records require environment evidence "
+                "version 2",
+            ):
+                records.write_record(Path(temp_dir), record)
+
+    def test_new_passing_claude_record_requires_v2_environment_evidence(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        record["targets"]["claude"]["cases"][0]["observed"][
+            "environment_isolation"
+        ] = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(
+                ValueError,
+                "new non-invalid Claude cases require environment "
+                "evidence version 2",
+            ):
+                records.write_record(Path(temp_dir), record)
 
     def test_passing_case_requires_only_required_assertions_to_pass(
         self,

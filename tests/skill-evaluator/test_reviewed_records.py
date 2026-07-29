@@ -136,7 +136,7 @@ def pending_review_with_sanitization() -> dict[str, object]:
 
 def isolated_claude_environment_evidence() -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "paths": {
             "USERPROFILE": "profile-root",
             "HOME": "profile-root",
@@ -145,6 +145,14 @@ def isolated_claude_environment_evidence() -> dict[str, object]:
             "LOCALAPPDATA": "profile/AppData/Local",
             "XDG_CONFIG_HOME": "profile/.config",
             "XDG_CACHE_HOME": "profile/.cache",
+        },
+        "mcp_config": {
+            "path": "workspace/.claude/empty-mcp.json",
+            "sha256": (
+                "sha256:"
+                "d8e397af03b5b032f21d0aa967086f0c"
+                "78b33c87b76f2e9898ae0a144df7de02"
+            ),
         },
         "windows_home_matches_profile": True if sys.platform == "win32" else None,
     }

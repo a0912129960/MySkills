@@ -1208,7 +1208,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             "execution_workspace": str(execution),
                             "environment_isolation": (
                                 {
-                                    "schema_version": 1,
+                                    "schema_version": 2,
                                     "paths": {
                                         "USERPROFILE": "profile-root",
                                         "HOME": "profile-root",
@@ -1217,6 +1217,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                         "LOCALAPPDATA": "profile/AppData/Local",
                                         "XDG_CONFIG_HOME": "profile/.config",
                                         "XDG_CACHE_HOME": "profile/.cache",
+                                    },
+                                    "mcp_config": {
+                                        "path": (
+                                            "workspace/.claude/"
+                                            "empty-mcp.json"
+                                        ),
+                                        "sha256": (
+                                            "sha256:"
+                                            "d8e397af03b5b032f21d0aa967086f0c"
+                                            "78b33c87b76f2e9898ae0a144df7de02"
+                                        ),
                                     },
                                     "windows_home_matches_profile": (
                                         True
@@ -1711,7 +1722,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     self.assertEqual(
                         environment_evidence,
                         {
-                            "schema_version": 1,
+                            "schema_version": 2,
                             "paths": {
                                 "USERPROFILE": "profile-root",
                                 "HOME": "profile-root",
@@ -1720,6 +1731,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                 "LOCALAPPDATA": "profile/AppData/Local",
                                 "XDG_CONFIG_HOME": "profile/.config",
                                 "XDG_CACHE_HOME": "profile/.cache",
+                            },
+                            "mcp_config": {
+                                "path": (
+                                    "workspace/.claude/"
+                                    "empty-mcp.json"
+                                ),
+                                "sha256": (
+                                    "sha256:"
+                                    "d8e397af03b5b032f21d0aa967086f0c"
+                                    "78b33c87b76f2e9898ae0a144df7de02"
+                                ),
                             },
                             "windows_home_matches_profile": (
                                 True if os.name == "nt" else None
@@ -1887,6 +1909,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "pyyaml",
                 "fixture_validation",
                 "claude_command",
+                "claude_mcp_config",
                 "codex_command",
                 "benchmark",
                 "static_report",
@@ -1958,8 +1981,12 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertIn("--setting-sources=project,local", claude)
         self.assertNotIn("--setting-sources", claude)
         self.assertEqual(
-            claude[claude.index("--mcp-config") + 1],
-            '{"mcpServers":{}}',
+            Path(claude[claude.index("--mcp-config") + 1]).resolve(),
+            (
+                Path("C:/evaluation/workspace").resolve()
+                / ".claude"
+                / "empty-mcp.json"
+            ),
         )
         self.assertIn("--strict-mcp-config", claude)
         self.assertIn("--no-chrome", claude)
@@ -2005,6 +2032,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "Natural trigger prompt.",
             Path("C:/tmp/skill"),
             explicit=False,
+            execution_workspace=Path("C:/evaluation/workspace"),
         )
         self.assertNotIn("--disable-slash-commands", claude_trigger)
         with self.assertRaises(TypeError):
@@ -2014,6 +2042,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 Path("C:/tmp/skill"),
                 explicit=False,
                 baseline=True,
+                execution_workspace=Path("C:/evaluation/workspace"),
             )
         trigger = runners.build_command(
             "codex",
@@ -2137,7 +2166,11 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         )
         variadic_mcp_command = list(safe_command)
         empty_config_index = variadic_mcp_command.index(
-            '{"mcpServers":{}}'
+            str(
+                Path("C:/evaluation/workspace").resolve()
+                / ".claude"
+                / "empty-mcp.json"
+            )
         )
         variadic_mcp_command.insert(empty_config_index + 1, "host.json")
         self.assertEqual(
@@ -2153,7 +2186,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             ],
         )
         incomplete_empty_config = list(safe_command)
-        incomplete_empty_config[empty_config_index] = "{}"
+        incomplete_empty_config[empty_config_index] = (
+            '{"mcpServers":{}}'
+        )
         self.assertIn(
             "Claude command does not enforce an empty MCP configuration",
             aggregate.model_isolation_violations(
@@ -2211,7 +2246,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "aggregate_benchmark.py",
         )
         evidence = {
-            "schema_version": 1,
+            "schema_version": 2,
             "paths": {
                 "USERPROFILE": "profile-root",
                 "HOME": "profile-root",
@@ -2220,6 +2255,14 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "LOCALAPPDATA": "workspace/.runtime/localappdata",
                 "XDG_CONFIG_HOME": "profile/.config",
                 "XDG_CACHE_HOME": "profile/.cache",
+            },
+            "mcp_config": {
+                "path": "workspace/.claude/empty-mcp.json",
+                "sha256": (
+                    "sha256:"
+                    "d8e397af03b5b032f21d0aa967086f0c"
+                    "78b33c87b76f2e9898ae0a144df7de02"
+                ),
             },
             "windows_home_matches_profile": (
                 True if os.name == "nt" else None
@@ -2254,6 +2297,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertEqual(
             aggregate.claude_environment_isolation_violations(contaminated),
             ["Claude environment path is not isolated: APPDATA"],
+        )
+        changed_mcp_config = copy.deepcopy(evidence)
+        changed_mcp_config["mcp_config"]["sha256"] = (
+            "sha256:" + ("0" * 64)
+        )
+        self.assertEqual(
+            aggregate.claude_environment_isolation_violations(
+                changed_mcp_config
+            ),
+            ["Claude empty MCP configuration evidence is invalid"],
         )
 
     def test_claude_writable_command_shape_is_exact(self) -> None:
@@ -2361,6 +2414,83 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 ["fixture-launcher", "alpha", "two words", prompt],
             )
 
+    @unittest.skipUnless(os.name == "nt", "Windows launcher contract")
+    def test_run_fails_when_claude_changes_empty_mcp_config(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=ROOT / ".scratch"
+        ) as temp_dir:
+            root = Path(temp_dir)
+            skill = root / "fixture-skill"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text(
+                "---\n"
+                "name: fixture-skill\n"
+                "description: Fixture Skill.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            (fake_bin / "claude.cmd").write_text(
+                "@echo off\r\nexit /b 99\r\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "claude.ps1").write_text(
+                "$index = [Array]::IndexOf("
+                "[object[]]$args, '--mcp-config')\n"
+                "$configPath = $args[$index + 1]\n"
+                "Set-Content -LiteralPath $configPath "
+                "-Value '{\"mcpServers\":{\"host\":"
+                "{\"command\":\"host\"}}}' -Encoding UTF8\n"
+                "Write-Output '{\"type\":\"result\","
+                "\"subtype\":\"success\",\"is_error\":false,"
+                "\"num_turns\":1,\"result\":\"done\","
+                "\"permission_denials\":[]}'\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            output = root / "results"
+            env = os.environ.copy()
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["ANTHROPIC_API_KEY"] = "fixture-key"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ENTRY_POINT),
+                    "run",
+                    str(skill),
+                    "--target",
+                    "claude",
+                    "--mode",
+                    "explicit",
+                    "--prompt",
+                    "Run the fixture.",
+                    "--workspace",
+                    str(output),
+                    "--allow-ephemeral-auth-copy",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 1, completed.stdout)
+            result_path = output / "claude" / "result.json"
+            self.assertTrue(
+                result_path.is_file(),
+                completed.stdout + completed.stderr,
+            )
+            record = json.loads(
+                result_path.read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "Claude empty MCP configuration evidence is invalid",
+                record["isolation_violations"],
+            )
+
     def test_claude_read_only_runtime_permissions_are_declaration_scoped(
         self,
     ) -> None:
@@ -2429,6 +2559,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
 
             self.assertTrue(
                 (claude_root / ".claude" / "skills" / "example" / "SKILL.md").is_file()
+            )
+            self.assertEqual(
+                json.loads(
+                    (
+                        claude_root
+                        / ".claude"
+                        / "empty-mcp.json"
+                    ).read_text(encoding="utf-8")
+                ),
+                {"mcpServers": {}},
             )
             self.assertFalse((claude_root / ".agents").exists())
             self.assertTrue(
@@ -3718,7 +3858,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             ),
                             "environment_isolation": (
                                 {
-                                    "schema_version": 1,
+                                    "schema_version": 2,
                                     "paths": {
                                         "USERPROFILE": "profile-root",
                                         "HOME": "profile-root",
@@ -3731,6 +3871,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                         ),
                                         "XDG_CONFIG_HOME": "profile/.config",
                                         "XDG_CACHE_HOME": "profile/.cache",
+                                    },
+                                    "mcp_config": {
+                                        "path": (
+                                            "workspace/.claude/"
+                                            "empty-mcp.json"
+                                        ),
+                                        "sha256": (
+                                            "sha256:"
+                                            "d8e397af03b5b032f21d0aa967086f0c"
+                                            "78b33c87b76f2e9898ae0a144df7de02"
+                                        ),
                                     },
                                     "windows_home_matches_profile": (
                                         True if os.name == "nt" else None

@@ -86,14 +86,23 @@ current directory digest of every Managed Skill. Raw model output stays under
    settings or user exec-policy rules are copied. Claude runs explicitly load
    only project/local setting sources; the evaluator writes its deny and ask
    rules into the disposable workspace's project settings so those rules are
-   part of the actual launch boundary. Runs require an empty strict MCP
-   configuration, disable Chrome integration, and isolate Windows home,
-   AppData, and XDG paths in the ephemeral profile. The isolation audit rejects
-   raw Claude commands that omit or override those controls. Each Claude result
-   also retains a sanitized environment manifest that classifies relevant paths
-   relative to the ephemeral profile or execution workspace (including QMD's
-   workspace-local XDG directories); missing,
-   malformed, or external-path evidence invalidates the measurement. Prompts,
+   part of the actual launch boundary. Runs require a strict MCP configuration
+   file owned by the evaluator inside the disposable workspace. That file
+   contains only an empty `mcpServers` object, avoiding Windows launcher
+   argument rewriting while preserving an empty MCP boundary. Runs also disable
+   Chrome integration and isolate Windows home, AppData, and XDG paths in the
+   ephemeral profile. The isolation audit rejects raw Claude commands that omit
+   or override those controls. Each Claude result also retains a sanitized
+   environment manifest that classifies relevant paths relative to the
+   ephemeral profile or execution workspace (including QMD's workspace-local
+   XDG directories) and records the empty MCP file's fixed path and content
+   digest after the target process exits; missing, malformed, changed, or
+   external-path evidence invalidates the measurement. Version 1 environment
+   evidence remains valid for append-only historical records, while every new
+   run emits version 2 with the MCP evidence and publication rejects a new
+   record containing version 1 evidence. A new non-invalid Claude case must
+   contain version 2 evidence; `null` is reserved for a case already classified
+   invalid because isolation evidence was unavailable. Prompts,
    commands, machine
    isolation results, and model output are written under the ignored batch
    workspace; credentials are never written there. Immediately before and
@@ -101,6 +110,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    workspace without following symlinks. The retained raw result includes a
    deterministic created/modified/deleted diff with relative paths, content
    digests, sizes, and bounded UTF-8 text for human inspection before cleanup.
+   The `commands` subcommand is a read-only command preview and does not stage
+   the referenced execution workspace; only `run` and `run-batch --execute`
+   create the evaluator-owned MCP file before launch.
 
 3. Grade the raw results and review the offline report. Claude evidence cannot
    substitute for Codex evidence or vice versa.

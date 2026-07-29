@@ -154,9 +154,30 @@ def smoke_contract() -> dict[str, Any]:
         )
         checks["fixture_validation"] = validate_skill.validate_skill(fixture)["valid"]
 
-        claude = runners.build_command("claude", "Smoke test.", fixture)
+        claude_workspace = root / "execution-workspace"
+        runners.prepare_isolated_workspace(
+            fixture,
+            "claude",
+            claude_workspace,
+        )
+        claude = runners.build_command(
+            "claude",
+            "Smoke test.",
+            fixture,
+            execution_workspace=claude_workspace,
+        )
         codex = runners.build_command("codex", "Smoke test.", fixture)
         checks["claude_command"] = claude[:2] == ["claude", "-p"]
+        claude_mcp_config = Path(
+            claude[claude.index("--mcp-config") + 1]
+        )
+        checks["claude_mcp_config"] = (
+            claude_mcp_config.is_file()
+            and json.loads(
+                claude_mcp_config.read_text(encoding="utf-8")
+            )
+            == {"mcpServers": {}}
+        )
         checks["codex_command"] = codex[:4] == [
             "codex",
             "--ask-for-approval",
@@ -290,13 +311,6 @@ def _execute_batch_item(
                 external_tool_evidence = (
                     preparation.external_tool_evidence
                 )
-            if item["target"] == "claude":
-                environment_isolation = (
-                    runners.claude_environment_isolation_evidence(
-                        env,
-                        execution_root,
-                    )
-                )
             identity = runners.run_command(
                 [item["target"], "--version"],
                 cwd=execution_root,
@@ -311,6 +325,13 @@ def _execute_batch_item(
                 timeout_seconds=timeout_seconds,
             )
             workspace_after = _workspace_snapshot(execution_root)
+            if item["target"] == "claude":
+                environment_isolation = (
+                    runners.claude_environment_isolation_evidence(
+                        env,
+                        execution_root,
+                    )
+                )
         execution_workspace = str(execution_root)
         evidence = aggregate_benchmark.model_evidence(
             item["target"],
@@ -377,7 +398,13 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument("skill_path", type=Path)
     validate_parser.add_argument("--json", action="store_true", dest="as_json")
 
-    commands_parser = subparsers.add_parser("commands")
+    commands_parser = subparsers.add_parser(
+        "commands",
+        help=(
+            "preview logical commands without staging their execution "
+            "workspace"
+        ),
+    )
     commands_parser.add_argument("skill_path", type=Path)
     commands_parser.add_argument("--prompt", default="Run a harmless Skill smoke test.")
     commands_parser.add_argument("--target", choices=["claude", "codex", "all"], default="all")
@@ -550,6 +577,12 @@ def main(argv: list[str] | None = None) -> int:
                     restrict_implicit_shell=target == "claude",
                     execution_workspace=execution_root,
                 ) as env:
+                    result = runners.run_command(
+                        command,
+                        cwd=execution_root,
+                        env=env,
+                        timeout_seconds=args.timeout_seconds,
+                    )
                     environment_isolation = (
                         runners.claude_environment_isolation_evidence(
                             env,
@@ -557,12 +590,6 @@ def main(argv: list[str] | None = None) -> int:
                         )
                         if target == "claude"
                         else None
-                    )
-                    result = runners.run_command(
-                        command,
-                        cwd=execution_root,
-                        env=env,
-                        timeout_seconds=args.timeout_seconds,
                     )
                 execution_workspace = str(execution_root)
                 evidence = aggregate_benchmark.model_evidence(
@@ -595,6 +622,7 @@ def main(argv: list[str] | None = None) -> int:
             results[target] = {
                 "returncode": result["returncode"],
                 "timed_out": result["timed_out"],
+                "isolation_violations": isolation_violations,
                 "result": str(result_path),
             }
         _write_json(
@@ -608,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if all(
             item["returncode"] == 0 and not item["timed_out"]
+            and not item["isolation_violations"]
             for item in results.values()
         ) else 1
 

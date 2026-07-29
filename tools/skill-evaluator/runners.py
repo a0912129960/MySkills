@@ -19,6 +19,10 @@ import threading
 import time
 from typing import Any, Iterable, NamedTuple
 
+from isolation_contract import (
+    CLAUDE_EMPTY_MCP_CONFIG_RELATIVE,
+    CLAUDE_EMPTY_MCP_CONFIG_TEXT,
+)
 
 TARGETS = ("claude", "codex")
 RUNTIME_TOOLS = ("obsidian-wiki", "skill-evaluator")
@@ -174,6 +178,17 @@ def prepare_evaluation_workspace(
         prepare_isolated_workspace(skill_path, target, root)
     _write_fixture_files(root, fixtures)
     return root
+
+
+def _write_empty_claude_mcp_config(workspace: Path) -> Path:
+    path = workspace.resolve() / CLAUDE_EMPTY_MCP_CONFIG_RELATIVE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        CLAUDE_EMPTY_MCP_CONFIG_TEXT,
+        encoding="utf-8",
+        newline="\n",
+    )
+    return path
 
 
 def prepare_runtime_environment(
@@ -744,6 +759,8 @@ def prepare_isolated_workspace(
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
+    if target == "claude":
+        _write_empty_claude_mcp_config(root)
     return root
 
 
@@ -783,18 +800,20 @@ def build_command(
             "Return only evidence produced in this isolated run."
         )
     if target == "claude":
-        workspace_permissions: list[str] = []
-        if execution_workspace is not None:
-            pattern = _claude_absolute_path_pattern(
-                Path(execution_workspace)
+        if execution_workspace is None:
+            raise ValueError(
+                "Claude isolation requires an execution workspace"
             )
-            workspace_permissions.append(f"Read({pattern})")
-            if safety != "read-only":
-                workspace_permissions.extend(
-                    [
-                        f"Edit({pattern})",
-                    ]
-                )
+        workspace = Path(execution_workspace).resolve()
+        workspace_permissions: list[str] = []
+        pattern = _claude_absolute_path_pattern(workspace)
+        workspace_permissions.append(f"Read({pattern})")
+        if safety != "read-only":
+            workspace_permissions.extend(
+                [
+                    f"Edit({pattern})",
+                ]
+            )
         command = [
             "claude",
             "-p",
@@ -805,7 +824,7 @@ def build_command(
             "--no-session-persistence",
             "--setting-sources=project,local",
             "--mcp-config",
-            '{"mcpServers":{}}',
+            str(workspace / CLAUDE_EMPTY_MCP_CONFIG_RELATIVE),
             "--strict-mcp-config",
             "--no-chrome",
         ]
@@ -1011,6 +1030,13 @@ def claude_environment_isolation_evidence(
     else:
         profile = Path(profile_text).resolve()
     workspace = Path(execution_workspace).resolve()
+    mcp_config = workspace / CLAUDE_EMPTY_MCP_CONFIG_RELATIVE
+    try:
+        mcp_config_digest = (
+            "sha256:" + hashlib.sha256(mcp_config.read_bytes()).hexdigest()
+        )
+    except OSError:
+        mcp_config_digest = "missing-or-invalid"
     keys = (
         "USERPROFILE",
         "HOME",
@@ -1028,7 +1054,7 @@ def claude_environment_isolation_evidence(
             and env.get("HOMEPATH") == home_path
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "paths": {
             key: _isolated_path_label(
                 env.get(key),
@@ -1036,6 +1062,14 @@ def claude_environment_isolation_evidence(
                 workspace,
             )
             for key in keys
+        },
+        "mcp_config": {
+            "path": _isolated_path_label(
+                str(mcp_config),
+                profile,
+                workspace,
+            ),
+            "sha256": mcp_config_digest,
         },
         "windows_home_matches_profile": home_match,
     }
@@ -1153,6 +1187,9 @@ def isolated_target_environment(
                 Path(execution_workspace).resolve() / ".claude",
                 declared_denied_read_roots,
                 restrict_implicit_shell=restrict_implicit_shell,
+            )
+            _write_empty_claude_mcp_config(
+                Path(execution_workspace).resolve()
             )
         yield env
 

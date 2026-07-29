@@ -11,6 +11,10 @@ import re
 import tempfile
 from typing import Any
 
+from isolation_contract import (
+    CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
+    CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
+)
 
 RECORD_SCHEMA_VERSION = 2
 EVALUATOR_VERSION = "myskills-skill-evaluator/4"
@@ -74,6 +78,44 @@ def read_record_document(record_path: Path | str) -> dict[str, Any]:
     return document
 
 
+def _new_record_environment_errors(
+    document: dict[str, Any],
+) -> list[str]:
+    targets = document.get("targets")
+    if not isinstance(targets, dict):
+        return []
+    claude = targets.get("claude")
+    if not isinstance(claude, dict):
+        return []
+    cases = claude.get("cases")
+    if not isinstance(cases, list):
+        return []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        observed = case.get("observed")
+        if not isinstance(observed, dict):
+            continue
+        evidence = observed.get("environment_isolation")
+        if isinstance(evidence, dict):
+            if evidence.get("schema_version") == 2:
+                continue
+            return [
+                (
+                    "new evaluation records require environment evidence "
+                    "version 2"
+                )
+            ]
+        if case.get("status") != "invalid":
+            return [
+                (
+                    "new non-invalid Claude cases require environment "
+                    "evidence version 2"
+                )
+            ]
+    return []
+
+
 def write_record(
     repo_root: Path | str,
     document: dict[str, Any],
@@ -81,6 +123,7 @@ def write_record(
     """Atomically write one append-only machine and human evaluation record."""
 
     errors = validate_record_document(document)
+    errors.extend(_new_record_environment_errors(document))
     if errors:
         raise ValueError("\n".join(errors))
     root = Path(repo_root).resolve()
@@ -450,16 +493,19 @@ def _validate_target(target: str, value: object) -> list[str]:
 
 
 def _valid_environment_isolation(value: object) -> bool:
-    if (
-        not isinstance(value, dict)
-        or set(value)
-        != {
-            "schema_version",
-            "paths",
-            "windows_home_matches_profile",
-        }
-        or value.get("schema_version") != 1
-    ):
+    if not isinstance(value, dict):
+        return False
+    version = value.get("schema_version")
+    expected_fields = {
+        "schema_version",
+        "paths",
+        "windows_home_matches_profile",
+    }
+    if version == 2:
+        expected_fields.add("mcp_config")
+    elif version != 1:
+        return False
+    if set(value) != expected_fields:
         return False
     paths = value.get("paths")
     if (
@@ -476,7 +522,7 @@ def _valid_environment_isolation(value: object) -> bool:
         }
     ):
         return False
-    return (
+    paths_are_isolated = (
         paths["USERPROFILE"] == "profile-root"
         and paths["HOME"] == "profile-root"
         and paths["CLAUDE_CONFIG_DIR"] == "profile-root"
@@ -501,6 +547,14 @@ def _valid_environment_isolation(value: object) -> bool:
             or value["windows_home_matches_profile"] is None
         )
     )
+    if not paths_are_isolated:
+        return False
+    if version == 1:
+        return True
+    return value["mcp_config"] == {
+        "path": CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
+        "sha256": CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
+    }
 
 
 def _validate_case(prefix: str, value: object) -> list[str]:

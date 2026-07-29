@@ -178,7 +178,7 @@
         "windows_home_matches_profile"
       ],
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"enum": [1, 2]},
         "paths": {
           "type": "object",
           "additionalProperties": false,
@@ -216,13 +216,36 @@
             }
           }
         },
+        "mcp_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {
+              "const": "workspace/.claude/empty-mcp.json"
+            },
+            "sha256": {
+              "const": "sha256:d8e397af03b5b032f21d0aa967086f0c78b33c87b76f2e9898ae0a144df7de02"
+            }
+          }
+        },
         "windows_home_matches_profile": {
           "oneOf": [
             {"const": true},
             {"type": "null"}
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"schema_version": {"const": 2}},
+            "required": ["schema_version"]
+          },
+          "then": {"required": ["mcp_config"]},
+          "else": {"not": {"required": ["mcp_config"]}}
+        }
+      ]
     },
     "observed": {
       "type": "object",

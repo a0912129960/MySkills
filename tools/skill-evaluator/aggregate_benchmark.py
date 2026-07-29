@@ -12,10 +12,19 @@ import re
 import statistics
 from typing import Any, Iterable
 
+from isolation_contract import (
+    CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
+    CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
+    CLAUDE_EMPTY_MCP_CONFIG_RELATIVE,
+)
 
 PENDING_EVIDENCE = "PENDING HUMAN REVIEW"
 _COMMAND_NOT_AUDITED = object()
 _ENVIRONMENT_NOT_AUDITED = object()
+_CLAUDE_EMPTY_MCP_CONFIG_EVIDENCE = {
+    "path": CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
+    "sha256": CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
+}
 
 
 def _mean(values: list[float]) -> float | None:
@@ -373,6 +382,10 @@ def claude_command_isolation_violations(
     expected_allowed_tools_values = (
         [expected_allowed_tools] if read_only else []
     )
+    expected_mcp_config = str(
+        Path(execution_workspace).resolve()
+        / CLAUDE_EMPTY_MCP_CONFIG_RELATIVE
+    )
     shape_valid = shape_valid and (
         len(parsed_values["-p"]) == 1
         and bool(parsed_values["-p"][0])
@@ -380,7 +393,7 @@ def claude_command_isolation_violations(
         and parsed_flags["--verbose"] == 1
         and parsed_flags["--no-session-persistence"] == 1
         and parsed_flags["--setting-sources=project,local"] == 1
-        and parsed_values["--mcp-config"] == ['{"mcpServers":{}}']
+        and parsed_values["--mcp-config"] == [expected_mcp_config]
         and parsed_flags["--strict-mcp-config"] == 1
         and parsed_flags["--no-chrome"] == 1
         and parsed_values["--permission-mode"]
@@ -428,8 +441,7 @@ def claude_command_isolation_violations(
         mcp_boundary_valid = (
             command_values[mcp_index] == "--mcp-config"
             and mcp_index + 2 < len(command_values)
-            and command_values[mcp_index + 1]
-            == '{"mcpServers":{}}'
+            and command_values[mcp_index + 1] == expected_mcp_config
             and command_values[mcp_index + 2].startswith("--")
             and command_values.count("--strict-mcp-config") == 1
         )
@@ -464,9 +476,10 @@ def claude_environment_isolation_violations(
         != {
             "schema_version",
             "paths",
+            "mcp_config",
             "windows_home_matches_profile",
         }
-        or evidence.get("schema_version") != 1
+        or evidence.get("schema_version") != 2
         or not isinstance(evidence.get("paths"), dict)
         or set(evidence["paths"])
         != {
@@ -507,6 +520,10 @@ def claude_environment_isolation_violations(
     }:
         violations.append(
             "Claude environment path is not isolated: XDG_CACHE_HOME"
+        )
+    if evidence.get("mcp_config") != _CLAUDE_EMPTY_MCP_CONFIG_EVIDENCE:
+        violations.append(
+            "Claude empty MCP configuration evidence is invalid"
         )
     expected_home_match: bool | None = True if os.name == "nt" else None
     if evidence.get("windows_home_matches_profile") is not expected_home_match:
