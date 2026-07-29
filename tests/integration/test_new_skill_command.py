@@ -61,6 +61,8 @@ class NewSkillCommandTests(unittest.TestCase):
             self.assertIn("allow_implicit_invocation: false", metadata)
             self.assertIn("$example-skill", metadata)
             self.assertIn("skill-evaluator", result.stdout)
+            self.assertIn("optional diagnostic", result.stdout)
+            self.assertNotIn("Creation is incomplete", result.stdout)
             self.assertIn("inventory/skills.json", result.stdout)
 
     def test_scaffolder_refuses_to_overwrite_an_existing_directory(self) -> None:

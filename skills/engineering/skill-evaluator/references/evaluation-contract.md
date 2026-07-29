@@ -1,5 +1,10 @@
 # Evaluation contract
 
+This contract applies only after a human explicitly activates model evaluation and approves
+its target platforms, case scope, and model-call budget. MySkills keeps this architecture
+available as an optional diagnostic; it is disabled by default and is not required for
+creation, installation, completion, or ordinary repository validation.
+
 ## Required evidence
 
 - canonical Skill path and deterministic directory digest;
@@ -150,7 +155,7 @@ state changes exist; reviewer prose cannot manufacture the evidence.
 
 ## Source-controlled evaluation records
 
-After grading, publish every evaluation run at:
+After grading an explicitly activated diagnostic, publish every retained evaluation run at:
 
 ```text
 evaluations/records/<skill>/<run-id>/
@@ -190,11 +195,12 @@ the raw workspace.
 
 ## Release pointer
 
-`attestations/skills/<skill>.json` is a v3 release pointer, not evaluation
-history. It contains the current Skill digest, canonical record path, exact
-record file digest, selection time, and pass status.
+`attestations/skills/<skill>.json` is an optional v3 release pointer, not
+evaluation history. It contains the current Skill digest, canonical record
+path, exact record file digest, selection time, and pass status.
 
 Only a record whose overall status and both target statuses are `pass` may be
-selected. `verify-attestation` and the repository release gate reject stale
-Skill content, changed records, invalid paths, non-passing targets, or malformed
-evidence.
+selected. `verify-attestation` and the explicitly enabled
+`validate_repo.py --require-evaluations` gate reject stale Skill content,
+changed records, invalid paths, non-passing targets, or malformed evidence.
+Default repository validation does not require or inspect release pointers.

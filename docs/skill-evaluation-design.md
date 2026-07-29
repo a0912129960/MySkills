@@ -1,16 +1,29 @@
 # Skill Evaluation Design
 
-Status: Accepted design; implementation pending. Confirmed on 2026-07-27.
+Status: Preserved optional diagnostic; disabled by default. Revised on 2026-07-29.
 
 ## Purpose
 
-This document defines how MySkills determines whether a Managed Skill satisfies its intended
-behavior. It is the normative source for evaluation scope, cases, scoring, escalation, and
-acceptance policy.
+This document defines the preserved model-evaluation architecture available for diagnosing a
+Managed Skill. It is the normative source for evaluation scope, cases, scoring, escalation,
+and evidence only after a human explicitly activates that workflow.
 
-MySkills as a whole remains in development acceptance. The evaluation subsystem is undergoing
-a requirements revision, so existing evaluation results remain historical evidence but do not
-prove conformance with the revised model until that model is implemented and run.
+Model evaluation is not part of default creation, installation, completion, repository
+validation, or release acceptance. Existing results remain append-only historical evidence;
+they do not prove future model behavior and do not block ordinary MySkills work.
+
+## Activation policy
+
+- MySkills does not automatically call Claude, Codex, or another model for Skill evaluation.
+- A human must explicitly request model evaluation and approve its target platforms, case
+  scope, and model-call budget before a runner executes.
+- Absence of cases, a passing evaluation record, an attestation, or a release pointer does not
+  make a Managed Skill incomplete and does not block default repository validation.
+- `python scripts/validate_repo.py` checks deterministic repository contracts.
+  `--require-evaluations` explicitly opts into the preserved record/release-pointer gate.
+- The cases, runners, grading, reports, records, attestations, and historical evidence remain
+  available for a future diagnostic. An activated run follows the remaining policy in this
+  document, including no automatic retries and append-only evidence retention.
 
 ## Document boundaries
 
@@ -21,14 +34,14 @@ prove conformance with the revised model until that model is implemented and run
   reports, and retaining evidence. It does not define acceptance policy.
 - `CONTEXT.md` defines shared domain terminology, not evaluation procedures.
 
-## Confirmed evaluation policy
+## Policy when explicitly activated
 
 ### Capability-based evaluation
 
 Evaluation is selected by Skill capability rather than applying every test type to every Skill:
 
-- Every Managed Skill is evaluated for structure, description-to-capability consistency,
-  explicit invocation, and final task outcome.
+- A Managed Skill selected for an explicitly authorized diagnostic is evaluated for structure,
+  description-to-capability consistency, explicit invocation, and final task outcome.
 - An Implicit-invocation Skill is additionally evaluated with positive, negative, boundary,
   paraphrase, and library-regression cases.
 - A Skill that uses tools or can cause side effects is additionally evaluated for required

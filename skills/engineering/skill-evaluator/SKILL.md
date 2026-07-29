@@ -8,6 +8,9 @@ disable-model-invocation: true
 
 Use this workflow only for a formal evaluation of an existing Skill. Never use
 it for general review, authoring, editing, or advice about trigger wording.
+This is a preserved optional diagnostic, not a default creation, installation,
+completion, or release gate. Never launch Claude, Codex, or another model
+unless the human explicitly approves the targets, cases, and model-call budget.
 
 Evaluate a completed Skill without editing it. A creator applies any accepted
 recommendations and asks for a new evaluation of the resulting digest.
@@ -18,9 +21,10 @@ recommendations and asks for a new evaluation of the resulting digest.
   directory digest.
 - Resolve the MySkills-managed evaluator launcher. Do not use a former source
   clone or a globally installed evaluator.
-- Require the evaluator launcher and both `claude` and `codex` target
-  capabilities declared by MySkills. Missing either target prevents a passing
-  evaluation record.
+- For an explicitly requested two-platform diagnostic, require the evaluator
+  launcher and both `claude` and `codex` target capabilities declared by
+  MySkills. Missing either target prevents that optional diagnostic record
+  from passing but does not block ordinary repository work.
 - Place raw runs under
   `.scratch\skill-evals\<skill-name>\<run-id>\`; this location is disposable
   and ignored.
@@ -68,13 +72,17 @@ Reviewer prose alone cannot satisfy external-state evidence. Confirm
 sanitization separately in `review.json`; the builder scans the entire
 prospective record for residual sensitive data and fails closed.
 
-Use `select-record` only when the published record passes for the exact current
-Skill digest and both primary platforms. This writes the current release pointer
+If the human explicitly requests the preserved evaluation gate, use
+`select-record` only when the published record passes for the exact current
+Skill digest and both primary platforms. This writes an optional release pointer
 under `attestations/skills/`; `verify-attestation` validates the pointer, record
 digest, Skill digest, and referenced evidence. Human review may classify a
 failure or invalid evaluation but must not convert a platform failure directly
-to a pass. A changed Skill digest requires a new evaluation.
+to a pass. A changed Skill digest requires a new evaluation only for a new
+optional pointer.
 
-An unchanged imported snapshot may use structural validation plus discovery and
-explicit-invocation smoke tests. Any rename, shortening, Windows port, merge,
-split, or behavioral change requires the full evaluation above.
+When a human activates model diagnostics, an unchanged imported snapshot may
+use structural validation plus discovery and explicit-invocation smoke tests.
+Any broader model scope remains an explicit human decision; it is never started
+automatically because of a rename, shortening, Windows port, merge, split, or
+behavioral change.

@@ -7,9 +7,10 @@ former source repositories are archived.
 
 ## Managed Skills
 
-Invocation policy is identical for Claude Code and Codex. **Explicit** skills run only when the
-user names them; **implicit** skills may be selected by the model when their description
-matches.
+Declared invocation policy is identical for Claude Code and Codex. **Explicit** skills are
+configured for human invocation; **implicit** skills may be selected by the model when their
+description matches. This is a portable metadata contract, not a guarantee of deterministic
+model selection.
 
 ### Engineering
 
@@ -118,3 +119,9 @@ python .\scripts\validate_inventory.py
 python .\scripts\validate_repo.py
 python .\scripts\run_tests.py
 ```
+
+These commands perform deterministic validation and do not call Claude or Codex. The preserved
+model-evaluation architecture is disabled by default. Run
+`python .\scripts\validate_repo.py --require-evaluations` only when a human explicitly wants
+to apply the optional evaluation-record and release-pointer gate; that flag validates existing
+records and does not itself launch model runs.

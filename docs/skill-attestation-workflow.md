@@ -1,8 +1,24 @@
 # Skill attestation workflow
 
-Release validation requires one passing, source-controlled attestation for the
-current directory digest of every Managed Skill. Raw model output stays under
+This is a preserved, optional diagnostic workflow. It is disabled by default and is not a
+creation, installation, completion, or release requirement. Do not execute its Claude/Codex
+commands unless a human explicitly requests model evaluation and approves the target
+platforms, case scope, and model-call budget. Raw model output stays under
 `.scratch/skill-evals/` and is never committed.
+
+Default deterministic repository validation is:
+
+```powershell
+python scripts/validate_repo.py
+```
+
+Only a human-requested diagnostic uses the workflow below. Its historical record can be
+retained without becoming a default release gate. To explicitly check the preserved
+record/release-pointer contract, use:
+
+```powershell
+python scripts/validate_repo.py --require-evaluations
+```
 
 1. Validate structure and print the current digest:
 
@@ -231,9 +247,9 @@ current directory digest of every Managed Skill. Raw model output stays under
    `publish-record` remains available for a separately constructed compatible
    record; the normal workflow is `publish-reviewed`.
 
-5. If and only if the published record passes for both platforms and the exact
-   current Skill digest, select it as the current release record and verify the
-   repository gate:
+5. If and only if the explicitly requested diagnostic needs a selected passing record, and the
+   published record passes for both platforms and the exact current Skill digest, select it
+   and verify the optional evaluation gate:
 
    ```powershell
    python tools/skill-evaluator/skill_evaluator.py select-record . `
@@ -241,10 +257,9 @@ current directory digest of every Managed Skill. Raw model output stays under
      evaluations/records/<name>/<run-id>/record.json
    python tools/skill-evaluator/skill_evaluator.py verify-attestation `
      skills/<bucket>/<name> attestations/skills/<name>.json
-   python scripts/validate_repo.py
+   python scripts/validate_repo.py --require-evaluations
    ```
 
-Any change inside the Skill directory changes its digest and makes the previous
-release pointer stale. Changing a selected `record.json` also invalidates its
-record digest. `python scripts/validate_repo.py --structural-only` is only for
-authoring before evaluation; it is not a release pass.
+Any change inside the Skill directory changes its digest and makes a previous optional release
+pointer stale. Changing a selected `record.json` also invalidates its record digest. Default
+repository validation remains deterministic and does not inspect those optional pointers.

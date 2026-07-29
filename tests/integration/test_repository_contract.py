@@ -13,7 +13,7 @@ VALIDATOR = ROOT / "scripts" / "validate_repo.py"
 class RepositoryContractTests(unittest.TestCase):
     def test_repository_matches_managed_inventory(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(VALIDATOR), "--structural-only"],
+            [sys.executable, str(VALIDATOR)],
             cwd=ROOT,
             check=False,
             capture_output=True,
@@ -24,9 +24,11 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Validated 42 Managed Skill(s)", result.stdout)
 
-    def test_release_validation_rejects_missing_release_pointers(self) -> None:
+    def test_evaluation_gate_is_available_only_when_explicitly_requested(
+        self,
+    ) -> None:
         result = subprocess.run(
-            [sys.executable, str(VALIDATOR)],
+            [sys.executable, str(VALIDATOR), "--require-evaluations"],
             cwd=ROOT,
             check=False,
             capture_output=True,

@@ -694,34 +694,22 @@ tools are selected only when required by the task and project.
 - The LLM Wiki source candidate `skill-creator` is transformed into the human-only
   Engineering Skill `skill-evaluator`. It does not author or package Skills. A platform
   creator or the repository-owned `scripts\new-skill.ps1` scaffolder creates or edits the
-  Skill; `skill-evaluator` then performs structural, behavioral, efficiency, trigger,
-  and human-review evaluation.
-- Every MySkills creation path has an explicit creator-to-evaluator handoff. After authoring
-  and basic structural validation, the creator invokes `skill-evaluator` against the new
-  Managed Skill and does not report creation as complete until the evaluator has produced a
-  passing evaluation record and release pointer for the current Skill digest. If evaluation
-  recommends changes, the creator applies only the accepted changes and evaluates the new
-  digest again. If evaluation cannot run or still fails, creation is reported as incomplete
-  rather than silently accepted.
-  Repository instructions enforce this final creator step for platform-native creators; the
-  deterministic scaffolder also prints the same required next action but does not pretend that
-  an empty scaffold has been evaluated.
-- MySkills repository instructions require every newly authored Managed Skill to run
-  `skill-evaluator` before completion. The evaluator writes raw runs under the ignored
-  `.scratch\skill-evals\<skill>\<run-id>\` and records sanitized, source-controlled evaluation
-  evidence as required by `skill-evaluation-design.md`. The Git-tracked record contains enough
-  process and result evidence for independent review; a compact result without its reviewable
-  evidence is insufficient. Repository validation rejects a new Managed Skill whose current
-  digest lacks a passing evaluation record.
-- Provenance alone does not exempt an import from behavioral evaluation. A snapshot whose
-  complete directory digest is unchanged from its recorded source receives structural
-  validation plus Claude and Codex discovery and explicit-invocation smoke tests. Any import
-  that is shortened, Windows-ported, renamed, merged, split, or behaviorally changed is treated
-  as a substantive revision and requires the same full Claude-and-Codex evaluation as a newly
-  authored Skill. Repository validation records the source and current digests so this
-  distinction is mechanical rather than judgment-based.
-- Default evaluation is report-only. It validates the MySkills structure and metadata, runs
-  realistic cases with the Skill installed, evaluates explicit assertions, measures time and
+  Skill. The preserved `skill-evaluator` can perform structural, behavioral, efficiency,
+  trigger, and human-review diagnostics only after a human explicitly activates it.
+- Model evaluation is disabled by default. Creation, import, editing, installation, completion,
+  and ordinary repository validation do not invoke a model and do not require cases, a passing
+  evaluation record, an attestation, or a release pointer. The scaffolder directs authors to
+  deterministic inventory, repository, and test validation.
+- A human may explicitly request the optional evaluator and approve its target platforms, case
+  scope, and model-call budget. The evaluator then writes raw runs under the ignored
+  `.scratch\skill-evals\<skill>\<run-id>\` and may retain sanitized, source-controlled evidence
+  as required by `skill-evaluation-design.md`. Historical records remain append-only and do
+  not prove future model behavior.
+- Default `python scripts\validate_repo.py` checks deterministic repository contracts.
+  `--require-evaluations` opts into the preserved evaluation-record and release-pointer gate;
+  the flag validates existing evidence and does not launch model runs.
+- When explicitly activated, evaluation is report-only. It validates the MySkills structure
+  and metadata, runs the approved cases, evaluates explicit assertions, measures time and
   tokens when exposed by the runner, and renders an offline static HTML review. Applying
   recommendations is a separate creator/editing action.
 - Trigger results are target-specific. Claude results never stand in for Codex. A passing
@@ -739,8 +727,8 @@ tools are selected only when required by the task and project.
   explicitly authorized evaluation so nondeterministic retries cannot consume tokens merely
   to obtain a favorable result.
 - Automated evaluation requires Python 3.10 or later. MySkills never installs or upgrades
-  Python; missing or incompatible Python blocks `skill-evaluator` from being copied because it
-  cannot produce the required automated attestation.
+  Python; missing or incompatible Python blocks only the optional `skill-evaluator` from being
+  copied and does not block unrelated Skills or default repository validation.
 - With compatible Python, the installer creates
   `%LOCALAPPDATA%\MySkills\venvs\skill-evaluator` and installs pinned PyYAML 6.0.3 there. Python
   detection prefers a compatible runtime reported by the official Python Install Manager,
@@ -753,12 +741,12 @@ tools are selected only when required by the task and project.
   MySkills builds a replacement environment separately, runs all core smoke tests, and swaps
   it into place only after success; a failed install or update leaves the last working
   evaluator environment intact.
-- Claude and Codex CLIs are required evaluation targets, not packages secretly installed by
-  `skill-evaluator`. If either executable is absent, `skill-evaluator` is not installed.
+- Claude and Codex CLIs are targets of the optional diagnostic, not packages secretly installed
+  by `skill-evaluator`. If either executable is absent, `skill-evaluator` is not installed.
   Installer preflight does not infer or gate runner support by Agent version; each real
-  evaluation proves the required Claude and Codex commands and fails without an attestation
-  when either cannot run. The offline report requires no Node.js package, CDN asset, local web
-  server, or additional browser installation.
+  diagnostic observes its approved Claude and Codex commands and reports unavailable targets
+  honestly. The offline report requires no Node.js package, CDN asset, local web server, or
+  additional browser installation.
 - Source helpers are reduced to validation, result aggregation, target runners,
   description testing, and static report generation. `package_skill.py`, general creator
   teaching, and Claude/Cowork-only presentation instructions are removed. Pipe reading is

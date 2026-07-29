@@ -98,9 +98,9 @@ policy:
     Write-Output "Created $resolvedTarget"
     Write-Output (
         "Next: add the candidate and its targets to inventory/skills.json, sync the " +
-        "repository manifests, then run skill-evaluator against the current directory " +
-        "digest. Creation is incomplete until a passing source-controlled " +
-        "evaluation record and release pointer exist."
+        "repository manifests, then run the deterministic repository validators. " +
+        "The preserved skill-evaluator is an optional diagnostic that runs only " +
+        "when a human explicitly requests model evaluation."
     )
     exit 0
 }

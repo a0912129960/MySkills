@@ -69,7 +69,7 @@ def _validate_attestations(root: Path) -> list[str]:
 def validate_repository(
     root: Path = ROOT,
     *,
-    require_attestations: bool = True,
+    require_attestations: bool = False,
 ) -> list[str]:
     """Return all repository contract violations."""
 
@@ -230,13 +230,27 @@ def validate_repository(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    evaluation_mode = parser.add_mutually_exclusive_group()
+    evaluation_mode.add_argument(
+        "--require-evaluations",
+        action="store_true",
+        help=(
+            "Opt in to the preserved model-evaluation record and release-"
+            "pointer gate."
+        ),
+    )
+    evaluation_mode.add_argument(
         "--structural-only",
         action="store_true",
-        help="Skip the release attestation gate while authoring.",
+        help=(
+            "Validate deterministic repository contracts only. This is the "
+            "default and is retained for command compatibility."
+        ),
     )
     args = parser.parse_args()
-    errors = validate_repository(require_attestations=not args.structural_only)
+    errors = validate_repository(
+        require_attestations=args.require_evaluations
+    )
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
@@ -248,7 +262,11 @@ def main() -> int:
         for skill in inventory["skills"]
         if skill["state"] == "managed"
     )
-    scope = "structural contracts" if args.structural_only else "release contracts"
+    scope = (
+        "evaluation and release-pointer contracts"
+        if args.require_evaluations
+        else "deterministic repository contracts"
+    )
     print(
         f"Validated {len(names)} Managed Skill(s) ({scope}): "
         f"{', '.join(names)}"
