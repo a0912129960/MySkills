@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 from typing import Any, Iterable
 
 import aggregate_benchmark
@@ -37,6 +38,57 @@ SECRET_PATTERNS = (
         r"(\s*[:=]\s*)[^\s,;]+"
     ),
 )
+PRIVATE_WINDOWS_PATH = re.compile(
+    r"(?i)(?:"
+    r"(?<=[\"'])(?:[A-Z]:[\\/]|\\\\)[^\r\n\"']+(?=[\"'])"
+    r"|\b[A-Z]:[\\/][^\s\"']+"
+    r"|(?<!\\)\\\\[^\s\"']+"
+    r")"
+)
+PRIVATE_POSIX_ROOT = (
+    r"(?:home|Users|tmp|var|root|opt|private|mnt|etc|usr|srv"
+    r"|[A-Za-z]/(?:home|Users|tmp|project))"
+)
+PRIVATE_POSIX_PATH = re.compile(
+    r"(?<=[\"'])//"
+    r"[A-Za-z]/(?:home|Users|tmp|project)(?:/[^\r\n\"']*)?"
+    r"(?=[\"'])"
+    + r"|(?<![:/A-Za-z0-9.])//"
+    r"[A-Za-z]/(?:home|Users|tmp|project)(?:/[^\s\"']*)?"
+    + r"|(?<=[\"'])/"
+    + PRIVATE_POSIX_ROOT
+    + r"(?=/|[\s\"']|$)"
+    + r"(?:/[^\r\n\"']*)?(?=[\"'])"
+    + r"|(?<![:/A-Za-z0-9.])/"
+    + PRIVATE_POSIX_ROOT
+    + r"(?=/|[\s\"']|$)"
+    + r"(?:/[^\s\"']*)?"
+)
+PRIVATE_PATH_REDACTIONS = (
+    ("private Windows path", PRIVATE_WINDOWS_PATH),
+    ("private POSIX path", PRIVATE_POSIX_PATH),
+)
+PRIVATE_ACCOUNT_IDENTIFIER = re.compile(
+    r"(?i)(\b(?:account|accounts|user|owner)\s*[:=]\s*)"
+    r"([A-Za-z0-9_.-]+(?:\+|\\)[A-Za-z0-9_.-]+)"
+    r"(?![A-Za-z0-9_.-])"
+)
+REDACTED_WHOAMI_OUTPUT = "[REDACTED_WHOAMI_OUTPUT]"
+REDACTED_MIXED_WHOAMI_OUTPUT = "[REDACTED_MIXED_WHOAMI_OUTPUT]"
+WHOAMI_COMMAND_MARKER = "[WHOAMI_COMMAND]"
+MIXED_WHOAMI_COMMAND_MARKER = "[MIXED_WHOAMI_COMMAND]"
+SHELL_STAGE_SEPARATORS = {"&", "&&", "|", "||", ";", "("}
+PRIVATE_POSIX_LISTING_IDENTIFIERS = re.compile(
+    r"(?<!\S)"
+    r"([bcdlps-][rwxStTs-]{9}\s+\d+\s+)"
+    r"((?!\[REDACTED_ACCOUNT\])\S+)(\s+)"
+    r"((?!\[REDACTED_ACCOUNT\])\S+)(\s+\d+\b)"
+)
+PRIVATE_POSIX_SINGLE_LISTING_IDENTIFIER = re.compile(
+    r"(?<!\S)"
+    r"([bcdlps-][rwxStTs-]{9}\s+\d+\s+)"
+    r"((?!\[REDACTED_ACCOUNT\])\S+)(\s+\d+\b)"
+)
 RESIDUAL_SENSITIVE_PATTERNS = {
     "email address": re.compile(
         r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
@@ -45,9 +97,12 @@ RESIDUAL_SENSITIVE_PATTERNS = {
     "private key material": re.compile(
         r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
     ),
-    "private Windows path": re.compile(r"(?i)\b[A-Z]:[\\/]"),
-    "private POSIX path": re.compile(
-        r"(?<![:A-Za-z0-9])/(?:home|Users|tmp|var/folders)/[^\s\"']+"
+    "private Windows path": PRIVATE_WINDOWS_PATH,
+    "private POSIX path": PRIVATE_POSIX_PATH,
+    "account identifier": PRIVATE_ACCOUNT_IDENTIFIER,
+    "directory listing account identifier": PRIVATE_POSIX_LISTING_IDENTIFIERS,
+    "single directory listing account identifier": (
+        PRIVATE_POSIX_SINGLE_LISTING_IDENTIFIER
     ),
     "SSH private path": re.compile(r"(?i)(?:^|[\\/])\.ssh[\\/]"),
     "known token format": re.compile(
@@ -1205,21 +1260,35 @@ def _tool_calls(
                 continue
             result = results.get(event.get("id"))
             failed = not isinstance(result, dict) or result.get("is_error") is True
+            inputs = (
+                event.get("input")
+                if isinstance(event.get("input"), dict)
+                else {}
+            )
+            command = str(inputs.get("command") or "")
+            arguments = _sanitize_value(
+                inputs,
+                repo,
+                raw,
+                redactions,
+            )
+            if _is_whoami_command(command):
+                arguments["command"] = WHOAMI_COMMAND_MARKER
+            elif _has_whoami_stage(command):
+                arguments["command"] = (
+                    MIXED_WHOAMI_COMMAND_MARKER
+                    + " "
+                    + str(arguments["command"])
+                )
             calls.append(
                 {
                     "sequence": len(calls) + 1,
                     "name": str(event.get("name") or "unknown"),
-                    "arguments": _sanitize_value(
-                        event.get("input")
-                        if isinstance(event.get("input"), dict)
-                        else {},
-                        repo,
-                        raw,
-                        redactions,
-                    ),
+                    "arguments": arguments,
                     "status": "failure" if failed else "success",
                     "result_summary": _brief(
-                        _sanitize_text(
+                        _sanitize_command_output(
+                            command,
                             str(result.get("content") if result else "no result"),
                             repo,
                             raw,
@@ -1235,21 +1304,35 @@ def _tool_calls(
                 exit_code = event.get("exit_code")
                 status = event.get("status")
                 failed = exit_code != 0 or status in {"failed", "error"}
+                command = str(event.get("command") or "")
                 calls.append(
                     {
                         "sequence": len(calls) + 1,
                         "name": "command_execution",
                         "arguments": {
-                            "command": _sanitize_text(
-                                str(event.get("command") or ""),
-                                repo,
-                                raw,
-                                redactions,
+                            "command": (
+                                WHOAMI_COMMAND_MARKER
+                                if _is_whoami_command(command)
+                                else (
+                                    (
+                                        MIXED_WHOAMI_COMMAND_MARKER
+                                        + " "
+                                    )
+                                    if _has_whoami_stage(command)
+                                    else ""
+                                )
+                                + _sanitize_text(
+                                    command,
+                                    repo,
+                                    raw,
+                                    redactions,
+                                )
                             )
                         },
                         "status": "failure" if failed else "success",
                         "result_summary": _brief(
-                            _sanitize_text(
+                            _sanitize_command_output(
+                                command,
                                 str(event.get("output") or ""),
                                 repo,
                                 raw,
@@ -1311,6 +1394,142 @@ def _tool_calls(
     return calls
 
 
+def _is_whoami_command(command: str) -> bool:
+    tokens = _split_command(command)
+    if tokens is None:
+        return False
+    if _is_direct_whoami(tokens):
+        return True
+    if len(tokens) < 3:
+        return False
+    executable = _command_basename(tokens[0])
+    if executable in {"cmd", "cmd.exe"}:
+        options = {"/c", "/k"}
+    elif executable in {
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+    }:
+        options = {"-command", "-c"}
+    else:
+        return False
+    for index, token in enumerate(tokens[1:], start=1):
+        if token.casefold() in options:
+            return _is_whoami_payload(tokens[index + 1 :])
+    return False
+
+
+def _is_whoami_payload(tokens: list[str]) -> bool:
+    return _is_direct_whoami(_payload_tokens(tokens))
+
+
+def _payload_tokens(tokens: list[str]) -> list[str]:
+    if len(tokens) != 1:
+        return tokens
+    nested = _split_command(tokens[0])
+    return nested if nested is not None else tokens
+
+
+def _split_command(command: str) -> list[str] | None:
+    try:
+        normalized = (
+            command.replace("\r\n", ";")
+            .replace("\n", ";")
+            .replace("\r", ";")
+        )
+        lexer = shlex.shlex(
+            normalized,
+            posix=False,
+            punctuation_chars="&|;<>()",
+        )
+        lexer.whitespace_split = True
+        return [
+            token.strip("\"'")
+            for token in lexer
+        ]
+    except ValueError:
+        return None
+
+
+def _is_direct_whoami(tokens: list[str]) -> bool:
+    if (
+        not tokens
+        or _command_basename(tokens[0]) not in {"whoami", "whoami.exe"}
+    ):
+        return False
+    index = 1
+    while index < len(tokens):
+        token = tokens[index].casefold()
+        if any(character in token for character in "&|;<>"):
+            return False
+        if not token.startswith(("/", "-")):
+            return False
+        if token in {"/fo", "/format"}:
+            index += 1
+            if (
+                index >= len(tokens)
+                or tokens[index].casefold() not in {"csv", "list", "table"}
+            ):
+                return False
+        index += 1
+    return True
+
+
+def _has_whoami_stage(command: str) -> bool:
+    tokens = _split_command(command)
+    if not tokens:
+        return False
+    executable = _command_basename(tokens[0])
+    if executable in {"cmd", "cmd.exe"}:
+        options = {"/c", "/k"}
+    elif executable in {
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+    }:
+        options = {"-command", "-c"}
+    else:
+        return _tokens_have_whoami_stage(tokens)
+    for index, token in enumerate(tokens[1:], start=1):
+        if token.casefold() in options:
+            return _tokens_have_whoami_stage(
+                _payload_tokens(tokens[index + 1 :])
+            )
+    return False
+
+
+def _tokens_have_whoami_stage(tokens: list[str]) -> bool:
+    for index, token in enumerate(tokens):
+        if _command_basename(token) not in {"whoami", "whoami.exe"}:
+            continue
+        if index == 0 or tokens[index - 1] in SHELL_STAGE_SEPARATORS:
+            return True
+    return False
+
+
+def _command_basename(token: str) -> str:
+    return token.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+
+
+def _sanitize_command_output(
+    command: str,
+    value: str,
+    repo: Path,
+    raw: dict[str, Any],
+    redactions: set[str],
+) -> str:
+    sanitized = _sanitize_text(value, repo, raw, redactions)
+    if _is_whoami_command(command):
+        sanitized = REDACTED_WHOAMI_OUTPUT
+        redactions.add("account identifier")
+    elif _has_whoami_stage(command):
+        sanitized = REDACTED_MIXED_WHOAMI_OUTPUT
+        redactions.add("account identifier")
+    return sanitized
+
+
 def _sanitize_value(
     value: Any,
     repo: Path,
@@ -1367,6 +1586,28 @@ def _sanitize_text(
                 changed = True
         if changed:
             redactions.add(label)
+    for label, pattern in PRIVATE_PATH_REDACTIONS:
+        if pattern.search(sanitized):
+            sanitized = pattern.sub("[REDACTED_PRIVATE_PATH]", sanitized)
+            redactions.add(label)
+    if PRIVATE_ACCOUNT_IDENTIFIER.search(sanitized):
+        sanitized = PRIVATE_ACCOUNT_IDENTIFIER.sub(
+            r"\1[REDACTED_ACCOUNT]",
+            sanitized,
+        )
+        redactions.add("account identifier")
+    if PRIVATE_POSIX_LISTING_IDENTIFIERS.search(sanitized):
+        sanitized = PRIVATE_POSIX_LISTING_IDENTIFIERS.sub(
+            r"\1[REDACTED_ACCOUNT]\3[REDACTED_ACCOUNT]\5",
+            sanitized,
+        )
+        redactions.add("account identifier")
+    if PRIVATE_POSIX_SINGLE_LISTING_IDENTIFIER.search(sanitized):
+        sanitized = PRIVATE_POSIX_SINGLE_LISTING_IDENTIFIER.sub(
+            r"\1[REDACTED_ACCOUNT]\3",
+            sanitized,
+        )
+        redactions.add("account identifier")
     for pattern in SECRET_PATTERNS:
         if pattern.search(sanitized):
             if pattern.groups >= 2:
@@ -1387,16 +1628,66 @@ def _sanitize_text(
 def _residual_sensitive_findings(
     record: dict[str, Any],
 ) -> list[str]:
-    text = json.dumps(
-        record,
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-    return sorted(
+    findings = {
         label
         for label, pattern in RESIDUAL_SENSITIVE_PATTERNS.items()
-        if pattern.search(text)
-    )
+        if any(pattern.search(text) for text in _iter_text(record))
+    }
+    if _has_unsanitized_whoami_output(record):
+        findings.add("whoami output")
+    return sorted(findings)
+
+
+def _has_unsanitized_whoami_output(value: Any) -> bool:
+    if isinstance(value, dict):
+        arguments = value.get("arguments")
+        command = (
+            arguments.get("command")
+            if isinstance(arguments, dict)
+            else None
+        )
+        summary = value.get("result_summary")
+        if (
+            isinstance(command, str)
+            and isinstance(summary, str)
+        ):
+            if (
+                (
+                    command == WHOAMI_COMMAND_MARKER
+                    or _is_whoami_command(command)
+                )
+                and summary != REDACTED_WHOAMI_OUTPUT
+            ):
+                return True
+            if (
+                _has_whoami_stage(command)
+                and summary != REDACTED_MIXED_WHOAMI_OUTPUT
+            ):
+                return True
+            if (
+                command.startswith(MIXED_WHOAMI_COMMAND_MARKER)
+                and summary != REDACTED_MIXED_WHOAMI_OUTPUT
+            ):
+                return True
+        return any(
+            _has_unsanitized_whoami_output(item)
+            for item in value.values()
+        )
+    if isinstance(value, list):
+        return any(_has_unsanitized_whoami_output(item) for item in value)
+    return False
+
+
+def _iter_text(value: Any) -> Iterable[str]:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _iter_text(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_text(item)
+    elif isinstance(value, str):
+        yield value
 
 
 def _normalized_human_review(

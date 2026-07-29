@@ -336,6 +336,437 @@ class ReviewedRecordBuilderTests(unittest.TestCase):
             self.assertEqual(calls[0]["sequence"], 1)
             self.assertEqual(calls[0]["status"], "success")
 
+    def test_sanitizes_unrelated_private_machine_data_from_tool_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            workspace, plan = self.make_workspace(repo)
+            result_path = (
+                workspace
+                / "fixture-skill"
+                / "normal-use"
+                / "codex"
+                / "result.json"
+            )
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
+            private_paths = (
+                r"C:\Users\Example Name\.codex\auth.json",
+                r"\\private-server\users\Example\auth.json",
+                "/tmp/evaluator-private",
+                "/c/Users/Example/.codex/auth.json",
+                "//c/Users/Example Name/.agents/private",
+                "/mnt/c/Users/Example/.codex/auth.json",
+                "/root/.config/private.json",
+                "/opt/private/evaluator.json",
+            )
+            private_accounts = (
+                r"corp\alice",
+                "alice",
+                "staff",
+                "SVR+B0016",
+                r"lab\bob",
+                r"lab\carol",
+            )
+            command_paths = tuple(
+                f'"{path}"' if " " in path else path
+                for path in private_paths
+            )
+            raw["result"]["stdout"] = "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    "Invoke /skill-evaluator with this prompt\nread "
+                                    + " --format json --keep evidence\nread ".join(
+                                        command_paths
+                                    )
+                                    + " --format json --keep evidence"
+                                ),
+                                "aggregated_output": (
+                                    "drwxr-xr-x 1 "
+                                    + private_accounts[3]
+                                    + " 4096 "
+                                    + command_paths[0]
+                                    + "\n-rw-r--r-- 1 "
+                                    + private_accounts[1]
+                                    + " "
+                                    + private_accounts[2]
+                                    + " 2048 "
+                                    + command_paths[1]
+                                    + "\n"
+                                    + "\n".join(command_paths[2:])
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": 'cmd /c "whoami /user /fo csv"',
+                                "aggregated_output": (
+                                    private_accounts[0] + " S-1-5-21-123"
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    "powershell -NoProfile -Command "
+                                    '"whoami /user /fo list"'
+                                ),
+                                "aggregated_output": (
+                                    '"'
+                                    + private_accounts[4]
+                                    + '","S-1-5-21-456"'
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    r'"C:\Windows\System32\whoami.exe" /user'
+                                ),
+                                "aggregated_output": private_accounts[5],
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "echo whoami",
+                                "aggregated_output": r"fixture\skill",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "whoami && echo evidence",
+                                "aggregated_output": (
+                                    private_accounts[0]
+                                    + "\ndirect compound evidence"
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    'cmd /c "whoami /user & echo evidence"'
+                                ),
+                                "aggregated_output": (
+                                    private_accounts[4]
+                                    + "\nwrapped compound evidence"
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "whoami /user>identity.txt",
+                                "aggregated_output": "direct redirection evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    'cmd /c "whoami /user>identity.txt"'
+                                ),
+                                "aggregated_output": "wrapped redirection evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "echo evidence && whoami",
+                                "aggregated_output": (
+                                    "late direct evidence\n"
+                                    + private_accounts[0]
+                                    + "\n"
+                                    + r"fixture\skill"
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    'cmd /c "echo evidence & whoami /user"'
+                                ),
+                                "aggregated_output": (
+                                    "late wrapped evidence\n"
+                                    + private_accounts[4]
+                                    + "\n"
+                                    + r"release\notes"
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": "echo evidence\nwhoami",
+                                "aggregated_output": "multiline direct evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    'cmd /c "echo evidence\nwhoami /user"'
+                                ),
+                                "aggregated_output": "multiline wrapped evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": 'cmd /c "(whoami /user)"',
+                                "aggregated_output": "grouped wrapped evidence",
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "command_execution",
+                                "command": (
+                                    "echo evidence && "
+                                    r'"C:\Windows\System32\whoami.exe"'
+                                ),
+                                "aggregated_output": (
+                                    "absolute mixed evidence\n"
+                                    + private_accounts[0]
+                                ),
+                                "exit_code": 0,
+                                "status": "completed",
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "agent_message",
+                                "text": (
+                                    "Invoke /skill-evaluator /optimize "
+                                    "/private-mode /etcetera with this prompt\n"
+                                    "Timestamp 2026-07-29T03:02:24.269840+00:00\n"
+                                    r"Accounts:SVR\Example:"
+                                    "\nArithmetic 3+4 = 7; x+y = z; "
+                                    "return foo+bar;\n"
+                                    "Paths\n"
+                                    r"fixture\skill"
+                                    "\n"
+                                    r"release\notes"
+                                    "\n"
+                                    "Observed "
+                                    + "\nObserved ".join(command_paths)
+                                ),
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "turn.completed",
+                            "usage": {},
+                        }
+                    ),
+                ]
+            )
+            result_path.write_text(json.dumps(raw), encoding="utf-8")
+
+            record = self.builder.build_record_from_plan(
+                repo,
+                workspace,
+                "fixture-skill",
+                "20260727T120000Z-private-paths",
+                plan,
+                human_review=final_review(),
+            )
+
+            serialized = json.dumps(record, ensure_ascii=False)
+            for private_path in private_paths:
+                self.assertNotIn(private_path, serialized)
+            self.assertNotIn("Example Name", serialized)
+            self.assertNotIn("Name/.agents/private", serialized)
+            for private_account in private_accounts:
+                self.assertNotIn(private_account, serialized)
+            self.assertNotIn(r"SVR\Example", serialized)
+            command = record["targets"]["codex"]["cases"][0]["observed"][
+                "tool_calls"
+            ][0]["arguments"]["command"]
+            self.assertIn("Invoke /skill-evaluator with this prompt", command)
+            self.assertEqual(
+                command.count("--format json --keep evidence"),
+                len(private_paths),
+            )
+            tool_calls = record["targets"]["codex"]["cases"][0]["observed"][
+                "tool_calls"
+            ]
+            non_whoami_summary = next(
+                call["result_summary"]
+                for call in tool_calls
+                if call["arguments"]["command"] == "echo whoami"
+            )
+            self.assertEqual(non_whoami_summary, r"fixture\skill")
+            whoami_summaries = [
+                call["result_summary"]
+                for call in tool_calls[1:4]
+            ]
+            self.assertEqual(
+                whoami_summaries,
+                ["[REDACTED_WHOAMI_OUTPUT]"] * 3,
+            )
+            self.assertEqual(
+                [call["arguments"]["command"] for call in tool_calls[1:4]],
+                ["[WHOAMI_COMMAND]"] * 3,
+            )
+            mixed_summaries = {
+                call["arguments"]["command"]: call["result_summary"]
+                for call in tool_calls
+                if call["result_summary"]
+                == "[REDACTED_MIXED_WHOAMI_OUTPUT]"
+            }
+            expected_mixed_commands = {
+                "whoami && echo evidence",
+                'cmd /c "whoami /user & echo evidence"',
+                "whoami /user>identity.txt",
+                'cmd /c "whoami /user>identity.txt"',
+                "echo evidence && whoami",
+                'cmd /c "echo evidence & whoami /user"',
+                "echo evidence\nwhoami",
+                'cmd /c "echo evidence\nwhoami /user"',
+                'cmd /c "(whoami /user)"',
+            }
+            expected_stored_mixed_commands = {
+                "[MIXED_WHOAMI_COMMAND] " + command
+                for command in expected_mixed_commands
+            }
+            expected_stored_mixed_commands.add(
+                "[MIXED_WHOAMI_COMMAND] "
+                'echo evidence && "[REDACTED_PRIVATE_PATH]"'
+            )
+            self.assertEqual(
+                set(mixed_summaries),
+                expected_stored_mixed_commands,
+            )
+            retained_commands = {
+                call["arguments"]["command"]
+                for call in tool_calls
+            }
+            self.assertTrue(
+                expected_stored_mixed_commands.issubset(retained_commands)
+            )
+            final_output = record["targets"]["codex"]["cases"][0]["observed"][
+                "final_output"
+            ]
+            for slash_command in (
+                "/skill-evaluator",
+                "/optimize",
+                "/private-mode",
+                "/etcetera",
+            ):
+                self.assertIn(slash_command, final_output)
+            self.assertIn(
+                "2026-07-29T03:02:24.269840+00:00",
+                final_output,
+            )
+            self.assertIn(
+                "Arithmetic 3+4 = 7; x+y = z; return foo+bar;",
+                final_output,
+            )
+            self.assertIn(
+                "Paths\n"
+                r"fixture\skill"
+                "\n"
+                r"release\notes",
+                final_output,
+            )
+            self.assertIn(
+                "private Windows path",
+                record["sanitization"]["redactions"],
+            )
+            self.assertIn(
+                "private POSIX path",
+                record["sanitization"]["redactions"],
+            )
+            self.assertIn(
+                "account identifier",
+                record["sanitization"]["redactions"],
+            )
+
     def test_host_skill_contamination_is_invalid_evaluator_evidence(
         self,
     ) -> None:
