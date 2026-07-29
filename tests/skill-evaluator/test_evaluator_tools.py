@@ -2383,6 +2383,42 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             [],
         )
 
+    def test_claude_isolation_accepts_msys_form_of_workspace_path(self) -> None:
+        aggregate = load_module(
+            "skill_evaluator_aggregate_msys_paths",
+            "aggregate_benchmark.py",
+        )
+        workspace = Path("C:/evaluation/workspace")
+        evidence = {
+            "events": [
+                {
+                    "type": "tool_use",
+                    "id": "read-msys-path",
+                    "name": "Read",
+                    "input": {
+                        "file_path": "/c/evaluation/workspace/fixture/input.txt"
+                    },
+                },
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "read-msys-path",
+                    "content": "fixture",
+                    "is_error": False,
+                },
+            ],
+            "parse_errors": [],
+            "metadata": {"terminal_result_count": 1},
+        }
+
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                evidence,
+                workspace,
+            ),
+            [],
+        )
+
     def test_claude_isolation_rejects_visible_host_skills(self) -> None:
         aggregate = load_module(
             "skill_evaluator_aggregate_skill_discovery",

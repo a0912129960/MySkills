@@ -1,10 +1,13 @@
 ---
 name: skill-evaluator
-description: Evaluate an existing MySkills Skill for structure, cross-platform discovery, behavior, efficiency, trigger quality, and human review. Use only when the user explicitly asks to evaluate, benchmark, or attest a Skill; this workflow does not author or package Skills.
+description: Run a formal, report-only MySkills evaluation of an existing Skill for structure, cross-platform discovery, behavior, efficiency, trigger quality, and human review. Use only when the user explicitly invokes $skill-evaluator or explicitly asks to evaluate, benchmark, or attest an existing Skill. Never use it for general review, authoring, or editing.
 disable-model-invocation: true
 ---
 
 # Skill Evaluator
+
+Use this workflow only for a formal evaluation of an existing Skill. Never use
+it for general review, authoring, editing, or advice about trigger wording.
 
 Evaluate a completed Skill without editing it. A creator applies any accepted
 recommendations and asks for a new evaluation of the resulting digest.

@@ -90,7 +90,7 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
             )
             self.assertEqual(len(entry["invocation_cases"]), 3, name)
             for case in entry["core_cases"]:
-                self.assertEqual(case["version"], 1)
+                self.assertGreaterEqual(case["version"], 1)
                 self.assertTrue(case["oracle"]["expected_outcome"].strip())
                 self.assertTrue(case["oracle"]["assertions"])
                 self.assertTrue(
@@ -139,6 +139,77 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
                     },
                     name,
                 )
+
+    def test_fixture_skill_directory_matches_frontmatter_name(self) -> None:
+        document = self.cases.load_cases(ROOT)
+        evaluator = next(
+            entry
+            for entry in document["skills"]
+            if entry["skill_name"] == "skill-evaluator"
+        )
+
+        for case in evaluator["core_cases"]:
+            skill_fixture = next(
+                fixture
+                for fixture in case["fixtures"]
+                if fixture["path"].endswith("/SKILL.md")
+            )
+            self.assertEqual(
+                Path(skill_fixture["path"]).parent.name,
+                "release-notes",
+                case["id"],
+            )
+            self.assertIn("fixture/release-notes", case["prompt"])
+            self.assertNotIn("fixture/skill", case["prompt"])
+
+    def test_validator_rejects_fixture_skill_name_mismatch(self) -> None:
+        document = self.cases.load_cases(ROOT)
+        invalid = copy.deepcopy(document)
+        evaluator = next(
+            entry
+            for entry in invalid["skills"]
+            if entry["skill_name"] == "skill-evaluator"
+        )
+        evaluator["core_cases"][0]["fixtures"][0][
+            "path"
+        ] = "fixture/not-release-notes/SKILL.md"
+
+        errors = self.cases.validate_cases(ROOT, invalid)
+
+        self.assertTrue(
+            any("fixture Skill directory must match name" in error for error in errors),
+            errors,
+        )
+
+    def test_explicit_evaluator_boundaries_are_unambiguous(self) -> None:
+        document = self.cases.load_cases(ROOT)
+        evaluator = next(
+            entry
+            for entry in document["skills"]
+            if entry["skill_name"] == "skill-evaluator"
+        )
+        invocation_cases = {
+            case["id"]: case for case in evaluator["invocation_cases"]
+        }
+        review = invocation_cases["negative-skill-review"]
+        self.assertGreaterEqual(review["version"], 2)
+        self.assertIn("fixture/release-notes/SKILL.md", review["prompt"])
+        self.assertEqual(
+            [fixture["path"] for fixture in review["fixtures"]],
+            ["fixture/release-notes/SKILL.md"],
+        )
+
+        skill_text = (
+            ROOT
+            / "skills"
+            / "engineering"
+            / "skill-evaluator"
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "Never use it for general review, authoring, or editing.",
+            skill_text,
+        )
 
     def test_plan_runs_each_case_once_per_platform_without_baseline(self) -> None:
         document = self.cases.load_cases(ROOT)

@@ -1310,6 +1310,9 @@ def _validate_core_cases(
                 errors.append(
                     f"{name}/{case_id}: duplicate fixture path"
                 )
+            errors.extend(
+                _fixture_skill_directory_errors(name, case_id, expanded)
+            )
         git_fixture = case.get("git_fixture")
         if git_fixture is not None:
             errors.extend(
@@ -1426,6 +1429,38 @@ def _expanded_fixtures(
         expanded.extend(dict(fixture) for fixture in fixture_sets.get(name, []))
     expanded.extend(dict(fixture) for fixture in case.get("fixtures", []))
     return expanded
+
+
+def _fixture_skill_directory_errors(
+    name: str,
+    case_id: object,
+    fixtures: list[dict[str, str]],
+) -> list[str]:
+    errors: list[str] = []
+    for fixture in fixtures:
+        path = fixture["path"]
+        if not path.endswith("/SKILL.md"):
+            continue
+        header = re.match(
+            r"\A---\r?\n(?P<header>.*?)\r?\n---(?:\r?\n|\Z)",
+            fixture["content"],
+            flags=re.DOTALL,
+        )
+        if header is None:
+            continue
+        declared = re.search(
+            r"(?m)^name:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$",
+            header.group("header"),
+        )
+        if declared is None:
+            continue
+        directory = path.rsplit("/", 2)[-2]
+        if directory != declared.group(1):
+            errors.append(
+                f"{name}/{case_id}: fixture Skill directory must match "
+                f"name {declared.group(1)!r}: {path}"
+            )
+    return errors
 
 
 def _validate_git_fixture(
@@ -1607,12 +1642,13 @@ def _validate_invocation_cases(
         if not fixture_sets_valid:
             errors.append(f"{name}/{case_id}: fixture_sets are invalid")
         elif fixtures_valid:
-            paths = [
-                fixture.get("path")
-                for fixture in _expanded_fixtures(case, fixture_sets)
-            ]
+            expanded = _expanded_fixtures(case, fixture_sets)
+            paths = [fixture.get("path") for fixture in expanded]
             if len(paths) != len(set(paths)):
                 errors.append(f"{name}/{case_id}: duplicate fixture path")
+            errors.extend(
+                _fixture_skill_directory_errors(name, case_id, expanded)
+            )
         external_tools = case.get("external_tools", [])
         if (
             not _unique_strings(external_tools)
@@ -1731,12 +1767,13 @@ def _validate_golden_cases(
         if not fixture_sets_valid:
             errors.append(f"{name}/{case_id}: fixture_sets are invalid")
         elif fixtures_valid:
-            paths = [
-                fixture.get("path")
-                for fixture in _expanded_fixtures(case, fixture_sets)
-            ]
+            expanded = _expanded_fixtures(case, fixture_sets)
+            paths = [fixture.get("path") for fixture in expanded]
             if len(paths) != len(set(paths)):
                 errors.append(f"{name}/{case_id}: duplicate fixture path")
+            errors.extend(
+                _fixture_skill_directory_errors(name, case_id, expanded)
+            )
         if case.get("git_fixture") is not None:
             errors.extend(
                 _validate_git_fixture(name, case_id, case["git_fixture"])

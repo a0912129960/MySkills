@@ -303,6 +303,24 @@ def _inside_workspace(path: Path, workspace: Path) -> bool:
     return True
 
 
+def _audited_path(value: str, workspace: Path) -> Path:
+    """Normalize a Claude-reported path without widening the workspace."""
+
+    candidate = Path(value).expanduser()
+    if os.name == "nt":
+        normalized = value.replace("\\", "/")
+        msys = re.fullmatch(r"/{1,2}([A-Za-z])/(.*)", normalized)
+        wsl = re.fullmatch(r"/mnt/([A-Za-z])/(.*)", normalized)
+        translated = msys or wsl
+        if translated is not None:
+            candidate = Path(
+                f"{translated.group(1).upper()}:/{translated.group(2)}"
+            )
+    if not candidate.is_absolute():
+        candidate = workspace / candidate
+    return candidate
+
+
 def _declared_command(
     command: str,
     allowed_commands: Iterable[str],
@@ -728,9 +746,7 @@ def model_isolation_violations(
                 )
                 continue
             for value in values:
-                candidate = Path(value).expanduser()
-                if not candidate.is_absolute():
-                    candidate = workspace / candidate
+                candidate = _audited_path(value, workspace)
                 if not _inside_workspace(candidate, workspace):
                     violations.append(
                         f"{tool} accessed {value} outside {workspace}"
