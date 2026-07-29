@@ -229,12 +229,6 @@ def validate_cases(repo_root: Path | str, document: object) -> list[str]:
         ]
         if len(case_ids) != len(set(case_ids)):
             errors.append(f"{name}: case ids must be unique across all suites")
-    missing = sorted(set(managed) - seen)
-    extra = sorted(seen - set(managed))
-    if missing:
-        errors.append(f"missing evaluation cases: {', '.join(missing)}")
-    if extra:
-        errors.append(f"unexpected evaluation cases: {', '.join(extra)}")
     return errors
 
 

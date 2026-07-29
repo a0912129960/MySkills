@@ -40,9 +40,13 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         document = cases.load_cases(ROOT)
         plan = cases.build_plan(ROOT, document)
         summary = cases.summarize_plan(plan)
+        configured_skill_count = len(document["skills"])
 
-        self.assertEqual(summary["skill_count"], 42)
-        self.assertEqual(summary["model_run_count"], 504)
+        self.assertEqual(summary["skill_count"], configured_skill_count)
+        self.assertEqual(
+            summary["model_run_count"],
+            configured_skill_count * 12,
+        )
         for name in summary["skills"]:
             runs = [item for item in plan if item["skill_name"] == name]
             self.assertEqual(len(runs), 12, name)

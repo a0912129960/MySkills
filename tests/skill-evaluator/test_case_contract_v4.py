@@ -32,18 +32,21 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
             "evaluation_cases.py",
         )
 
-    def test_catalog_has_one_owned_file_per_managed_skill(self) -> None:
+    def test_catalog_has_one_owned_file_per_configured_skill(self) -> None:
         index = json.loads(
             (ROOT / "evaluations" / "cases.json").read_text(encoding="utf-8")
         )
 
         self.assertEqual(index["schema_version"], 4)
-        self.assertEqual(len(index["skill_case_files"]), 42)
+        self.assertTrue(index["skill_case_files"])
         self.assertEqual(
             index["skill_case_files"],
             sorted(index["skill_case_files"]),
         )
-        self.assertEqual(len(set(index["skill_case_files"])), 42)
+        self.assertEqual(
+            len(set(index["skill_case_files"])),
+            len(index["skill_case_files"]),
+        )
         for relative in index["skill_case_files"]:
             self.assertRegex(relative, r"^cases/[a-z0-9]+(?:-[a-z0-9]+)*\.json$")
             self.assertTrue((ROOT / "evaluations" / relative).is_file())
@@ -71,14 +74,13 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
         ]
 
         self.assertEqual(len(groups), 3)
-        self.assertTrue(all(len(groups[group]) == 14 for group in groups))
         self.assertEqual(len(flattened), len(set(flattened)))
         self.assertEqual(sorted(flattened), sorted(expected))
 
     def test_every_skill_has_fixed_core_and_invocation_suites(self) -> None:
         document = self.cases.load_cases(ROOT)
         self.assertEqual(document["schema_version"], 4)
-        self.assertEqual(len(document["skills"]), 42)
+        self.assertTrue(document["skills"])
 
         for entry in document["skills"]:
             name = entry["skill_name"]
@@ -139,6 +141,21 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
                     },
                     name,
                 )
+
+    def test_validator_accepts_managed_skills_without_optional_cases(
+        self,
+    ) -> None:
+        document = self.cases.load_cases(ROOT)
+        optional_subset = copy.deepcopy(document)
+        omitted = optional_subset["skills"].pop()
+
+        errors = self.cases.validate_cases(ROOT, optional_subset)
+
+        self.assertNotIn(
+            f"missing evaluation cases: {omitted['skill_name']}",
+            errors,
+        )
+        self.assertEqual(errors, [])
 
     def test_fixture_skill_directory_matches_frontmatter_name(self) -> None:
         document = self.cases.load_cases(ROOT)
@@ -222,10 +239,14 @@ class EvaluationCaseContractV4Tests(unittest.TestCase):
         document = self.cases.load_cases(ROOT)
         plan = self.cases.build_plan(ROOT, document)
         summary = self.cases.summarize_plan(plan)
+        configured_skill_count = len(document["skills"])
 
         self.assertEqual(summary["schema_version"], 4)
-        self.assertEqual(summary["skill_count"], 42)
-        self.assertEqual(summary["model_run_count"], 504)
+        self.assertEqual(summary["skill_count"], configured_skill_count)
+        self.assertEqual(
+            summary["model_run_count"],
+            configured_skill_count * 12,
+        )
         for name in summary["skills"]:
             runs = [item for item in plan if item["skill_name"] == name]
             self.assertEqual(len(runs), 12, name)

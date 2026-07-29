@@ -65,8 +65,9 @@ python scripts/validate_repo.py --require-evaluations
    permission in read-only Claude cases. The launchers reject mutating
    subcommands and paths outside the evaluation workspace.
 
-   A complete 42-Skill run contains 504 target calls: three core cases and
-   three invocation cases, each run once on Claude and once on Codex. Explicit
+   With the current 42 configured Skill case sources, a full-catalog run contains
+   504 target calls: three core cases and three invocation cases, each run once
+   on Claude and once on Codex. Explicit
    Skills use three negative implicit-selection cases. Implicit Skills use a
    direct positive, paraphrased positive, and nearest-boundary negative case.
    The plan fixes `max_attempts` to `1`; a rerun is a new explicitly authorized

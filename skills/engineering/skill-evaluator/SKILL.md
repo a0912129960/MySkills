@@ -33,14 +33,15 @@ recommendations and asks for a new evaluation of the resulting digest.
 
 1. Run structural validation for `SKILL.md`, `agents/openai.yaml`, directory
    naming, references, and matching invocation policy.
-2. Run harmless isolated discovery and explicit-invocation smoke tests with
-   Claude (`claude -p`) and Codex (`codex exec --ephemeral`) separately.
-3. Run the three predeclared core cases once per target: normal use, boundary
-   or invalid input, and safety/authorization or another core capability.
-4. Run the three predeclared invocation cases once per target. Explicit Skills
-   must remain unselected in all three negative cases. Implicit Skills must
-   pass direct-positive, paraphrase-positive, and nearest-boundary-negative
-   classification.
+2. For each explicitly approved target, run harmless isolated discovery and
+   explicit-invocation smoke tests using its managed runner.
+3. Run each explicitly approved predeclared core case once per approved target.
+   The available suite covers normal use, boundary or invalid input, and
+   safety/authorization or another core capability.
+4. Run each explicitly approved predeclared invocation case once per approved
+   target. Explicit Skills must remain unselected in approved negative cases.
+   Implicit Skills must pass the approved direct-positive,
+   paraphrase-positive, and nearest-boundary-negative classifications.
 5. Grade every required assertion without averaging away a failed case. Record
    duration and token usage when the runners expose them. Never automatically
    retry a completed result.

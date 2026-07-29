@@ -57,21 +57,22 @@ or users.
 
 ### Invocation classification
 
-Every new or reevaluated Managed Skill declares whether it is an Explicit-invocation Skill or
-an Implicit-invocation Skill before its cases are defined. The classification is canonical:
+Every Managed Skill selected for evaluation uses its inventory declaration as either an
+Explicit-invocation Skill or an Implicit-invocation Skill before its cases are defined. The
+classification is canonical:
 the same Skill has the same classification on every supported platform.
 
 An Explicit-invocation Skill must succeed when explicitly invoked and must not be selected
 implicitly. It is not graded on a positive implicit-trigger rate.
 
-Each Explicit-invocation Skill has three negative implicit-selection cases for each platform.
+Each evaluated Explicit-invocation Skill has three negative implicit-selection cases for each platform.
 The prompts are close to the Skill's scope but do not explicitly name or invoke it. Each case
 is executed once per platform, and all three must remain untriggered; any implicit selection is
 a platform policy failure.
 
 ### Implicit trigger evaluation
 
-Each Implicit-invocation Skill has a fixed three-case trigger suite for each platform in an
+Each evaluated Implicit-invocation Skill has a fixed three-case trigger suite for each platform in an
 evaluation run:
 
 - one direct case that should invoke the Skill;
@@ -104,7 +105,8 @@ case receives a new version and is executed only as a new, explicitly authorized
 
 ### Core outcome evaluation
 
-Every Managed Skill has at least three core outcome cases for each platform:
+Every Skill configured for model evaluation has at least three core outcome cases for each
+approved platform:
 
 - a normal-use case;
 - a boundary or invalid-input case; and
@@ -119,15 +121,16 @@ same evaluation.
 ### Machine-readable case layout
 
 `evaluations/cases.json` is the schema-v4 catalog. It contains shared fixture sets and a
-sorted, unique list of one `evaluations/cases/<skill>.json` source for every Managed Skill.
-The per-Skill files carry the canonical invocation classification, three core cases, three
-invocation cases, and any approved Golden cases. This split permits independent file
-ownership while the loader returns one deterministic merged plan.
+sorted, unique list of one `evaluations/cases/<skill>.json` source for every Skill configured
+for optional model evaluation. A Managed Skill may exist without a case source. The per-Skill
+files carry the canonical invocation classification, three core cases, three invocation
+cases, and any approved Golden cases. This split permits independent file ownership while
+the loader returns one deterministic merged plan.
 
 Every plan item records its expected observable outcome or invocation classification,
 predeclared typed assertions, case role and version, current Skill and dependency digests,
-fixtures, tools, target platform, and `max_attempts: 1`. The validator rejects missing Managed Skills,
-extra or duplicate entries, weakened case counts, invocation policy mismatches, baseline
+fixtures, tools, target platform, and `max_attempts: 1`. The validator rejects unknown Managed Skills,
+duplicate entries, weakened case counts, invocation policy mismatches, baseline
 configuration, unsafe fixture paths, and undeclared tools before any model tokens are spent.
 
 The grading artifact preserves each assertion's ID, kind, description, and required flag.

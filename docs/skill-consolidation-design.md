@@ -702,8 +702,8 @@ tools are selected only when required by the task and project.
   deterministic inventory, repository, and test validation.
 - A human may explicitly request the optional evaluator and approve its target platforms, case
   scope, and model-call budget. The evaluator then writes raw runs under the ignored
-  `.scratch\skill-evals\<skill>\<run-id>\` and may retain sanitized, source-controlled evidence
-  as required by `skill-evaluation-design.md`. Historical records remain append-only and do
+  `.scratch\skill-evals\<skill>\<run-id>\` and retains a sanitized, source-controlled record
+  for every activated run as required by `skill-evaluation-design.md`. Historical records remain append-only and do
   not prove future model behavior.
 - Default `python scripts\validate_repo.py` checks deterministic repository contracts.
   `--require-evaluations` opts into the preserved evaluation-record and release-pointer gate;

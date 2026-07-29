@@ -1,9 +1,8 @@
 # Evaluation contract
 
-This contract applies only after a human explicitly activates model evaluation and approves
-its target platforms, case scope, and model-call budget. MySkills keeps this architecture
-available as an optional diagnostic; it is disabled by default and is not required for
-creation, installation, completion, or ordinary repository validation.
+This contract defines the detailed evidence and execution rules for the optional diagnostic
+authorized in `SKILL.md`. It is not a creation, installation, completion, or ordinary
+repository-validation requirement.
 
 ## Required evidence
 
@@ -22,10 +21,11 @@ Do not record or infer hidden model reasoning.
 ## Source-controlled cases
 
 `evaluations/cases.json` is the v4 catalog. It lists one sorted
-`evaluations/cases/<skill>.json` source per Managed Skill, so case ownership
-does not overlap. The loader merges those sources only after checking filenames,
-inventory membership, invocation classification, duplicate identifiers,
-fixtures, tools, and complete coverage.
+`evaluations/cases/<skill>.json` source per Skill configured for optional model
+evaluation, so case ownership does not overlap. A Managed Skill does not need a
+case source until a human chooses to configure that diagnostic. The loader
+merges listed sources only after checking filenames, inventory membership,
+invocation classification, duplicate identifiers, fixtures, and tools.
 
 Every Skill source declares exactly three core cases and three invocation
 cases. Every case has a positive integer version that binds its prompt and
@@ -155,7 +155,7 @@ state changes exist; reviewer prose cannot manufacture the evidence.
 
 ## Source-controlled evaluation records
 
-After grading an explicitly activated diagnostic, publish every retained evaluation run at:
+After grading an explicitly activated diagnostic, publish every evaluation run at:
 
 ```text
 evaluations/records/<skill>/<run-id>/
