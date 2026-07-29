@@ -380,7 +380,7 @@ def claude_command_isolation_violations(
         and parsed_flags["--verbose"] == 1
         and parsed_flags["--no-session-persistence"] == 1
         and parsed_flags["--setting-sources=project,local"] == 1
-        and parsed_values["--mcp-config"] == ["{}"]
+        and parsed_values["--mcp-config"] == ['{"mcpServers":{}}']
         and parsed_flags["--strict-mcp-config"] == 1
         and parsed_flags["--no-chrome"] == 1
         and parsed_values["--permission-mode"]
@@ -428,7 +428,8 @@ def claude_command_isolation_violations(
         mcp_boundary_valid = (
             command_values[mcp_index] == "--mcp-config"
             and mcp_index + 2 < len(command_values)
-            and command_values[mcp_index + 1] == "{}"
+            and command_values[mcp_index + 1]
+            == '{"mcpServers":{}}'
             and command_values[mcp_index + 2].startswith("--")
             and command_values.count("--strict-mcp-config") == 1
         )

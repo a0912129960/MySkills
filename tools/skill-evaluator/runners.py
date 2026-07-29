@@ -805,7 +805,7 @@ def build_command(
             "--no-session-persistence",
             "--setting-sources=project,local",
             "--mcp-config",
-            "{}",
+            '{"mcpServers":{}}',
             "--strict-mcp-config",
             "--no-chrome",
         ]

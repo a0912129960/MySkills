@@ -1959,7 +1959,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
         self.assertNotIn("--setting-sources", claude)
         self.assertEqual(
             claude[claude.index("--mcp-config") + 1],
-            "{}",
+            '{"mcpServers":{}}',
         )
         self.assertIn("--strict-mcp-config", claude)
         self.assertIn("--no-chrome", claude)
@@ -2136,7 +2136,9 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             ],
         )
         variadic_mcp_command = list(safe_command)
-        empty_config_index = variadic_mcp_command.index("{}")
+        empty_config_index = variadic_mcp_command.index(
+            '{"mcpServers":{}}'
+        )
         variadic_mcp_command.insert(empty_config_index + 1, "host.json")
         self.assertEqual(
             aggregate.model_isolation_violations(
@@ -2149,6 +2151,17 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 "Claude command shape permits undeclared capabilities",
                 "Claude command does not enforce an empty MCP configuration",
             ],
+        )
+        incomplete_empty_config = list(safe_command)
+        incomplete_empty_config[empty_config_index] = "{}"
+        self.assertIn(
+            "Claude command does not enforce an empty MCP configuration",
+            aggregate.model_isolation_violations(
+                "claude",
+                evidence,
+                Path("C:/evaluation/workspace"),
+                command=incomplete_empty_config,
+            ),
         )
         for boundary_expansion in (
             ["--add-dir", "C:/host"],
