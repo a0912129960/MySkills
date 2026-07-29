@@ -160,6 +160,7 @@ class InstallerCommandTests(unittest.TestCase):
                     "-Skills",
                     "skill-evaluator",
                     "-DryRun",
+                    "-AdoptExact",
                     "-StatePath",
                     str(state_path),
                 ],

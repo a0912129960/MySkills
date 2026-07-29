@@ -690,6 +690,41 @@ function Format-SkillTargetPlanLine {
     return $line
 }
 
+function New-BackupRunId {
+    [CmdletBinding()]
+    param(
+        [DateTimeOffset]$Timestamp = [DateTimeOffset]::Now
+    )
+
+    $stamp = $Timestamp.ToString(
+        "yyyyMMdd-HHmmssfff",
+        [Globalization.CultureInfo]::InvariantCulture
+    )
+    return "$stamp-$([Guid]::NewGuid().ToString('N'))"
+}
+
+function Get-BackupSnapshotPath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StatePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RunId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Category,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $stateDirectory = Split-Path -Parent ([IO.Path]::GetFullPath($StatePath))
+    return Join-Path (
+        Join-Path $stateDirectory "backups\$RunId\$Category"
+    ) $Name
+}
+
 function Backup-DirectorySnapshot {
     [CmdletBinding()]
     param(
@@ -711,9 +746,11 @@ function Backup-DirectorySnapshot {
 Export-ModuleMember -Function @(
     "Backup-DirectorySnapshot",
     "Format-SkillTargetPlanLine",
+    "Get-BackupSnapshotPath",
     "Get-DirectoryDigest",
     "Get-SkillDeploymentState",
     "Install-DirectorySnapshot",
+    "New-BackupRunId",
     "Set-ReparsePointDirectorySnapshot",
     "Test-ClaudeSkillDiscovery",
     "Test-CodexSkillDiscovery",

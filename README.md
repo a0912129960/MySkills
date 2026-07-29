@@ -109,7 +109,8 @@ before rerunning installation.
 
 Machine-specific ownership and hashes live outside Git at
 `%LOCALAPPDATA%\MySkills\state.json`. Backups live below
-`%LOCALAPPDATA%\MySkills\backups`.
+`%LOCALAPPDATA%\MySkills\backups`; every backup created by one installer invocation shares
+one timestamped run directory.
 
 ## Dependencies
 

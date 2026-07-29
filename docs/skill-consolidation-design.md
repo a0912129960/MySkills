@@ -1197,8 +1197,10 @@ tools are selected only when required by the task and project.
 - Backup-and-replace applies only after explicit approval for a `DRIFTED` or differing
   `UNOWNED` target; normal installation and clean updates create no backup.
 - Before replacement, MySkills copies the complete existing Skill directory to
-  `%LOCALAPPDATA%\MySkills\backups\<timestamp>\<platform>\<skill-name>` and verifies its
-  digest. Replacement begins only after that verification succeeds.
+  `%LOCALAPPDATA%\MySkills\backups\<timestamp>-<unique-id>\<platform>\<skill-name>` and
+  verifies its digest. Every backup created by the same installer invocation uses that one
+  run directory; the unique suffix prevents concurrent invocations from sharing it.
+  Replacement begins only after backup verification succeeds.
 - Backup metadata is recorded in machine state and backups are never committed to the
   repository. The initial implementation does not delete backups automatically; cleanup is a
   separate explicit operation.

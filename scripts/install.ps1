@@ -988,10 +988,11 @@ function Sync-PrivateToolSnapshot {
             $hash = $Plan.Observation.SourceHash
         }
         else {
-            $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-            $backup = Join-Path (
-                Join-Path (Split-Path -Parent $StatePath) "backups\$stamp\tool"
-            ) $Plan.Name
+            $backup = Get-BackupSnapshotPath `
+                -StatePath $StatePath `
+                -RunId $backupRunId `
+                -Category "tool" `
+                -Name $Plan.Name
             $backupHash = Backup-DirectorySnapshot `
                 -Source $Plan.Target `
                 -Backup $backup
@@ -1006,10 +1007,11 @@ function Sync-PrivateToolSnapshot {
         }
     }
     elseif ($status -eq "DRIFTED") {
-        $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-        $backup = Join-Path (
-            Join-Path (Split-Path -Parent $StatePath) "backups\$stamp\tool"
-        ) $Plan.Name
+        $backup = Get-BackupSnapshotPath `
+            -StatePath $StatePath `
+            -RunId $backupRunId `
+            -Category "tool" `
+            -Name $Plan.Name
         $backupHash = Backup-DirectorySnapshot `
             -Source $Plan.Target `
             -Backup $backup
@@ -1138,10 +1140,11 @@ function Set-ManagedLauncher {
             if (-not $BackupAndReplace) {
                 throw "Unowned launcher differs and requires -BackupAndReplace: $Target"
             }
-            $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-            $backup = Join-Path (
-                Join-Path (Split-Path -Parent $StatePath) "backups\$stamp\launcher"
-            ) ([IO.Path]::GetFileName($Target))
+            $backup = Get-BackupSnapshotPath `
+                -StatePath $StatePath `
+                -RunId $backupRunId `
+                -Category "launcher" `
+                -Name ([IO.Path]::GetFileName($Target))
             New-Item -ItemType Directory -Path (Split-Path -Parent $backup) -Force |
                 Out-Null
             Copy-Item -LiteralPath $Target -Destination $backup
@@ -1542,6 +1545,7 @@ try {
     $records = $state.Records
     $dependencyRecords = $state.DependencyRecords
     $backups = @($state.Backups)
+    $backupRunId = New-BackupRunId
 
     Write-Output "PREFLIGHT"
     Write-Output "PowerShell`t$($PSVersionTable.PSVersion)`tCOMPATIBLE"
@@ -2335,10 +2339,11 @@ try {
                             )
                         }
                         else {
-                            $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-                            $backup = Join-Path (
-                                Join-Path (Split-Path -Parent $StatePath) "backups\$stamp\$targetId"
-                            ) $skill.managed_name
+                            $backup = Get-BackupSnapshotPath `
+                                -StatePath $StatePath `
+                                -RunId $backupRunId `
+                                -Category $targetId `
+                                -Name $skill.managed_name
                             $backupHash = Backup-DirectorySnapshot `
                                 -Source $target `
                                 -Backup $backup
@@ -2431,10 +2436,11 @@ try {
                             )
                         }
                         else {
-                            $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-                            $backup = Join-Path (
-                                Join-Path (Split-Path -Parent $StatePath) "backups\$stamp\$targetId"
-                            ) $skill.managed_name
+                            $backup = Get-BackupSnapshotPath `
+                                -StatePath $StatePath `
+                                -RunId $backupRunId `
+                                -Category $targetId `
+                                -Name $skill.managed_name
                             $backupHash = Backup-DirectorySnapshot `
                                 -Source $target `
                                 -Backup $backup

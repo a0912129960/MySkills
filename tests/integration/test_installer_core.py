@@ -113,6 +113,62 @@ class InstallerCoreTests(unittest.TestCase):
             ),
         )
 
+    def test_backup_paths_share_the_supplied_installation_run_directory(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "state.json"
+            result = self.run_powershell(
+                "$timestamp = "
+                "[DateTimeOffset]'2026-07-29T17:04:30.406+08:00'; "
+                "$run = New-BackupRunId -Timestamp $timestamp; "
+                "Get-BackupSnapshotPath "
+                "-StatePath $env:MYSKILLS_TEST_STATE "
+                "-RunId $run "
+                "-Category 'codex' "
+                "-Name 'code-review'; "
+                "Get-BackupSnapshotPath "
+                "-StatePath $env:MYSKILLS_TEST_STATE "
+                "-RunId $run "
+                "-Category 'claude-code' "
+                "-Name 'codebase-design'",
+                environment={"MYSKILLS_TEST_STATE": str(state_path)},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            paths = [Path(line) for line in result.stdout.strip().splitlines()]
+            self.assertEqual(len(paths), 2)
+            self.assertEqual(
+                paths[0].parents[1],
+                paths[1].parents[1],
+            )
+            self.assertTrue(
+                paths[0].parents[1].name.startswith(
+                    "20260729-170430406-"
+                ),
+            )
+            self.assertEqual(paths[0].parent.name, "codex")
+            self.assertEqual(paths[1].parent.name, "claude-code")
+
+    def test_backup_run_ids_are_unique_at_the_same_timestamp(self) -> None:
+        result = self.run_powershell(
+            "$timestamp = "
+            "[DateTimeOffset]'2026-07-29T17:04:30.406+08:00'; "
+            "New-BackupRunId -Timestamp $timestamp; "
+            "New-BackupRunId -Timestamp $timestamp"
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run_ids = result.stdout.strip().splitlines()
+        self.assertEqual(len(run_ids), 2)
+        self.assertNotEqual(run_ids[0], run_ids[1])
+        self.assertTrue(
+            all(
+                run_id.startswith("20260729-170430406-")
+                for run_id in run_ids
+            )
+        )
+
     def test_snapshot_copy_is_exact_and_refuses_an_existing_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
