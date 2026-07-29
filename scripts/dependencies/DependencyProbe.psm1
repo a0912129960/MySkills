@@ -95,8 +95,15 @@ function Invoke-DependencyCommand {
         [object[]]$Arguments
     )
 
-    $output = @(& $Command @Arguments 2>&1)
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $Command @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     if ($null -eq $exitCode) {
         $exitCode = 0
     }

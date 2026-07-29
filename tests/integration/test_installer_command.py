@@ -180,6 +180,73 @@ class InstallerCommandTests(unittest.TestCase):
                 self.assertLess(target_index, dependency_index)
             self.assertIn("WOULD_INSTALL_TOOL\tskill-evaluator", result.stdout)
 
+    def test_install_dry_run_reports_broken_optional_cli_without_aborting(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_bin = Path(temp_dir) / "bin"
+            fake_bin.mkdir()
+            (fake_bin / "node.cmd").write_text(
+                "@echo off\r\n"
+                'if "%1"=="--version" (echo v22.0.0) else (echo x64)\r\n',
+                encoding="ascii",
+            )
+            (fake_bin / "mmdc.cmd").write_text(
+                "@echo off\r\n"
+                "echo Error: missing mermaid module 1>&2\r\n"
+                "exit /b 1\r\n",
+                encoding="ascii",
+            )
+            state_path = Path(temp_dir) / "state.json"
+            system_root = os.environ.get("SystemRoot", r"C:\Windows")
+            env = {
+                **os.environ,
+                "NO_COLOR": "1",
+                "PATH": os.pathsep.join(
+                    [
+                        str(fake_bin),
+                        str(Path(system_root) / "System32"),
+                        system_root,
+                    ]
+                ),
+            }
+
+            result = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(INSTALLER),
+                    "-Action",
+                    "Install",
+                    "-Skills",
+                    "spec-package-generator",
+                    "-DryRun",
+                    "-BackupAndReplace",
+                    "-StatePath",
+                    str(state_path),
+                ],
+                cwd=ROOT,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                result.stderr + "\n" + result.stdout,
+            )
+            self.assertFalse(state_path.exists())
+            self.assertIn("mermaid-cli\tBROKEN", result.stdout)
+            self.assertIn("SUMMARY", result.stdout)
+
     def test_status_is_read_only_and_accepts_a_managed_skill_filter(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = Path(temp_dir) / "state.json"
