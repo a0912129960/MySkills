@@ -99,11 +99,12 @@ disabled Chrome integration, and a sanitized child environment manifest whose
 home, AppData, and XDG paths remain inside the ephemeral profile or execution
 workspace. The MCP file must contain only an empty `mcpServers` object, and the
 manifest records its fixed workspace-relative path and post-execution content
-digest. New runs emit environment evidence version 2; the record validator
-continues to read version 1 evidence in append-only historical records, while
-record publication rejects version 1 as new evidence. Every new non-invalid
-Claude case requires version 2 evidence; `null` is valid only for an invalid
-measurement.
+digest. The project settings must set `disableBundledSkills: true`, and the
+manifest records that value after execution. New runs emit environment evidence
+version 3; the record validator continues to read version 1 and version 2
+evidence only in append-only historical records, while record publication
+rejects either older version as new evidence. Every new non-invalid Claude case
+requires version 3 evidence; `null` is valid only for an invalid measurement.
 Evaluator-owned deny and ask rules are written to the disposable workspace's
 project settings so the declared setting sources load them; QMD may relocate
 XDG state only to its declared workspace-local runtime directories. Missing,
@@ -114,12 +115,15 @@ Before staging, every parent outside the Claude execution workspace must be
 free of a `.claude/skills` directory. The evaluator then populates the
 workspace-local `.claude/skills` root with only the declared primary and
 companion Skills. Before isolation, it captures a name-only inventory of
-installed host Skills. The raw Claude stream must contain exactly one
-`system/init` event whose `skills` list includes every staged Skill. Any
-non-staged visible Skill that also occurs in the captured host inventory
-invalidates the measurement. Raw results retain the host inventory so review
-and aggregation recompute this check; missing, malformed, or contradictory
-Skill-discovery evidence fails closed.
+installed host Skills. Isolated single-Skill and batch evaluations disable
+Claude's bundled Skills. Claude's documented `doctor` exception may remain
+visible. The raw Claude stream must contain exactly one `system/init` event
+whose `skills` list contains every staged Skill and no undeclared Skill other
+than `doctor`. Raw results retain the host inventory so review and aggregation
+can distinguish host contamination from other undeclared discovery and
+recompute this check. A host inventory containing `doctor` makes that name's
+origin ambiguous and invalidates the measurement; missing, malformed, or
+contradictory Skill-discovery evidence also fails closed.
 
 `commands` previews logical commands without staging their referenced
 workspace. Only an executing `run` or `run-batch --execute` invocation creates

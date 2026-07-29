@@ -14,6 +14,7 @@ from typing import Any
 from isolation_contract import (
     CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
     CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
+    CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
 )
 
 RECORD_SCHEMA_VERSION = 2
@@ -98,19 +99,19 @@ def _new_record_environment_errors(
             continue
         evidence = observed.get("environment_isolation")
         if isinstance(evidence, dict):
-            if evidence.get("schema_version") == 2:
+            if evidence.get("schema_version") == 3:
                 continue
             return [
                 (
                     "new evaluation records require environment evidence "
-                    "version 2"
+                    "version 3"
                 )
             ]
         if case.get("status") != "invalid":
             return [
                 (
                     "new non-invalid Claude cases require environment "
-                    "evidence version 2"
+                    "evidence version 3"
                 )
             ]
     return []
@@ -501,9 +502,11 @@ def _valid_environment_isolation(value: object) -> bool:
         "paths",
         "windows_home_matches_profile",
     }
-    if version == 2:
+    if version in {2, 3}:
         expected_fields.add("mcp_config")
-    elif version != 1:
+    if version == 3:
+        expected_fields.add("project_settings")
+    elif version not in {1, 2}:
         return False
     if set(value) != expected_fields:
         return False
@@ -551,9 +554,16 @@ def _valid_environment_isolation(value: object) -> bool:
         return False
     if version == 1:
         return True
-    return value["mcp_config"] == {
+    if value["mcp_config"] != {
         "path": CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
         "sha256": CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
+    }:
+        return False
+    if version == 2:
+        return True
+    return value["project_settings"] == {
+        "path": CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
+        "disable_bundled_skills": True,
     }
 
 

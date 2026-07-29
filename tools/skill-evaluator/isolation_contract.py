@@ -27,3 +27,9 @@ CLAUDE_EMPTY_MCP_CONFIG_DIGEST = (
         CLAUDE_EMPTY_MCP_CONFIG_TEXT.encode("utf-8")
     ).hexdigest()
 )
+CLAUDE_PROJECT_SETTINGS_RELATIVE = (
+    Path(".claude") / "settings.json"
+)
+CLAUDE_PROJECT_SETTINGS_PATH_LABEL = (
+    "workspace/" + CLAUDE_PROJECT_SETTINGS_RELATIVE.as_posix()
+)

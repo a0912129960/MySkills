@@ -128,7 +128,7 @@ def valid_record() -> dict[str, object]:
     record["targets"]["claude"]["cases"][0]["observed"][
         "environment_isolation"
     ] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "paths": {
             "USERPROFILE": "profile-root",
             "HOME": "profile-root",
@@ -145,6 +145,10 @@ def valid_record() -> dict[str, object]:
                 "d8e397af03b5b032f21d0aa967086f0c"
                 "78b33c87b76f2e9898ae0a144df7de02"
             ),
+        },
+        "project_settings": {
+            "path": "workspace/.claude/settings.json",
+            "disable_bundled_skills": True,
         },
         "windows_home_matches_profile": (
             True if sys.platform == "win32" else None
@@ -203,7 +207,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
             schema["$defs"]["environmentIsolation"]["properties"][
                 "schema_version"
             ],
-            {"enum": [1, 2]},
+            {"enum": [1, 2, 3]},
         )
         self.assertNotIn(
             "mcp_config",
@@ -223,7 +227,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
         record["targets"]["claude"]["cases"][0]["observed"][
             "environment_isolation"
         ] = {
-            "schema_version": 2,
+            "schema_version": 3,
             "paths": {
                 "USERPROFILE": "profile-root",
                 "HOME": "profile-root",
@@ -240,6 +244,10 @@ class EvaluationRecordContractTests(unittest.TestCase):
                     "d8e397af03b5b032f21d0aa967086f0c"
                     "78b33c87b76f2e9898ae0a144df7de02"
                 ),
+            },
+            "project_settings": {
+                "path": "workspace/.claude/settings.json",
+                "disable_bundled_skills": True,
             },
             "windows_home_matches_profile": True,
         }
@@ -281,11 +289,40 @@ class EvaluationRecordContractTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 ValueError,
                 "new evaluation records require environment evidence "
-                "version 2",
+                "version 3",
             ):
                 records.write_record(Path(temp_dir), record)
 
-    def test_new_passing_claude_record_requires_v2_environment_evidence(
+    def test_record_validator_preserves_v2_environment_evidence(
+        self,
+    ) -> None:
+        records = load_records_module()
+        record = valid_record()
+        evidence = record["targets"]["claude"]["cases"][0]["observed"][
+            "environment_isolation"
+        ]
+        evidence["schema_version"] = 2
+        evidence.pop("project_settings")
+
+        self.assertEqual(records.validate_record_document(record), [])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            historical_path = Path(temp_dir) / "record.json"
+            historical_path.write_text(
+                json.dumps(record),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                records.read_record_document(historical_path),
+                record,
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "new evaluation records require environment evidence "
+                "version 3",
+            ):
+                records.write_record(Path(temp_dir), record)
+
+    def test_new_passing_claude_record_requires_v3_environment_evidence(
         self,
     ) -> None:
         records = load_records_module()
@@ -298,7 +335,7 @@ class EvaluationRecordContractTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 ValueError,
                 "new non-invalid Claude cases require environment "
-                "evidence version 2",
+                "evidence version 3",
             ):
                 records.write_record(Path(temp_dir), record)
 

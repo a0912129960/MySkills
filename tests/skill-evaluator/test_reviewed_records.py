@@ -136,7 +136,7 @@ def pending_review_with_sanitization() -> dict[str, object]:
 
 def isolated_claude_environment_evidence() -> dict[str, object]:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "paths": {
             "USERPROFILE": "profile-root",
             "HOME": "profile-root",
@@ -153,6 +153,10 @@ def isolated_claude_environment_evidence() -> dict[str, object]:
                 "d8e397af03b5b032f21d0aa967086f0c"
                 "78b33c87b76f2e9898ae0a144df7de02"
             ),
+        },
+        "project_settings": {
+            "path": "workspace/.claude/settings.json",
+            "disable_bundled_skills": True,
         },
         "windows_home_matches_profile": True if sys.platform == "win32" else None,
     }

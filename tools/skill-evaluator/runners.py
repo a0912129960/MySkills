@@ -23,6 +23,8 @@ from typing import Any, Iterable, NamedTuple
 from isolation_contract import (
     CLAUDE_EMPTY_MCP_CONFIG_RELATIVE,
     CLAUDE_EMPTY_MCP_CONFIG_TEXT,
+    CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
+    CLAUDE_PROJECT_SETTINGS_RELATIVE,
 )
 
 TARGETS = ("claude", "codex")
@@ -1032,12 +1034,24 @@ def claude_environment_isolation_evidence(
         profile = Path(profile_text).resolve()
     workspace = Path(execution_workspace).resolve()
     mcp_config = workspace / CLAUDE_EMPTY_MCP_CONFIG_RELATIVE
+    project_settings = workspace / CLAUDE_PROJECT_SETTINGS_RELATIVE
     try:
         mcp_config_digest = (
             "sha256:" + hashlib.sha256(mcp_config.read_bytes()).hexdigest()
         )
     except OSError:
         mcp_config_digest = "missing-or-invalid"
+    try:
+        settings = json.loads(
+            project_settings.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
+        bundled_skills_disabled = (
+            isinstance(settings, dict)
+            and settings.get("disableBundledSkills") is True
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        bundled_skills_disabled = False
     keys = (
         "USERPROFILE",
         "HOME",
@@ -1055,7 +1069,7 @@ def claude_environment_isolation_evidence(
             and env.get("HOMEPATH") == home_path
         )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "paths": {
             key: _isolated_path_label(
                 env.get(key),
@@ -1071,6 +1085,10 @@ def claude_environment_isolation_evidence(
                 workspace,
             ),
             "sha256": mcp_config_digest,
+        },
+        "project_settings": {
+            "path": CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
+            "disable_bundled_skills": bundled_skills_disabled,
         },
         "windows_home_matches_profile": home_match,
     }
@@ -1431,7 +1449,10 @@ def _write_isolated_claude_settings(
             f"Bash({name} *)"
             for name in CLAUDE_READ_ONLY_SHELL_COMMANDS
         ]
-    settings = {"permissions": permissions}
+    settings = {
+        "disableBundledSkills": True,
+        "permissions": permissions,
+    }
     (destination / "settings.json").write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -1448,3 +1469,14 @@ def _copy_auth_file(source: Path, destination: Path) -> None:
         os.chmod(destination, 0o600)
     except OSError:
         pass
+
+
+def _reject_duplicate_json_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result

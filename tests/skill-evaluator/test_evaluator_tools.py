@@ -1217,7 +1217,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             "execution_workspace": str(execution),
                             "environment_isolation": (
                                 {
-                                    "schema_version": 2,
+                                    "schema_version": 3,
                                     "paths": {
                                         "USERPROFILE": "profile-root",
                                         "HOME": "profile-root",
@@ -1237,6 +1237,13 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                             "d8e397af03b5b032f21d0aa967086f0c"
                                             "78b33c87b76f2e9898ae0a144df7de02"
                                         ),
+                                    },
+                                    "project_settings": {
+                                        "path": (
+                                            "workspace/.claude/"
+                                            "settings.json"
+                                        ),
+                                        "disable_bundled_skills": True,
                                     },
                                     "windows_home_matches_profile": (
                                         True
@@ -1677,6 +1684,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     )
                     deny_rules = isolated_settings["permissions"]["deny"]
                     ask_rules = isolated_settings["permissions"]["ask"]
+                    self.assertIs(
+                        isolated_settings["disableBundledSkills"],
+                        True,
+                    )
                     normalized_repository = (
                         (root / "repository").resolve().as_posix()
                     )
@@ -1732,7 +1743,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     self.assertEqual(
                         environment_evidence,
                         {
-                            "schema_version": 2,
+                            "schema_version": 3,
                             "paths": {
                                 "USERPROFILE": "profile-root",
                                 "HOME": "profile-root",
@@ -1752,6 +1763,12 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                     "d8e397af03b5b032f21d0aa967086f0c"
                                     "78b33c87b76f2e9898ae0a144df7de02"
                                 ),
+                            },
+                            "project_settings": {
+                                "path": (
+                                    "workspace/.claude/settings.json"
+                                ),
+                                "disable_bundled_skills": True,
                             },
                             "windows_home_matches_profile": (
                                 True if os.name == "nt" else None
@@ -2381,7 +2398,6 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             "fixture-skill",
                             "host-skill",
                             "host-skill",
-                            "design-sync",
                         ],
                     }
                 ),
@@ -2413,6 +2429,84 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 host_skill_names=["host-skill"],
             ),
             ["Claude loaded host Skill(s): host-skill"],
+        )
+
+        unexpected_bundled = aggregate.model_evidence(
+            "claude",
+            {
+                "stdout": "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "system",
+                                "subtype": "init",
+                                "skills": ["fixture-skill", "debug"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "result",
+                                "result": "done",
+                            }
+                        ),
+                    ]
+                ),
+                "stderr": "",
+            },
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                unexpected_bundled,
+                Path("C:/evaluation/workspace"),
+                allowed_skills=["fixture-skill"],
+                host_skill_names=[],
+            ),
+            ["Claude loaded undeclared Skill(s): debug"],
+        )
+
+        doctor_only = aggregate.model_evidence(
+            "claude",
+            {
+                "stdout": "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "system",
+                                "subtype": "init",
+                                "skills": ["fixture-skill", "doctor"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "result",
+                                "result": "done",
+                            }
+                        ),
+                    ]
+                ),
+                "stderr": "",
+            },
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                doctor_only,
+                Path("C:/evaluation/workspace"),
+                allowed_skills=["fixture-skill"],
+                host_skill_names=["doctor"],
+            ),
+            ["Claude loaded host Skill(s): doctor"],
+        )
+        self.assertEqual(
+            aggregate.model_isolation_violations(
+                "claude",
+                doctor_only,
+                Path("C:/evaluation/workspace"),
+                allowed_skills=["fixture-skill"],
+                host_skill_names=[],
+            ),
+            [],
         )
 
     def test_claude_skill_discovery_evidence_fails_closed(self) -> None:
@@ -2470,7 +2564,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 ["fixture-skill"],
                 [],
             ),
-            ["Claude did not load declared Skill(s): fixture-skill"],
+            [
+                "Claude did not load declared Skill(s): fixture-skill",
+                "Claude loaded undeclared Skill(s): other-skill",
+            ],
         )
 
     def test_claude_environment_isolation_evidence_fails_closed(self) -> None:
@@ -2479,7 +2576,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
             "aggregate_benchmark.py",
         )
         evidence = {
-            "schema_version": 2,
+            "schema_version": 3,
             "paths": {
                 "USERPROFILE": "profile-root",
                 "HOME": "profile-root",
@@ -2496,6 +2593,10 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                     "d8e397af03b5b032f21d0aa967086f0c"
                     "78b33c87b76f2e9898ae0a144df7de02"
                 ),
+            },
+            "project_settings": {
+                "path": "workspace/.claude/settings.json",
+                "disable_bundled_skills": True,
             },
             "windows_home_matches_profile": (
                 True if os.name == "nt" else None
@@ -2540,6 +2641,16 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                 changed_mcp_config
             ),
             ["Claude empty MCP configuration evidence is invalid"],
+        )
+        bundled_skills_enabled = copy.deepcopy(evidence)
+        bundled_skills_enabled["project_settings"][
+            "disable_bundled_skills"
+        ] = False
+        self.assertEqual(
+            aggregate.claude_environment_isolation_violations(
+                bundled_skills_enabled
+            ),
+            ["Claude bundled Skills are not disabled"],
         )
 
     def test_claude_writable_command_shape_is_exact(self) -> None:
@@ -4100,7 +4211,7 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                             ),
                             "environment_isolation": (
                                 {
-                                    "schema_version": 2,
+                                    "schema_version": 3,
                                     "paths": {
                                         "USERPROFILE": "profile-root",
                                         "HOME": "profile-root",
@@ -4124,6 +4235,13 @@ class SkillEvaluatorToolContractTests(unittest.TestCase):
                                             "d8e397af03b5b032f21d0aa967086f0c"
                                             "78b33c87b76f2e9898ae0a144df7de02"
                                         ),
+                                    },
+                                    "project_settings": {
+                                        "path": (
+                                            "workspace/.claude/"
+                                            "settings.json"
+                                        ),
+                                        "disable_bundled_skills": True,
                                     },
                                     "windows_home_matches_profile": (
                                         True if os.name == "nt" else None

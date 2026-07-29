@@ -98,13 +98,15 @@ current directory digest of every Managed Skill. Raw model output stays under
    environment manifest that classifies relevant paths relative to the
    ephemeral profile or execution workspace (including QMD's workspace-local
    XDG directories) and records the empty MCP file's fixed path and content
-   digest after the target process exits; missing, malformed, changed, or
-   external-path evidence invalidates the measurement. Version 1 environment
-   evidence remains valid for append-only historical records, while every new
-   run emits version 2 with the MCP evidence and publication rejects a new
-   record containing version 1 evidence. A new non-invalid Claude case must
-   contain version 2 evidence; `null` is reserved for a case already classified
-   invalid because isolation evidence was unavailable. Prompts,
+   digest after the target process exits. The project settings also set
+   `disableBundledSkills: true`, and the manifest records that value after the
+   target process exits; missing, malformed, changed, or external-path evidence
+   invalidates the measurement. Version 1 and version 2 environment evidence
+   remain readable only in append-only historical records. Every new run emits
+   version 3 with the MCP and project-settings evidence, and publication rejects
+   older evidence as a new record. A new non-invalid Claude case must contain
+   version 3 evidence; `null` is reserved for a case already classified invalid
+   because isolation evidence was unavailable. Prompts,
    commands, machine
    isolation results, and model output are written under the ignored batch
    workspace; credentials are never written there. Immediately before and
@@ -120,12 +122,16 @@ current directory digest of every Managed Skill. Raw model output stays under
    `.claude/skills`; otherwise Claude can discover host Skills even when its
    profile is isolated. The workspace-local `.claude/skills` root is then
    populated only with evaluator-staged Skills. Before launch, the evaluator
-   records the names of installed host Skills. After launch, it parses the single
-   `system/init.skills` list and requires every staged Skill to be visible while
-   rejecting any non-staged name found in that host inventory. The raw result
-   retains this name-only inventory so later aggregation and publication can
-   recompute the check. Missing or contradictory Skill-discovery evidence is an
-   invalid measurement.
+   records the names of installed host Skills. Claude's bundled Skills are
+   disabled for isolated single-Skill and batch evaluations; Claude's documented
+   `doctor` exception may remain visible. After launch, the evaluator parses the
+   single `system/init.skills` list and requires it to contain the staged Skills
+   and no undeclared Skill other than `doctor`. The raw result retains the
+   name-only host inventory so later aggregation and publication can distinguish
+   host contamination from other undeclared discovery and recompute the check.
+   If that host inventory also contains `doctor`, the name-only evidence cannot
+   prove which copy Claude loaded, so the measurement is invalid. Missing or
+   contradictory Skill-discovery evidence is also an invalid measurement.
 
 3. Grade the raw results and review the offline report. Claude evidence cannot
    substitute for Codex evidence or vice versa.

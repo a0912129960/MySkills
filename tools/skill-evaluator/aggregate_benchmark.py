@@ -16,12 +16,14 @@ from isolation_contract import (
     CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
     CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
     CLAUDE_EMPTY_MCP_CONFIG_RELATIVE,
+    CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
 )
 
 PENDING_EVIDENCE = "PENDING HUMAN REVIEW"
 _COMMAND_NOT_AUDITED = object()
 _ENVIRONMENT_NOT_AUDITED = object()
 _SKILLS_NOT_AUDITED = object()
+_CLAUDE_BUNDLED_SKILL_EXCEPTIONS = frozenset({"doctor"})
 _CLAUDE_EMPTY_MCP_CONFIG_EVIDENCE = {
     "path": CLAUDE_EMPTY_MCP_CONFIG_PATH_LABEL,
     "sha256": CLAUDE_EMPTY_MCP_CONFIG_DIGEST,
@@ -495,9 +497,10 @@ def claude_environment_isolation_violations(
             "schema_version",
             "paths",
             "mcp_config",
+            "project_settings",
             "windows_home_matches_profile",
         }
-        or evidence.get("schema_version") != 2
+        or evidence.get("schema_version") != 3
         or not isinstance(evidence.get("paths"), dict)
         or set(evidence["paths"])
         != {
@@ -543,6 +546,11 @@ def claude_environment_isolation_violations(
         violations.append(
             "Claude empty MCP configuration evidence is invalid"
         )
+    if evidence.get("project_settings") != {
+        "path": CLAUDE_PROJECT_SETTINGS_PATH_LABEL,
+        "disable_bundled_skills": True,
+    }:
+        violations.append("Claude bundled Skills are not disabled")
     expected_home_match: bool | None = True if os.name == "nt" else None
     if evidence.get("windows_home_matches_profile") is not expected_home_match:
         violations.append(
@@ -595,14 +603,23 @@ def claude_skill_discovery_violations(
             "Claude did not load declared Skill(s): "
             + ", ".join(missing)
         )
-    contaminated = sorted(
-        (set(visible_skills) & set(host_skill_names))
-        - declared
-    )
+    unexpected = set(visible_skills) - declared
+    host_skills = set(host_skill_names)
+    contaminated = sorted(unexpected & host_skills)
     if contaminated:
         violations.append(
             "Claude loaded host Skill(s): "
             + ", ".join(contaminated)
+        )
+    undeclared = sorted(
+        unexpected
+        - host_skills
+        - _CLAUDE_BUNDLED_SKILL_EXCEPTIONS
+    )
+    if undeclared:
+        violations.append(
+            "Claude loaded undeclared Skill(s): "
+            + ", ".join(undeclared)
         )
     return violations
 

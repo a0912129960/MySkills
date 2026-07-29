@@ -178,7 +178,7 @@
         "windows_home_matches_profile"
       ],
       "properties": {
-        "schema_version": {"enum": [1, 2]},
+        "schema_version": {"enum": [1, 2, 3]},
         "paths": {
           "type": "object",
           "additionalProperties": false,
@@ -229,6 +229,17 @@
             }
           }
         },
+        "project_settings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "disable_bundled_skills"],
+          "properties": {
+            "path": {
+              "const": "workspace/.claude/settings.json"
+            },
+            "disable_bundled_skills": {"const": true}
+          }
+        },
         "windows_home_matches_profile": {
           "oneOf": [
             {"const": true},
@@ -239,11 +250,30 @@
       "allOf": [
         {
           "if": {
-            "properties": {"schema_version": {"const": 2}},
+            "properties": {"schema_version": {"const": 3}},
             "required": ["schema_version"]
           },
-          "then": {"required": ["mcp_config"]},
-          "else": {"not": {"required": ["mcp_config"]}}
+          "then": {
+            "required": ["mcp_config", "project_settings"]
+          },
+          "else": {
+            "if": {
+              "properties": {"schema_version": {"const": 2}},
+              "required": ["schema_version"]
+            },
+            "then": {
+              "required": ["mcp_config"],
+              "not": {"required": ["project_settings"]}
+            },
+            "else": {
+              "not": {
+                "anyOf": [
+                  {"required": ["mcp_config"]},
+                  {"required": ["project_settings"]}
+                ]
+              }
+            }
+          }
         }
       ]
     },
