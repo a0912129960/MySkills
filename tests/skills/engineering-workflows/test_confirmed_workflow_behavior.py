@@ -160,6 +160,54 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertNotIn("install the missing Mermaid", content)
         self.assertNotIn("npm install", content.lower())
 
+    def test_spec_tasks_are_vertical_capability_slices(self) -> None:
+        package = ENGINEERING / "spec-package-generator"
+        tasking = read(package / "references" / "traceability-and-tasking.md")
+        task = read(package / "templates" / "task.template.md")
+        readiness = read(
+            package / "templates" / "35a-final-readiness-result.template.md"
+        )
+
+        for required in (
+            "vertical capability slice",
+            "user- or system-observable outcome",
+            "public validation seam",
+            "end-to-end validation route",
+        ):
+            with self.subTest(required=required):
+                combined = f"{tasking}\n{task}\n{readiness}".lower()
+                self.assertIn(required.lower(), combined)
+
+        self.assertNotIn("roughly 3-5 likely files", tasking)
+        self.assertNotIn("one screen, one API", tasking)
+
+    def test_spec_tasks_support_safe_parallel_waves(self) -> None:
+        package = ENGINEERING / "spec-package-generator"
+        task = read(package / "templates" / "task.template.md")
+        index = read(package / "templates" / "31-final-task-index.template.md")
+        prompt = read(package / "templates" / "tdd-prompt.template.md")
+
+        for required in (
+            "Parallel wave",
+            "Exclusive ownership paths",
+            "Shared read-only contracts",
+            "Integration owner",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, f"{task}\n{index}")
+        self.assertIn("Other workers may continue independent eligible tasks", prompt)
+
+    def test_spec_uses_grill_me_only_as_an_explicit_pause(self) -> None:
+        governance = read(
+            ENGINEERING
+            / "spec-package-generator"
+            / "references"
+            / "question-and-decision-governance.md"
+        )
+        self.assertIn("Do not invoke `grill-me` automatically", governance)
+        self.assertIn("Ask one decision question at a time", governance)
+        self.assertIn("Do not apply the plan during the grilling phase", governance)
+
 
 if __name__ == "__main__":
     unittest.main()

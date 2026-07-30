@@ -2,7 +2,7 @@
 
 Use this reference before generating `36-final-dashboard.html`.
 
-Start from `templates/36-final-dashboard.template.html`: keep its embedded CSS and JavaScript layout and fill in the placeholders for header metadata, readiness, task order, task scope, task handoff details, traceability, risks, and copyable prompts.
+Start from `templates/36-final-dashboard.template.html`: keep its embedded CSS and JavaScript layout and fill in the placeholders for header metadata, readiness, dependency and parallel waves, task scope, capability outcome, ownership, task handoff details, traceability, risks, and copyable prompts.
 
 Dashboard validation happens after `35a-final-readiness-result.md` and must not be a prerequisite for readiness itself. The readiness result verifies that dashboard source inputs are ready to render; the rendered dashboard then displays that persisted readiness result.
 
@@ -22,7 +22,7 @@ The dashboard must:
 ## Required Sections
 
 - Header with feature name, generated time, spec status, and item count
-- Summary table with recommended implementation order
+- Dependency-aware parallel-wave summary and task eligibility
 - Item cards or accordion sections
 - Required input files for each item
 - Allowed-to-modify paths
@@ -37,6 +37,7 @@ The dashboard must:
 - Acceptance criteria
 - Suggested test cases
 - User-observable result and how to see the task working
+- Capability outcome, public validation seam, exclusive ownership paths, shared contracts, and integration handoff
 - Ready-to-copy prompt in a `textarea`
 - Copy Prompt button for each item
 - Traceability summary
@@ -56,19 +57,20 @@ Use the Markdown files as the source of truth:
 
 Do not make the dashboard the only place where important instructions exist.
 
-Task handoff details such as input files, allowed paths, read-only references, BDD coverage, required Test IDs, validation mode, evidence requirements, acceptance criteria, and suggested test cases are derived from `tasks/TASK-xxx.md` and related final package artifacts. The dashboard displays them for execution convenience; it does not define them.
+Task handoff details such as input files, allowed paths, read-only references, capability outcome, public validation seam, parallel wave, dependency state, ownership, integration handoff, BDD coverage, required Test IDs, validation mode, evidence requirements, acceptance criteria, and suggested test cases are derived from `tasks/TASK-xxx.md` and related final package artifacts. The dashboard displays them for execution convenience; it does not define them.
 
 `31-final-task-index.md` is the Markdown source of truth for planned per-task review status across sessions. Dashboard review status stored in `localStorage` is a human convenience layer only. Export dashboard status and reconcile it back to `31-final-task-index.md` or `implementation-evidence.md` for shared review state.
 
 ## Task Execution Loop
 
-The dashboard should make the recommended loop obvious:
+The dashboard should make the dependency-aware loop obvious:
 
-1. Copy one prompt.
-2. Run implementation for that task only.
-3. Review evidence and handoff criteria.
-4. Set the task status to `accepted` or `blocked`.
-5. Continue to the next task only after the current task is accepted or explicitly deferred.
+1. Select a task whose dependencies are satisfied.
+2. Copy one prompt per worker and run implementation for that task only.
+3. Run non-overlapping tasks in the same wave concurrently when ownership and shared contracts make it safe.
+4. Review each task's capability evidence and handoff criteria independently.
+5. Set each task status to `accepted`, `blocked`, or `deferred`.
+6. Continue to a dependent wave only after its prerequisites meet the recorded eligibility rule.
 
 ## HTML Boundaries
 

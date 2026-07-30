@@ -22,11 +22,13 @@ The projects-involved list must be derived from `00-context-inventory.md`, never
 - What shared contracts exist?
 - What release order is required?
 - Can provider and consumer be released independently?
-- Should the feature be split into multiple project-level tasks?
+- Which vertical capability slices can remain independently observable across project boundaries?
+- Which dependency contracts must be frozen before provider and consumer slices can run in parallel?
+- Who owns cross-project integration evidence?
 
 ## Provider And Consumer Rule
 
-Provider-side contracts usually need to be defined or implemented before consumer-side work.
+Provider-side contracts usually need to be defined and frozen before dependent consumer work. Provider and consumer capability slices may run in parallel after the contract, ownership paths, fixtures, and integration owner are explicit.
 
 Examples:
 
@@ -34,6 +36,8 @@ Examples:
 - Shared DTO package before API and UI updates.
 - Data project query before report rendering.
 - External PDF/report project before calling service integration.
+
+Do not default to one horizontal task per project or layer. Prefer an independently demonstrable capability slice. Use a project-level contract or platform enabler only when it has concrete validation and unlocks named capability slices.
 
 ## Risk Signals
 

@@ -2,7 +2,7 @@
 artifactId: 19-gate2-solution-sketch
 stage: gate2-solution-sketch
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-context-inventory.template.md
   - 10-gate1-prd.template.md
@@ -25,7 +25,7 @@ openQuestions: []
 
 This is an early human confirmation micro-gate before full Gate 2 solution artifacts are generated.
 
-Use this file to confirm the API flow, cross-project direction, project responsibilities, solution assumptions, Test ID direction, and task split boundaries while changes are still cheap.
+Use this file to confirm the API flow, cross-project direction, project responsibilities, solution assumptions, Test ID direction, vertical capability slices, and parallel ownership seams while changes are still cheap.
 
 ## Source Inputs
 
@@ -99,10 +99,15 @@ Diagram source: `diagrams/cross-project-flow.mmd`
 | BDD Scenario | Proposed Test ID | Automation Level | Test Contract Needed? | Notes |
 |---|---|---|---|---|
 
-## Initial Task Split Boundary Concerns
+## Initial Capability Slice Plan
 
-| Concern | Suggested Split | Reason | Needs Human Confirmation? |
-|---|---|---|---|
+| Slice / Enabler | User- Or System-Observable Outcome | End-To-End Validation Route | Layers Needed | Reason For Boundary | Needs Human Confirmation? |
+|---|---|---|---|---|---|
+
+## Initial Parallel Ownership Plan
+
+| Proposed Wave | Task / Slice | Depends On | Exclusive Ownership Paths | Shared Contract / Seam | Integration Owner | Conflict Concern |
+|---|---|---|---|---|---|---|
 
 ## Human Correction Notes
 

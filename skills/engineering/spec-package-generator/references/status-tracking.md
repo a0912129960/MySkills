@@ -144,7 +144,7 @@ When waiting on an early Gate 2 solution sketch, the status file must show:
 - Sketch file path
 - Draft API-flow diagram path
 - Draft cross-project-flow diagram path, if applicable
-- Provider/consumer direction, solution assumptions, Test ID direction, task split concerns, and blocking questions awaiting confirmation
+- Provider/consumer direction, solution assumptions, Test ID direction, capability-slice boundaries, parallel ownership seams, and blocking questions awaiting confirmation
 
 ## Completion
 

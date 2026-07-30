@@ -2,7 +2,7 @@
 artifactId: 35a-final-readiness-result
 stage: final
 status: template
-version: 1
+version: 2
 dependsOn:
   - 34-final-traceability-matrix.template.md
   - 35-final-analysis-report.template.md
@@ -39,7 +39,9 @@ Pass / Fail:
 | BDD scenarios map to Test IDs |  | `24-gate2-test-strategy.md` |  |
 | Test IDs map to tasks |  | `31-final-task-index.md`, `34-final-traceability-matrix.md` |  |
 | Automated and semi-automated Test IDs have complete Test Contracts |  | `24-gate2-test-strategy.md`, `tasks/TASK-xxx.md` |  |
-| Task split fields are compliant or justified |  | `31-final-task-index.md`, `tasks/TASK-xxx.md` |  |
+| Feature tasks are compliant vertical capability slices and enablers are justified |  | `31-final-task-index.md`, `tasks/TASK-xxx.md` |  |
+| Every task has an executable validation or inspection route and independently reviewable evidence |  | `tasks/TASK-xxx.md`, `24-gate2-test-strategy.md` |  |
+| Dependency waves, ownership paths, shared contracts, and integration owners make claimed parallelism safe |  | `31-final-task-index.md`, `tasks/TASK-xxx.md` |  |
 | Task prompts are derived from task contracts and include BDD/Test ID/validation instructions |  | `prompts/TASK-xxx.prompt.md` |  |
 | Dashboard source inputs are ready for rendering |  | `30-approved-feature-baseline.md`, `31-final-task-index.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, `tasks/TASK-xxx.md`, `prompts/TASK-xxx.prompt.md` | Dashboard validation happens after this readiness result and must not be a prerequisite for readiness itself. |
 
@@ -51,5 +53,7 @@ Pass / Fail:
 - Fail when an automated or semi-automated Test ID lacks entry point, fixture/input, assertions, expected red-state failure, pass criteria, evidence output, or owning task.
 - For bootstrap Test IDs that create the project skeleton or test runner, expected red-state failure may be the absence of required files, scripts, or configuration instead of an executable failing test command.
 - Fail when a manual Test ID lacks explicit human inspection evidence, pass criteria, evidence output, or owning task.
-- Fail when a task violates the split rule without an exception justification.
+- Fail when a feature task lacks a cohesive user- or system-observable outcome, end-to-end validation route, or runnable completion state.
+- Fail when a horizontal enabler lacks a concrete validated deliverable, exception justification, or named capability tasks that it unlocks.
+- Fail when tasks claimed to run in parallel have unresolved dependencies, unsafe ownership overlap, an unfrozen required shared contract, or no integration owner.
 - Fail when a task prompt omits required BDD scenarios, Test IDs, validation mode, or validation evidence instructions.

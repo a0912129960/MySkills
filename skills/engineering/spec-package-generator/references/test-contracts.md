@@ -369,6 +369,29 @@ REGRESSION:
 - Owner: spec-package-generator maintainer
 - Status: planned
 
+### TEST-CONTRACT-012
+
+- Title: Vertical capability slices and safe parallel waves
+- Purpose: Verify final tasks deliver independently demonstrable outcomes and claimed parallel work has safe dependency and ownership contracts.
+- Requirement references: `references/traceability-and-tasking.md`
+- Artifact references: `templates/task.template.md`, `templates/31-final-task-index.template.md`, `templates/tdd-prompt.template.md`, `templates/35a-final-readiness-result.template.md`
+- Inputs: Final task index, two capability tasks, one optional enabler, and derived prompts.
+- Fixture: A feature that crosses UI, API, and persistence layers and has two non-overlapping acceptance scenarios.
+- Files inspected: Tasking reference and final task, prompt, index, and readiness templates.
+- Execution method: Required-field and task-boundary review.
+- Assertions:
+  - Each feature task names one cohesive user- or system-observable outcome, a public validation seam, a demo route, and a runnable completion state.
+  - Required layers stay in the same capability slice unless a validated enabler or frozen dependency justifies separation.
+  - Enablers name the capability tasks they unlock.
+  - Parallel tasks record satisfied dependencies, exclusive ownership paths or a frozen shared contract, an integration seam, and an integration owner.
+  - Prompts require completion evidence for the whole slice and allow other workers to run independent eligible tasks.
+- Expected red-state failure: Tasks are split into database, API, and UI layers that cannot be demonstrated independently, or two tasks claim the same parallel wave with unresolved path ownership.
+- Pass criteria: Every task is an independently reviewable capability slice or justified enabler, and every claimed parallel wave has a safe coordination contract.
+- Evidence output: Static contract checklist and generated-package review note.
+- Automation: semi-automated
+- Owner: spec-package-generator maintainer
+- Status: planned
+
 ## Final Readiness Validation Guidance
 
 Final readiness validation is recorded in `35a-final-readiness-result.md`, not in the dashboard.
@@ -380,6 +403,9 @@ Before rendering `36-final-dashboard.html`, confirm:
 - Traceability has no unresolved critical gaps.
 - Test contracts exist for critical Test IDs, with validation mode recorded.
 - Task files include allowed scope, forbidden scope, read-only references, TDD or validation, and completion evidence.
+- Feature task files include a cohesive user- or system-observable outcome, public validation seam, demo route, runnable completion state, and independently reviewable evidence.
+- Enabler task files include a validated deliverable, exception justification, and named capability tasks unlocked.
+- Parallel waves include satisfied dependencies, safe path ownership or frozen shared contracts, integration seams, and integration owners.
 - Prompt files are derived from task files and do not redefine behavior.
 - Critical UNVERIFIED evidence is either resolved or formally accepted as risk.
 - `proposed-context-update.md` has not been applied to current project context before convergence.

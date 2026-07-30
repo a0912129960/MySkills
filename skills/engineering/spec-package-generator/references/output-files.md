@@ -198,7 +198,8 @@ Include:
 - Key solution assumptions
 - Blocking solution questions
 - Initial Test ID coverage direction
-- Initial task split boundary concerns
+- Initial vertical capability-slice boundaries
+- Initial dependency waves, parallel ownership, and integration seams
 - Human correction notes
 
 Stop after creating it and wait for user confirmation or revision before producing full Gate 2 artifacts. If project mode is `existing` and the solution is trivial, record the skip reason in the status file and manifest. Do not skip this sketch in greenfield mode.
@@ -257,21 +258,23 @@ This file is the final-package index and approval anchor.
 
 ## `31-final-task-index.md`
 
-Split work into small human-reviewable items.
+Split feature work into cohesive, human-reviewable vertical capability slices. A feature task should leave one user- or system-observable outcome working through a defined validation route, even when it must cross frontend, backend, domain, persistence, or integration layers.
 
-Do not mix unrelated frontend, backend, database, and external project work in one item.
+Do not mix unrelated outcomes in one item. Do not split tightly coupled work by technical layer merely to reduce the estimated file or layer count. Record unavoidable horizontal prerequisites as validated enablers that name the capability slices they unlock.
 
-This file is the Markdown source of truth for per-task review status across sessions. Include a task review status table with `not-started`, `in-progress`, `ready-for-review`, `accepted`, `blocked`, or `deferred`, plus reviewer/date, evidence link, blocked reason, deferred reason, and next eligible task marker when applicable.
+Define the dependency DAG, parallel waves, exclusive ownership paths, shared contracts, integration seams, and integration owner. Only claim tasks can run in parallel when dependencies and ownership make concurrent work safe.
+
+This file is the Markdown source of truth for per-task review status across sessions. Include a task review status table with `not-started`, `in-progress`, `ready-for-review`, `accepted`, `blocked`, or `deferred`, plus reviewer/date, evidence link, blocked reason, deferred reason, dependency satisfaction, and eligible wave.
 
 ## `tasks/TASK-xxx.md`
 
-Define the scope, dependencies, acceptance criteria, and validation for one implementation item.
+Define the scope, observable outcome or validated enabler, dependencies, parallel ownership, acceptance criteria, public validation seam, and completion evidence for one capability slice or justified enabler.
 
 ## `prompts/TASK-xxx.prompt.md`
 
 Create ready-to-copy prompts for future implementation tasks.
 
-Each prompt must tell AI to implement only the selected item.
+Each prompt must tell AI to implement only the selected item and complete its whole scoped capability outcome. It must not stop after only one technical layer when the task contract requires an end-to-end result.
 
 ## `34-final-traceability-matrix.md`
 

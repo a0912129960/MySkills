@@ -26,7 +26,7 @@ intake
   -> Gate 1 confirmation
   -> existing mode: deep architecture verification
   -> greenfield mode: planned architecture and schema design confirmation
-  -> solution clarification questions (max 8 per round, solution layer only)
+  -> solution clarification questions (max 8 per round, solution layer only; optional explicit focused grilling for high-risk decision trees)
   -> 19-gate2-solution-sketch.md + draft api-flow/cross-project diagrams when applicable or project mode is greenfield -> user confirms/revises the solution sketch
   -> Gate 2: 20-gate2-project-impact.md + 21-gate2-technical-design.md + 22-gate2-constitution-compliance.md + 24-gate2-test-strategy.md + proposed-context-update.md + 25-gate2-review.html + optional gate2-checklist.md + api-flow/cross-project diagrams
   -> Gate 2 confirmation
@@ -125,9 +125,11 @@ Required behavior:
 
 ## Solution Clarification
 
-Ask at most 8 critical solution clarification questions per round using the Gate 2 solution clarification matrix from `references/question-and-decision-governance.md`. Cover API contract shape, DB schema or query approach, integration mechanics, permission/security decisions, error-code and validation design, logging/audit behavior, release constraints, contract compatibility only when verified released contracts or active consumers exist, Test ID coverage, task split boundaries, and greenfield technology choices when project mode is `greenfield`.
+Ask at most 8 critical solution clarification questions per round using the Gate 2 solution clarification matrix from `references/question-and-decision-governance.md`. Cover API contract shape, DB schema or query approach, integration mechanics, permission/security decisions, error-code and validation design, logging/audit behavior, release constraints, contract compatibility only when verified released contracts or active consumers exist, Test ID coverage, capability-slice boundaries, parallel ownership seams, and greenfield technology choices when project mode is `greenfield`.
 
 Prefer deriving answers from verified architecture before asking. If answers reveal new blocking technical ambiguity, ask a focused follow-up round. If verification reveals a conflict with confirmed business behavior, that is a Gate Re-Open Rule event, not a solution question.
+
+Use focused grilling only when the user explicitly requests `grill-me` and the unresolved choices form a high-impact decision tree. Follow the pause-and-resume protocol in `references/question-and-decision-governance.md`; do not replace normal clarification with a mandatory interview.
 
 Before Gate 2 confirmation, `24-gate2-test-strategy.md` must map relevant BDD scenarios to Test IDs and define Test Contract data for automated and semi-automated validation.
 
@@ -142,7 +144,7 @@ Required behavior:
 - Create draft `diagrams/cross-project-flow.mmd` when multiple projects or systems are involved.
 - For greenfield projects, create the solution sketch even when the solution appears simple, because the sketch confirms the planned technical shape before task generation.
 - Derive every participant, responsibility, and call from `00-context-inventory.md` entries with status `verified`, `confirmed-design`, or explicitly accepted `UNVERIFIED`.
-- Include project responsibility split, provider/consumer direction, key solution assumptions, blocking solution questions, initial Test ID coverage direction, and task split boundary concerns.
+- Include project responsibility split, provider/consumer direction, key solution assumptions, blocking solution questions, initial Test ID coverage direction, capability-slice boundaries, and parallel ownership seams.
 - Stop and wait for user confirmation or correction before full Gate 2 artifact generation.
 - Present the solution sketch path, diagram paths, and exact confirmation or correction request in chat when waiting for confirmation.
 - Record the sketch state in `00-spec-workflow-status.md` and `00-stage-manifest.md`.
@@ -185,16 +187,19 @@ Required behavior:
 
 - Read `00-spec-workflow-status.md`, `00-stage-manifest.md`, and `00-context-inventory.md` before generating final package files.
 - Use `30-approved-feature-baseline.md` as the approved summary of the confirmed gates.
-- Break the feature into human-reviewable AI development items.
+- Break the feature into human-reviewable vertical capability slices. Each feature task must produce one cohesive user- or system-observable outcome with an end-to-end validation route and leave the scoped system in a runnable state.
+- Keep the layers needed for that outcome in the same task unless a contract-frozen dependency or unavoidable enabler provides a safer boundary. Do not create separate database, backend, and frontend tasks solely because they touch different layers.
+- Use horizontal enabler tasks only for unavoidable bootstrap, contract, migration, or platform prerequisites. Name the capability slices they unlock and give the enabler its own concrete validation evidence.
+- Arrange tasks into dependency-aware parallel waves. Record exclusive modify paths, shared contracts, integration seams, and an integration owner before claiming tasks can run concurrently.
 - For greenfield projects, make the first bootstrap task invoke `project-rules-init` with the user-confirmed Gate 2 architecture. Create any remaining project skeleton, package manager, test runner, linting, routing, database tooling, or app-shell bootstrap tasks before feature behavior tasks.
 - Create task input packages and ready-to-copy prompts.
-- Add machine-checkable split fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows to each task.
+- Add machine-checkable vertical-slice fields, dependency and parallel-wave fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows to each task.
 - Implementation review and test handoff is distributed across `24-gate2-test-strategy.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, and `tasks/TASK-xxx.md`.
 - Prompts are per-task files generated from `tasks/TASK-xxx.md` using `templates/tdd-prompt.template.md`.
 - Create `37-implementation-package-approval.md` only when the team explicitly requires a named approval record.
 - Create the standalone HTML dashboard with readiness result.
 - Treat `31-final-task-index.md` as the Markdown source of truth for per-task review status. The dashboard may store local status and export updates, but shared status must be reconciled back to Markdown.
-- The dashboard must support the intended one-task-at-a-time loop: copy one prompt, implement one task, review evidence, mark the task accepted or blocked, then proceed.
+- The dashboard must show dependency eligibility and parallel waves. Each worker still copies one prompt, implements one task, and reports evidence, while non-overlapping eligible tasks may run concurrently.
 
 ## Optional Post-Implementation Convergence
 
@@ -220,7 +225,7 @@ Rules:
 - One-shot mode still creates `09-gate1-flow-sketch.md` and `19-gate2-solution-sketch.md` when applicable, but marks their human confirmation as pre-approved by the user's one-shot instruction and documented assumptions.
 - Ask at most 8 critical business clarification questions per round and at most 8 critical solution clarification questions per round if needed.
 - Generate the full package only after resolving high-impact ambiguity or documenting assumptions, with `UNVERIFIED` tags where the user accepted gaps.
-- Keep generated development items small and reviewable.
+- Keep generated development items cohesive and reviewable as vertical capability slices; preserve dependency-aware parallel waves.
 
 ## Stop Conditions
 

@@ -91,6 +91,21 @@ You can answer in batch, for example: "1 use default, 2 choose B, 3 no".
 
 If a question is non-blocking but material, ask for explicit confirm/override in the gate review instead of silently treating the default as approved.
 
+## Focused Grilling Protocol
+
+Use normal batch clarification by default. Recommend `grill-me` only when unresolved high-impact choices form a decision tree whose branches materially change product behavior, architecture, release safety, test strategy, capability-slice boundaries, or parallel ownership.
+
+Do not invoke `grill-me` automatically. When the user explicitly requests it:
+
+1. Pause specification artifact mutation.
+2. Resolve discoverable facts from the environment instead of asking the user.
+3. Ask one decision question at a time and include a recommended answer.
+4. Walk dependent branches until the user confirms shared understanding.
+5. Finish with confirmed decisions, assumptions, constraints, and remaining questions.
+6. Do not apply the plan during the grilling phase. Record the answers and resume specification generation only after the user separately asks to continue.
+
+Do not use focused grilling for routine fields, facts that can be verified, low-risk defaults, or every Gate 1/Gate 2 question. A full interview is intentionally slower than the default clarification flow.
+
 ## Gate 1 Scenario Checklist
 
 For every core user scenario, the agent must classify each field as `extracted`, `assumed`, `asked`, `blocking`, or `not-applicable`:
@@ -123,7 +138,8 @@ For every solution-impacting area, derive from verified context or confirmed gre
 - Release order and contract compatibility when verified released contracts or active consumers exist
 - BDD scenario to Test ID mapping
 - Test Contract completeness for automated and semi-automated validation
-- Task split boundary, allowed modify paths, and read-only references
+- Capability-slice boundary and user- or system-observable outcome
+- Dependency wave, parallel ownership, allowed modify paths, shared contracts, and read-only references
 
 For greenfield projects, also confirm these choices before Gate 2 approval when applicable:
 

@@ -2,13 +2,13 @@
 artifactId: task
 stage: final
 status: template
-version: 1
+version: 2
 dependsOn:
   - 31-final-task-index.template.md
   - 30-approved-feature-baseline.template.md
 invalidates:
   - tdd-prompt.template.md
-summary: Human-reviewable task contract template.
+summary: Human-reviewable vertical capability-slice task contract template.
 keyDecisions: []
 openQuestions: []
 ---
@@ -20,23 +20,46 @@ openQuestions: []
 - Task ID:
 - Title:
 - Project:
-- Task type: bootstrap / feature / test / integration / documentation
+- Task type: capability-slice / enabler / bootstrap / integration / documentation
 
 ## Goal
 
-## Reason For Separation
+## Capability Outcome
 
-Explain why this is small enough for one focused human review. If the task touches more than one major layer, more than roughly 3-5 likely files, or more than one independently testable behavior, justify why it should not be split.
+- User- or system-observable outcome:
+- Who or what can observe it:
+- How to demonstrate it:
+- Public validation seam:
+- Runnable state after completion:
 
-## Split Rule Fields
+## Vertical Slice Contract
 
+- Cohesive acceptance bundle:
+- Independently demonstrable: yes/no
+- End-to-end validation route:
+- Vertical-slice compliant: yes/no
+- If no, enabler type: bootstrap / shared-contract / migration / platform / other
+- Enabler exception justification:
+- Capability task IDs unlocked:
 - Estimated modified file count:
 - Major layers touched:
-- Single independently testable behavior: yes/no
-- Split-rule compliant: yes/no
-- Split-rule exception justification:
+- Review-size note:
 
-## Dependencies
+File and layer estimates are planning signals, not automatic split gates. Keep tightly coupled layers together when they are required for the capability outcome.
+
+## Dependencies And Parallelism
+
+- Depends on:
+- Dependency acceptance required:
+- Parallel wave:
+- Can run in parallel with:
+- Exclusive ownership paths:
+- Shared read-only contracts:
+- Shared contract status: draft / frozen / not-applicable
+- Integration seam:
+- Integration owner:
+- Merge or release order:
+- Conflict-avoidance notes:
 
 ## In Scope
 
@@ -69,6 +92,8 @@ Explain why this is small enough for one focused human review. If the task touch
 
 ## Acceptance Criteria
 
+Acceptance criteria must prove the complete scoped capability outcome, not only the presence of one technical layer.
+
 ## Suggested Test Cases
 
 ## Risk Level
@@ -94,6 +119,7 @@ Explain why this is small enough for one focused human review. If the task touch
 - For bootstrap tasks that create the project skeleton or test runner, red-state evidence may be the absence of the required file, script, or configuration. Do not require executing a test command before the command exists.
 - Manual Test IDs do not require red-state evidence, but they must define concrete before/after inspection evidence.
 - Implement the smallest change needed to pass this task.
+- Keep the complete capability slice working through its public validation seam; do not stop after only one required technical layer is implemented.
 - Run and report green-state evidence for automated or semi-automated Test IDs.
 - For manual Test IDs, report the exact inspection result and the user-visible evidence.
 - If automation is not practical, use an approved semi-automated or manual validation mode with explicit human review evidence.
@@ -107,5 +133,6 @@ Explain why this is small enough for one focused human review. If the task touch
 - User-observable result:
 - How to see it working:
 - What visible behavior proves this task is complete:
-- What must be true before starting the next task:
+- Integration handoff:
+- What must be true before starting dependent tasks:
 - Review status: not-started / in-progress / ready-for-review / accepted / blocked / deferred

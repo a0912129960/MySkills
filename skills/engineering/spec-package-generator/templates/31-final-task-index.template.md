@@ -2,14 +2,14 @@
 artifactId: 31-final-task-index
 stage: final
 status: template
-version: 1
+version: 2
 dependsOn:
   - 30-approved-feature-baseline.template.md
   - 24-gate2-test-strategy.template.md
 invalidates:
   - 34-final-traceability-matrix.template.md
   - 35a-final-readiness-result.template.md
-summary: Final task index template.
+summary: Final vertical capability-slice and parallel-wave task index template.
 keyDecisions: []
 openQuestions: []
 ---
@@ -22,12 +22,14 @@ openQuestions: []
 
 ## Breakdown Strategy
 
-## Recommended Development Order
+Describe how the feature is divided by cohesive user- or system-observable outcomes. Explain any unavoidable enabler tasks and name the capability slices they unlock.
 
-| Order | Task ID | Title | Project | Goal | Depends On | Risk | Primary Test IDs | BDD Scenarios | Split Compliant? | TDD Ready? | Review Focus |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+## Dependency And Parallel Plan
 
-For greenfield projects, list bootstrap tasks before feature behavior tasks when foundational project files or tooling do not exist yet.
+| Wave | Task ID | Title | Project | Capability Outcome | Depends On | Can Run With | Exclusive Paths / Shared Contract | Integration Owner | Risk | Primary Test IDs | BDD Scenarios | Slice Compliant? | TDD Ready? | Review Focus |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+For greenfield projects, list bootstrap tasks before feature behavior tasks when foundational project files or tooling do not exist yet. Tasks in the same wave may run concurrently only when dependency and ownership fields show that doing so is safe.
 
 ## Bootstrap Task Plan
 
@@ -42,15 +44,20 @@ This table is the Markdown source of truth for per-task review status across ses
 
 Allowed status values: `not-started`, `in-progress`, `ready-for-review`, `accepted`, `blocked`, `deferred`.
 
-| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Next Eligible? |
+| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Dependencies Satisfied? | Eligible Wave? |
+|---|---|---|---|---|---|---|---|---|
+
+## Capability Slice Decisions
+
+For each feature task, confirm that it delivers one cohesive observable outcome through an end-to-end validation route. Layer and file counts are planning signals only. For each enabler, justify why it cannot safely live in a capability slice and name the slices it unlocks.
+
+| Task ID | Type | Observable Outcome / Validated Enabler | Demo Or Validation Route | Estimated Files | Layers | Vertical-Slice Compliant | Exception And Unlocked Tasks |
 |---|---|---|---|---|---|---|---|
 
-## Split Decision Notes
+## Parallel Ownership And Integration
 
-For each task, explain why the scope is small enough for one focused human review. Split any task that touches more than one major layer, more than roughly 3-5 likely files, or more than one independently testable behavior unless the coupling is explicitly justified.
-
-| Task ID | Estimated Modified File Count | Major Layers Touched | Single Independently Testable Behavior | Split-Rule Compliant | Exception Justification |
-|---|---|---|---|---|---|
+| Task ID | Wave | Exclusive Ownership Paths | Shared Read-Only Contract | Integration Seam | Integration Owner | Merge / Release Order | Conflict Risk |
+|---|---|---|---|---|---|---|---|
 
 ## Task Files To Generate
 

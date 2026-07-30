@@ -129,7 +129,8 @@
       <p class="warn">{{READINESS_BLOCKERS}}</p>
     </section>
     <section id="task-order" class="panel">
-      <h2>Implementation Order</h2>
+      <h2>Dependency And Parallel Waves</h2>
+      <p>{{PARALLEL_WAVE_SUMMARY}}</p>
       <ol>
         {{TASK_ORDER_ITEMS}}
       </ol>
@@ -173,6 +174,14 @@
               <p class="label">Validation</p>
               {{TDD_READINESS}}
             </section>
+            <section>
+              <p class="label">Parallel Wave</p>
+              {{PARALLEL_WAVE}}
+            </section>
+            <section>
+              <p class="label">Dependency State</p>
+              {{DEPENDENCY_STATE}}
+            </section>
           </div>
           <div class="task-layout">
             <div>
@@ -206,6 +215,22 @@
                 <section>
                   <p class="label">Evidence Required</p>
                   {{EVIDENCE_REQUIRED}}
+                </section>
+                <section>
+                  <p class="label">Capability Outcome</p>
+                  {{CAPABILITY_OUTCOME}}
+                </section>
+                <section>
+                  <p class="label">Public Validation Seam</p>
+                  {{PUBLIC_VALIDATION_SEAM}}
+                </section>
+                <section>
+                  <p class="label">Parallel Ownership</p>
+                  {{PARALLEL_OWNERSHIP}}
+                </section>
+                <section>
+                  <p class="label">Integration Handoff</p>
+                  {{INTEGRATION_HANDOFF}}
                 </section>
                 <section>
                   <p class="label">User-Observable Result</p>
@@ -292,11 +317,11 @@
         ``,
         `Copy these rows back into 31-final-task-index.md or use them as implementation-evidence.md status input.`,
         ``,
-        `| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Next Eligible? |`,
-        `|---|---|---|---|---|---|---|---|`
+        `| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Dependencies Satisfied? | Eligible Wave? |`,
+        `|---|---|---|---|---|---|---|---|---|`
       ];
       document.querySelectorAll('select[data-task-id]').forEach((select) => {
-        lines.push(`| ${select.dataset.taskId} | ${select.value} |  |  |  |  |  |  |`);
+        lines.push(`| ${select.dataset.taskId} | ${select.value} |  |  |  |  |  |  |  |`);
       });
       return lines.join('\n');
     }

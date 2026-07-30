@@ -22,7 +22,9 @@ Use this reference when calculating whether the final package is ready for imple
 - Readiness must fail when automated or semi-automated Test IDs lack complete Test Contract fields: entry point, fixture/input, assertions, expected red-state failure, pass criteria, evidence output, and owning task.
 - For bootstrap Test IDs that create the project skeleton or test runner, expected red-state failure may be the absence of required files, scripts, or configuration instead of an executable failing test command.
 - Readiness must fail when manual Test IDs lack explicit human inspection evidence, pass criteria, evidence output, or owning task.
-- Readiness must fail when a task violates the split rule without an explicit exception justification.
+- Readiness must fail when a feature task lacks a cohesive user- or system-observable outcome, end-to-end validation route, runnable completion state, or independently reviewable evidence.
+- Readiness must fail when a horizontal enabler lacks a concrete validated deliverable, exception justification, or named capability slices that it unlocks.
+- Readiness must fail when tasks claimed to run in parallel have unresolved dependencies, unsafe path ownership overlap, an unfrozen required shared contract, or no integration owner.
 - Readiness must fail when `31-final-task-index.md` lacks a per-task review status table with the allowed status values needed for cross-session task review tracking.
 
 ## Implementation Approval
@@ -34,12 +36,12 @@ The final dashboard is the handoff point for implementation prompts.
 
 ## Task Execution Loop
 
-The readiness result and dashboard should support one reviewed task at a time:
+The readiness result and dashboard should support independently reviewed tasks in dependency-aware parallel waves:
 
-1. Copy one task prompt.
-2. Implement only that task.
-3. Review the reported evidence and task handoff checklist.
-4. Mark the task accepted, blocked, or deferred in `31-final-task-index.md`.
-5. Start the next task only after the current task is accepted or explicitly deferred.
+1. Select any task whose dependencies are accepted or explicitly deferred with a safe exception.
+2. Run eligible non-overlapping tasks in the same wave concurrently when ownership and shared contracts make it safe.
+3. Have each worker implement only one selected task and report its own evidence.
+4. Review and mark each task accepted, blocked, or deferred in `31-final-task-index.md`.
+5. Start a dependent wave only after its prerequisites satisfy the recorded eligibility rule.
 
 Dashboard `localStorage` status is a local convenience only. Shared task status must be reconciled back to `31-final-task-index.md` or implementation evidence.

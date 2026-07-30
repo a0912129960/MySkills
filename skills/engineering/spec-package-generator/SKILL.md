@@ -1,6 +1,6 @@
 ---
 name: spec-package-generator
-description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses a manifest-driven two-gate PRD/EARS/BDD-to-task workflow with readiness-checked task contracts, derived prompts, dashboard handoff, and post-implementation convergence."
+description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses a manifest-driven two-gate PRD/EARS/BDD workflow, vertically sliced capability tasks, dependency-aware parallel work, readiness-checked prompts, dashboard handoff, and post-implementation convergence."
 ---
 
 # Spec Package Generator Skill
@@ -122,7 +122,7 @@ Do not update `.ai-dev/context/project-context.md` here. Record verified facts, 
 
 Run after deep architecture verification for existing projects, or after greenfield architecture design confirmation for greenfield projects, and before Gate 2 artifacts.
 
-Ask up to 8 critical solution clarification questions per round when verified architecture or greenfield planned architecture leaves more than one reasonable design choice. Use the Gate 2 solution clarification matrix in `references/question-and-decision-governance.md`. Focus on API contracts, data/query approach, integration mechanics, permissions/security, error handling, validation, logging/audit, release order, compatibility when verified released contracts or active consumers exist, greenfield technology choices, Test ID coverage, and task split boundaries. Use additional rounds only when the user's answers reveal new blocking technical ambiguity.
+Ask up to 8 critical solution clarification questions per round when verified architecture or greenfield planned architecture leaves more than one reasonable design choice. Use the Gate 2 solution clarification matrix and focused grilling protocol in `references/question-and-decision-governance.md`. Focus on API contracts, data/query approach, integration mechanics, permissions/security, error handling, validation, logging/audit, release order, compatibility when verified released contracts or active consumers exist, greenfield technology choices, Test ID coverage, capability-slice boundaries, and parallel ownership seams. Use additional rounds only when the user's answers reveal new blocking technical ambiguity.
 
 Before Gate 2 can be confirmed, the test strategy must define Test IDs for relevant BDD scenarios and enough Test Contract data to support TDD when automation or semi-automation is expected.
 
@@ -130,7 +130,7 @@ Before Gate 2 can be confirmed, the test strategy must define Test IDs for relev
 
 Before full Gate 2 generation, create `19-gate2-solution-sketch.md` and draft `diagrams/api-flow.mmd` plus `diagrams/cross-project-flow.mmd` when applicable, so the user can correct the technical flow early. In greenfield mode, always create this sketch. Stop for this micro-gate until the user confirms or revises the sketch.
 
-The sketch must be derived from verified inventory entries, `confirmed-design` greenfield entries, or explicitly accepted `UNVERIFIED` risks. It should cover draft API flow, cross-project responsibility direction, provider/consumer boundaries, material solution assumptions, blocking solution questions, initial Test ID direction, and task split boundary concerns.
+The sketch must be derived from verified inventory entries, `confirmed-design` greenfield entries, or explicitly accepted `UNVERIFIED` risks. It should cover draft API flow, cross-project responsibility direction, provider/consumer boundaries, material solution assumptions, blocking solution questions, initial Test ID direction, capability-slice boundaries, and parallel ownership seams.
 
 ### Gate 2: Solution Review
 
@@ -176,17 +176,17 @@ Prompt files are derived from task files. They must not redefine behavior, widen
 
 `31-final-task-index.md` is the Markdown source of truth for per-task review status across sessions. The dashboard may persist local browser state and export status updates, but shared task status must be reconciled back to the task index or implementation evidence.
 
-Final task contracts must expose machine-checkable split fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows. Readiness fails when critical behavior is not traceably connected from EARS to BDD to Test ID to task and prompt.
+Final task contracts must expose machine-checkable vertical-slice fields, dependency and parallel-wave fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows. Every feature task must leave a user- or system-observable capability working through a defined validation route. Readiness fails when critical behavior is not traceably connected from EARS to BDD to Test ID to task and prompt.
 
 For greenfield packages, final tasks must begin with a bootstrap task that explicitly invokes `project-rules-init` using the user-confirmed Gate 2 architecture. Follow it with any project skeleton, package manager, test runner, linting, routing, database tooling, or app-shell bootstrap tasks needed before feature behavior. Bootstrap tasks may use manual or semi-automated validation based on file existence, configuration checks, package script checks, and human inspection; do not require executable red-state test evidence before the test runner exists.
 
-After the dashboard is generated, the recommended implementation loop is task-by-task:
+After the dashboard is generated, the recommended implementation loop is dependency-aware:
 
-1. Copy one task prompt.
-2. Let AI implement only that task.
-3. Review the task evidence and human handoff checklist.
-4. Mark the task accepted or blocked.
-5. Proceed to the next task only after the current task is accepted or explicitly deferred.
+1. Select any task whose dependencies are accepted or explicitly deferred with a safe exception.
+2. Run non-overlapping tasks in the same parallel wave concurrently when their contracts and allowed paths do not conflict.
+3. Let each AI implement only its selected capability slice.
+4. Review each task's executable evidence, user- or system-observable result, and human handoff checklist independently.
+5. Mark each task accepted, blocked, or deferred before starting a dependent wave.
 
 ### Optional Post-Implementation Convergence
 
@@ -240,7 +240,10 @@ Derived HTML dashboards, review HTML, prompts, checklists, summaries, and tracea
 - Never let prompts or HTML override PRD, EARS, BDD, technical design, test strategy, or task contracts.
 - Never continue downstream work when verified facts contradict confirmed gate content; reopen the affected gate.
 - Render SVG diagrams whenever the centrally managed Mermaid CLI is available; otherwise retain the complete authoritative `.mmd` output and record that optional SVG rendering was skipped.
-- Keep generated tasks small, human-reviewable, and scoped to one implementation item.
+- Prefer vertically sliced feature tasks that deliver one cohesive, independently demonstrable capability, even when the slice crosses UI, API, domain, or persistence layers.
+- Do not split feature work by technical layer merely to reduce file count. Treat file count and layer count as planning signals, not automatic split rules.
+- Allow horizontal enabler tasks only when a runnable capability slice cannot own the prerequisite safely; require a named unlocked capability, concrete validation, and explicit justification.
+- Define dependency waves, allowed paths, shared contracts, and integration ownership so non-overlapping ready tasks can be developed in parallel.
 
 ## Bundled Resources
 
