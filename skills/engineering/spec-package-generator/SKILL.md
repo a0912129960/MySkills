@@ -1,6 +1,6 @@
 ---
 name: spec-package-generator
-description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses a manifest-driven two-gate PRD/EARS/BDD workflow, vertically sliced capability tasks, dependency-aware parallel work, readiness-checked prompts, dashboard handoff, and post-implementation convergence."
+description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses a manifest-driven two-gate PRD/EARS/BDD workflow, human-confirmed vertical capability tasks, YAML execution manifests, readiness checks, dashboard handoff, and post-implementation convergence."
 ---
 
 # Spec Package Generator Skill
@@ -27,7 +27,7 @@ Primary authorities:
 - `references/ears-bdd-tdd.md` for PRD/EARS/BDD/TDD transformation rules.
 - `references/test-contracts.md` for validation mode, test contract fields, automation levels, and readiness-oriented validation contract rules.
 - `references/constitution-governance.md` for constitution and amendment handling.
-- `references/traceability-and-tasking.md` for final task and prompt rules.
+- `references/traceability-and-tasking.md` for final Task, Manifest, and prompt rules.
 - `references/context-window-management.md` for bounded reads and task-scoped context.
 - `references/machine-readiness.md` before declaring final readiness.
 - `references/dashboard-guidelines.md` before rendering final dashboards.
@@ -46,7 +46,7 @@ New and resumed packages must use this artifact family:
 - Intake and governance: `00-source-requirement.md`, `00-spec-workflow-status.md`, `00-stage-manifest.md`, `00-context-inventory.md`, `14-decision-log.md`, `15-open-questions.md`
 - Gate 1: `09-gate1-flow-sketch.md`, `10-gate1-prd.md`, `11-gate1-ears.md`, `12-gate1-bdd.feature`, `13-gate1-review.html`
 - Gate 2: `19-gate2-solution-sketch.md`, `20-gate2-project-impact.md`, `21-gate2-technical-design.md`, `22-gate2-constitution-compliance.md`, `24-gate2-test-strategy.md`, `25-gate2-review.html`, `proposed-context-update.md`
-- Final package: `30-approved-feature-baseline.md`, `31-final-task-index.md`, `tasks/TASK-xxx.md`, `prompts/TASK-xxx.prompt.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, `36-final-dashboard.html`
+- Final package: `30-approved-feature-baseline.md`, `31-final-task-index.md`, `tasks/TASK-xxx.md`, `32-task-plan-review.md`, `manifests/TASK-xxx.execution.yaml`, `prompts/TASK-xxx.prompt.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, `36-final-dashboard.html`
 - Optional convergence: `implementation-evidence.md`, `40-convergence-report.md`, `verified-context-update.md`
 
 Only this optimized artifact family is supported.
@@ -154,15 +154,30 @@ Gate 2 must derive solution content from verified inventory entries, `confirmed-
 
 Ask the user to confirm or revise Gate 2 before finalization. `25-gate2-review.html` is the only required human review surface for final Gate 2 confirmation; Markdown files remain authoritative details linked from it.
 
+### Task Plan Gate
+
+After Gate 2 confirmation, create `30-approved-feature-baseline.md`,
+`31-final-task-index.md`, and `tasks/TASK-xxx.md`. Present
+`32-task-plan-review.md` and stop for human confirmation before generating
+execution-routing artifacts.
+
+The human confirms each Reviewable Capability or Shared Enabler, its
+dependencies, public test boundary, and expected review scope. Task-only
+corrections stay in the Task Plan. A behavior gap reopens Gate 1; a solution
+gap reopens Gate 2. Do not predefine Task Work Units: they are runtime
+coordination proposed by `implement-spec-task` from current code.
+
 ### Final Package
 
-Finalize only after Gate 2 confirmation or explicit user approval to proceed with documented assumptions.
+Finalize execution artifacts only after the Task Plan Gate is human-confirmed.
 
 Create:
 
 - `30-approved-feature-baseline.md`
 - `31-final-task-index.md`
 - `tasks/TASK-xxx.md`
+- `32-task-plan-review.md`
+- `manifests/TASK-xxx.execution.yaml`
 - `prompts/TASK-xxx.prompt.md`
 - `34-final-traceability-matrix.md`
 - `35-final-analysis-report.md`
@@ -172,21 +187,63 @@ Create:
 
 Readiness must be calculated and persisted in `35a-final-readiness-result.md` before rendering `36-final-dashboard.html`. The final dashboard is the direct implementation entry point after readiness passes and must not redefine the Markdown artifacts.
 
-Prompt files are derived from task files. They must not redefine behavior, widen scope, or override task constraints.
+Task Markdown owns what to build. Each YAML Task Execution Manifest owns
+artifact loading, dependency eligibility, execution routing, scope paths, Skill
+Plan, validation, evidence destinations, and freshness. Digest-pin approved
+normative artifacts, but require `implement-spec-task` to re-read current
+project rules during Execution Preflight.
+
+Prompt files are derived from Manifests and contain only
+`$implement-spec-task <manifest-path>` plus path substitution guidance. They
+must not restate behavior, widen scope, or override the Task or Manifest.
 
 `31-final-task-index.md` is the Markdown source of truth for per-task review status across sessions. The dashboard may persist local browser state and export status updates, but shared task status must be reconciled back to the task index or implementation evidence.
 
-Final task contracts must expose machine-checkable vertical-slice fields, dependency and parallel-wave fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows. Every feature task must leave a user- or system-observable capability working through a defined validation route. Readiness fails when critical behavior is not traceably connected from EARS to BDD to Test ID to task and prompt.
+Final Task contracts must expose machine-checkable vertical-slice fields,
+dependency and parallel-wave fields, BDD coverage, EARS coverage, required Test
+IDs, validation mode, and validation contract rows. Every feature Task must
+leave a user- or system-observable capability working through a defined
+validation route. Readiness fails when critical behavior is not traceably
+connected from EARS to BDD to Test ID to Task to Manifest.
 
 For greenfield packages, final tasks must begin with a bootstrap task that explicitly invokes `project-rules-init` using the user-confirmed Gate 2 architecture. Follow it with any project skeleton, package manager, test runner, linting, routing, database tooling, or app-shell bootstrap tasks needed before feature behavior. Bootstrap tasks may use manual or semi-automated validation based on file existence, configuration checks, package script checks, and human inspection; do not require executable red-state test evidence before the test runner exists.
 
-After the dashboard is generated, the recommended implementation loop is dependency-aware:
+After the dashboard is generated, the first-version implementation loop is
+human-gated:
 
-1. Select any task whose dependencies are accepted or explicitly deferred with a safe exception.
-2. Run non-overlapping tasks in the same parallel wave concurrently when their contracts and allowed paths do not conflict.
-3. Let each AI implement only its selected capability slice.
-4. Review each task's executable evidence, user- or system-observable result, and human handoff checklist independently.
-5. Mark each task accepted, blocked, or deferred before starting a dependent wave.
+1. Select a Task only when every required dependency is human-`accepted`.
+2. Invoke `implement-spec-task` with exactly one selected Task Manifest.
+3. Approve its Execution Preflight before any production-code edit; same-Task
+   subagents may then implement approved exclusive Work Units.
+4. Review the integrated Task evidence and AI code review after it reaches
+   `ready-for-review`.
+5. Only the human marks the Task `accepted`; the executor never starts the next
+   Task automatically.
+
+Retain dependency and parallel-wave data for planning, but do not use it to
+execute multiple formal Tasks in one first-version invocation.
+
+### Spec Change Request Revision
+
+When the human invokes
+`$spec-package-generator <feature-package-path> --revise-from <request-path>`,
+read the Spec Change Request, linked code evidence, current workflow status,
+stage manifest, and affected normative artifacts.
+
+Treat the human invocation as authorization to revise the specification
+package, never as authorization to modify production code. Follow the request's
+Return Level:
+
+- reopen Gate 1 for a behavior gap;
+- reopen Gate 2 for a solution or validation-design gap;
+- return to the Task Plan Gate for a Task boundary or task-only validation gap.
+
+Record whether referenced implementation changes are already committed or
+remain uncommitted in the request's Partial Change State. Preserve prior
+append-only Execution Records. Revise only affected normative content, apply
+artifact invalidation, re-confirm the reopened gate, and generate a new
+Manifest version with new digests. Never reuse the stale Manifest or silently
+resume implementation.
 
 ### Optional Post-Implementation Convergence
 
@@ -208,9 +265,15 @@ Gate 2 produces only `proposed-context-update.md`. `verified-context-update.md` 
 - Default mode: intake -> project mode detection -> Gate 1 -> confirmation -> existing verification or greenfield design confirmation -> Gate 2 -> confirmation -> final package.
 - Gate 1 review mode: produce or revise business artifacts only, using up to 8 critical business questions per round.
 - Gate 2 review mode: verify existing architecture or confirm greenfield planned architecture, ask solution clarification questions when needed, produce or revise the solution sketch and solution artifacts, and stop before final package.
-- Finalize mode: produce final task, prompt, traceability, readiness, and dashboard artifacts.
-- One-shot mode: allowed only when the user explicitly asks for a one-pass package or explicitly approves assumptions. It still runs context scan, architecture verification, gate logic, readiness, and post-implementation convergence timing rules, but it does not stop at Gate 1 or Gate 2 confirmation points. Missing architecture sources still require either a source or explicit `UNVERIFIED` acceptance.
+- Finalize mode: produce the Task Plan Gate, then after human confirmation produce Manifest, prompt, traceability, readiness, and dashboard artifacts.
+- One-shot mode: allowed only when the user explicitly asks to pre-approve Gate
+  1 and Gate 2 assumptions. It still runs context scan, architecture
+  verification, readiness, and convergence timing rules. It never pre-approves
+  or skips the Task Plan Gate.
 - Convergence mode: reconcile implementation evidence and update verified project context only when evidence supports it.
+- Spec revision mode: consume a human-authorized Spec Change Request, reopen
+  its declared gate, regenerate affected artifacts and Manifest versions, then
+  stop for the required human confirmation.
 
 ## Artifact Authority
 
@@ -222,6 +285,8 @@ Resolve conflicts by ownership, not file order:
 - Constitution compliance: Gate 2 constitution compliance and project constitution sources.
 - Test planning: Gate 2 test strategy and test contracts.
 - Implementation scope: individual `tasks/TASK-xxx.md`.
+- Task planning approval: `32-task-plan-review.md`.
+- Execution routing: `manifests/TASK-xxx.execution.yaml`.
 - Execution prompts: derived `prompts/TASK-xxx.prompt.md`.
 - Readiness: `35a-final-readiness-result.md`.
 - Project context: `.ai-dev/context/project-context.md` after verified convergence only.
@@ -237,13 +302,17 @@ Derived HTML dashboards, review HTML, prompts, checklists, summaries, and tracea
 - Never generate Gate 2 artifacts from missing existing architecture sources unless the user explicitly accepts `UNVERIFIED` risk. For greenfield projects, use user-confirmed `confirmed-design` entries instead of missing source verification.
 - Never write `.ai-dev/context/project-context.md` before verified convergence.
 - Never let stale critical artifacts pass readiness.
+- Never generate a Task Execution Manifest before its Task Plan Gate decision is
+  `human-confirmed`.
+- Never support a legacy prompt-only package by guessing an execution contract;
+  revise the package through this skill.
 - Never let prompts or HTML override PRD, EARS, BDD, technical design, test strategy, or task contracts.
 - Never continue downstream work when verified facts contradict confirmed gate content; reopen the affected gate.
 - Render SVG diagrams whenever the centrally managed Mermaid CLI is available; otherwise retain the complete authoritative `.mmd` output and record that optional SVG rendering was skipped.
 - Prefer vertically sliced feature tasks that deliver one cohesive, independently demonstrable capability, even when the slice crosses UI, API, domain, or persistence layers.
 - Do not split feature work by technical layer merely to reduce file count. Treat file count and layer count as planning signals, not automatic split rules.
 - Allow horizontal enabler tasks only when a runnable capability slice cannot own the prerequisite safely; require a named unlocked capability, concrete validation, and explicit justification.
-- Define dependency waves, allowed paths, shared contracts, and integration ownership so non-overlapping ready tasks can be developed in parallel.
+- Define dependency waves, allowed paths, shared contracts, and integration ownership for future scheduling, while keeping each executor invocation to one formal Task.
 
 ## Bundled Resources
 
@@ -252,7 +321,7 @@ Use templates by artifact name instead of embedding formats here:
 - Intake and governance templates: `00-source-requirement`, `00-spec-workflow-status`, `00-stage-manifest`, `00-context-inventory`, `14-decision-log`, `15-open-questions`.
 - Gate 1 templates: `09-gate1-flow-sketch`, `10-gate1-prd`, `11-gate1-ears`, `12-gate1-bdd`, `13-gate1-review`, `gate1-checklist`.
 - Gate 2 templates: `19-gate2-solution-sketch`, `20-gate2-project-impact`, `21-gate2-technical-design`, `22-gate2-constitution-compliance`, `24-gate2-test-strategy`, `25-gate2-review`, `gate2-checklist`, `proposed-context-update`, `test-case-contract`.
-- Final templates: `30-approved-feature-baseline`, `31-final-task-index`, `task`, `tdd-prompt`, `34-final-traceability-matrix`, `35-final-analysis-report`, `35a-final-readiness-result`, `36-final-dashboard`, `37-implementation-package-approval`.
+- Final templates: `30-approved-feature-baseline`, `31-final-task-index`, `task`, `32-task-plan-review`, `task-execution-manifest`, `tdd-prompt`, `34-final-traceability-matrix`, `35-final-analysis-report`, `35a-final-readiness-result`, `36-final-dashboard`, `37-implementation-package-approval`.
 - Convergence templates: `implementation-evidence`, `40-convergence-report`, `verified-context-update`, `project-context`.
 - Constitution templates: `constitution`, `implementation-constitution`, `constitution-amendment`.
 
@@ -261,9 +330,14 @@ Use templates by artifact name instead of embedding formats here:
 The package is ready for implementation when:
 
 - Gate 1 and Gate 2 are confirmed or explicitly documented assumptions are accepted.
+- The Task Plan Gate is human-confirmed for every generated Manifest.
 - Required artifacts are current according to `00-stage-manifest.md` and invalidation rules.
 - Traceability maps source -> PRD -> EARS -> BDD -> technical design -> test ID -> task.
+- Every Task has one valid YAML Execution Manifest with current SHA-256
+  artifact digests, accepted dependencies, scope, Skill Plan, validation, and
+  evidence destinations.
 - `35a-final-readiness-result.md` passes.
-- `36-final-dashboard.html` presents the ready-to-implement task order and per-task copyable prompts.
+- `36-final-dashboard.html` presents the ready-to-implement Task order and
+  per-Task copyable Manifest-backed executor invocations.
 
 Convergence is not required for the specification package to be ready for implementation. It is a post-implementation maintenance flow for reconciling actual implementation evidence and promoting verified reusable context.

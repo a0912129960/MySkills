@@ -14,6 +14,8 @@ Route by outcome without inventing an uninstalled workflow.
 - Capture a small, already-discussed requirement: `to-spec`; use
   `spec-package-generator` for a gated, resumable formal package.
 - Implement a small task or `to-spec` artifact: `implement`.
+- Implement one human-confirmed Task from a formal
+  `spec-package-generator` package: `implement-spec-task`.
 - Build one observable behavior test-first: `tdd`.
 - Diagnose a hard bug or regression: `diagnosing-bugs`.
 - Review a change set against standards and a specification: `code-review`.

@@ -43,6 +43,8 @@ Final package stage:
 - `30-approved-feature-baseline.md`
 - `31-final-task-index.md`
 - `tasks/TASK-xxx.md`
+- `32-task-plan-review.md`
+- `manifests/TASK-xxx.execution.yaml`
 - `prompts/TASK-xxx.prompt.md`
 - `34-final-traceability-matrix.md`
 - `35-final-analysis-report.md`
@@ -57,7 +59,7 @@ Optional post-implementation convergence stage:
 - `verified-context-update.md`
 - `.ai-dev/context/project-context.md` only when verified convergence supports reusable project-context updates
 
-Do not generate full Gate 2 files until Gate 1 is confirmed, all in-scope existing systems are `verified` or explicitly accepted with inventory status `accepted-unverified`, all in-scope greenfield components are `confirmed-design`, and the Gate 2 solution sketch is confirmed or skipped with a reason. Do not generate final package files until the Gate 2 review is confirmed or the user explicitly says to proceed with assumptions.
+Do not generate full Gate 2 files until Gate 1 is confirmed, all in-scope existing systems are `verified` or explicitly accepted with inventory status `accepted-unverified`, all in-scope greenfield components are `confirmed-design`, and the Gate 2 solution sketch is confirmed or skipped with a reason. Do not generate Task planning files until the Gate 2 review is confirmed or the user explicitly says to proceed with assumptions. Do not generate execution Manifests or prompts until the Task Plan Gate is human-confirmed.
 
 ## `00-source-requirement.md`
 
@@ -264,17 +266,31 @@ Do not mix unrelated outcomes in one item. Do not split tightly coupled work by 
 
 Define the dependency DAG, parallel waves, exclusive ownership paths, shared contracts, integration seams, and integration owner. Only claim tasks can run in parallel when dependencies and ownership make concurrent work safe.
 
-This file is the Markdown source of truth for per-task review status across sessions. Include a task review status table with `not-started`, `in-progress`, `ready-for-review`, `accepted`, `blocked`, or `deferred`, plus reviewer/date, evidence link, blocked reason, deferred reason, dependency satisfaction, and eligible wave.
+This file is the Markdown source of truth for per-task review status across sessions. Include the complete executor lifecycle from `not-started` through preflight, implementation, review, acceptance, revision, and blocked states. Only a human may set `accepted`.
 
 ## `tasks/TASK-xxx.md`
 
 Define the scope, observable outcome or validated enabler, dependencies, parallel ownership, acceptance criteria, public validation seam, and completion evidence for one capability slice or justified enabler.
 
+## `32-task-plan-review.md`
+
+Record the Task Plan Gate. The human confirms each Task boundary, Shared
+Enabler, dependency, public test boundary, and expected review scope before
+execution-routing artifacts exist. Task-only corrections remain here; behavior
+gaps reopen Gate 1 and solution gaps reopen Gate 2.
+
+## `manifests/TASK-xxx.execution.yaml`
+
+Provide the only supported input to `implement-spec-task`. Bind exactly one
+formal Task to its human Task Plan approval, readiness result, SHA-256-pinned
+normative artifacts, accepted dependencies, allowed paths, Skill Plan,
+validation contract, evidence destinations, and freshness policy. Current
+project rules are re-read at Execution Preflight rather than digest-frozen.
+
 ## `prompts/TASK-xxx.prompt.md`
 
-Create ready-to-copy prompts for future implementation tasks.
-
-Each prompt must tell AI to implement only the selected item and complete its whole scoped capability outcome. It must not stop after only one technical layer when the task contract requires an end-to-end result.
+Create a ready-to-copy `$implement-spec-task <manifest-path>` invocation. Do
+not restate Task behavior or execution rules in this derived prompt.
 
 ## `34-final-traceability-matrix.md`
 
@@ -304,7 +320,9 @@ This file must not create a mandatory post-dashboard approval gate.
 
 ## `implementation-evidence.md`
 
-Collect implementation evidence used by optional post-implementation convergence, including changed files, test results, task completion status, and known deviations.
+Index append-only Task Execution Records and summarize current Task status for
+optional post-implementation convergence. Do not use it as the detailed mutable
+session log.
 
 ## `40-convergence-report.md`
 

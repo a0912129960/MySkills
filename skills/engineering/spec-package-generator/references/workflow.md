@@ -9,7 +9,9 @@ Use this reference as the workflow authority. The user should not need to choose
 - `00-spec-workflow-status.md` is the resume point.
 - `00-context-inventory.md` is the architecture evidence ledger.
 - `30-approved-feature-baseline.md` is the approved final-package index.
-- Derived files such as HTML dashboards and prompts never redefine the normative Markdown artifacts.
+- Task Execution Manifests own execution routing but never redefine normative
+  Task behavior. Derived files such as HTML dashboards and prompts never
+  redefine normative Markdown artifacts.
 
 ## Pipeline Overview
 
@@ -30,7 +32,9 @@ intake
   -> 19-gate2-solution-sketch.md + draft api-flow/cross-project diagrams when applicable or project mode is greenfield -> user confirms/revises the solution sketch
   -> Gate 2: 20-gate2-project-impact.md + 21-gate2-technical-design.md + 22-gate2-constitution-compliance.md + 24-gate2-test-strategy.md + proposed-context-update.md + 25-gate2-review.html + optional gate2-checklist.md + api-flow/cross-project diagrams
   -> Gate 2 confirmation
-  -> final package: 30-approved-feature-baseline.md + 31-final-task-index.md + tasks + prompts + 34-final-traceability-matrix.md + 35-final-analysis-report.md + 35a-final-readiness-result.md + 36-final-dashboard.html
+  -> task planning: 30-approved-feature-baseline.md + 31-final-task-index.md + tasks
+  -> Task Plan Gate: 32-task-plan-review.md -> user confirms/revises Task boundaries
+  -> execution package: one YAML Manifest + minimal implement-spec-task prompt per Task + traceability + analysis + readiness + dashboard
   -> optional post-implementation convergence after implementation evidence: implementation-evidence.md + 40-convergence-report.md + verified-context-update.md
 ```
 
@@ -167,7 +171,10 @@ Required behavior:
 - Include the Gate 2 review artifact path, diagram paths, and exact confirmation points in the chat response.
 - Stop before final AI development breakdown.
 
-Do not generate implementation prompts until the Gate 2 review is confirmed or the user explicitly says to proceed with assumptions.
+Do not generate Task files until the Gate 2 review is confirmed or the user
+explicitly says to proceed with assumptions. Do not generate execution
+Manifests or implementation prompts until the Task Plan Gate is
+human-confirmed.
 
 ## Gate Re-Open Rule
 
@@ -190,16 +197,36 @@ Required behavior:
 - Break the feature into human-reviewable vertical capability slices. Each feature task must produce one cohesive user- or system-observable outcome with an end-to-end validation route and leave the scoped system in a runnable state.
 - Keep the layers needed for that outcome in the same task unless a contract-frozen dependency or unavoidable enabler provides a safer boundary. Do not create separate database, backend, and frontend tasks solely because they touch different layers.
 - Use horizontal enabler tasks only for unavoidable bootstrap, contract, migration, or platform prerequisites. Name the capability slices they unlock and give the enabler its own concrete validation evidence.
-- Arrange tasks into dependency-aware parallel waves. Record exclusive modify paths, shared contracts, integration seams, and an integration owner before claiming tasks can run concurrently.
+- Arrange tasks into dependency-aware parallel waves as planning metadata.
+  Record exclusive modify paths, shared contracts, integration seams, and an
+  integration owner without executing multiple formal Tasks in one
+  first-version invocation.
 - For greenfield projects, make the first bootstrap task invoke `project-rules-init` with the user-confirmed Gate 2 architecture. Create any remaining project skeleton, package manager, test runner, linting, routing, database tooling, or app-shell bootstrap tasks before feature behavior tasks.
-- Create task input packages and ready-to-copy prompts.
+- Create `30-approved-feature-baseline.md`, `31-final-task-index.md`, and the
+  Task files first.
 - Add machine-checkable vertical-slice fields, dependency and parallel-wave fields, BDD coverage, EARS coverage, required Test IDs, validation mode, and validation contract rows to each task.
+- Create `32-task-plan-review.md`, present the Task Plan Gate, and stop. Require
+  the human to confirm each Reviewable Capability or Shared Enabler,
+  dependencies, public test boundary, and review scope.
+- Keep Task-only corrections in the Task Plan. Reopen Gate 1 for behavior gaps
+  and Gate 2 for solution gaps.
+- After confirmation, generate one YAML
+  `manifests/TASK-xxx.execution.yaml` per Task. Make the Manifest own loading,
+  dependency eligibility, allowed paths, Skill Plan, validation, evidence
+  destinations, and freshness. Digest-pin approved normative artifacts and
+  require current project rules to be re-read during Execution Preflight.
 - Implementation review and test handoff is distributed across `24-gate2-test-strategy.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, and `tasks/TASK-xxx.md`.
-- Prompts are per-task files generated from `tasks/TASK-xxx.md` using `templates/tdd-prompt.template.md`.
+- Prompts are per-task files generated from the Task Manifest using
+  `templates/tdd-prompt.template.md`. Each prompt contains only the
+  `$implement-spec-task <manifest-path>` invocation and must not duplicate the
+  execution contract.
 - Create `37-implementation-package-approval.md` only when the team explicitly requires a named approval record.
 - Create the standalone HTML dashboard with readiness result.
 - Treat `31-final-task-index.md` as the Markdown source of truth for per-task review status. The dashboard may store local status and export updates, but shared status must be reconciled back to Markdown.
-- The dashboard must show dependency eligibility and parallel waves. Each worker still copies one prompt, implements one task, and reports evidence, while non-overlapping eligible tasks may run concurrently.
+- The dashboard must show dependency eligibility and parallel waves. In the
+  first version, one invocation implements one formal Task, may coordinate
+  approved same-Task Work Units, and stops at human review without starting the
+  next Task.
 
 ## Optional Post-Implementation Convergence
 
@@ -214,17 +241,42 @@ Required behavior:
 - Update `.ai-dev/context/project-context.md` only after verified convergence.
 - Do not promote any `proposed-context-update.md` fact unless the convergence report links it to implementation evidence.
 
+## Spec Change Request Revision
+
+Run only after a human invokes
+`$spec-package-generator <feature-package-path> --revise-from <request-path>`.
+
+1. Read the Spec Change Request, linked code evidence, Partial Change State,
+   workflow status, stage manifest, and affected normative artifacts.
+2. Reopen the declared Return Level: Gate 1 for behavior, Gate 2 for solution
+   or validation design, or Task Plan Gate for Task boundary/task-only
+   validation.
+3. Never modify, revert, stage, or commit production code. The request may
+   reference either committed evidence or uncommitted review changes.
+4. Revise only affected specification content and mark every dependent
+   artifact stale according to invalidation rules.
+5. Ask the human to re-confirm the changed gate content.
+6. After confirmation, generate a new Task Execution Manifest version and
+   digests. Preserve old append-only Execution Records and do not resume
+   implementation automatically.
+
 ## One-Shot Mode
 
-One-shot mode is not the default. Use it only when the user explicitly requests a one-pass complete package or explicitly approves proceeding with assumptions.
+One-shot mode is not the default. Use it only when the user explicitly
+pre-approves proceeding through Gate 1 and Gate 2 with documented assumptions.
 
 Rules:
 
 - The context scan and existing architecture verification or greenfield design confirmation still run internally; project-context write-back happens only through optional post-implementation convergence when evidence supports it.
 - One-shot mode does not stop at Gate 1 or Gate 2 confirmation points. It is allowed only after the user explicitly requests one-pass generation or explicitly approves documented assumptions.
 - One-shot mode still creates `09-gate1-flow-sketch.md` and `19-gate2-solution-sketch.md` when applicable, but marks their human confirmation as pre-approved by the user's one-shot instruction and documented assumptions.
+- One-shot mode does not pre-approve or skip the Task Plan Gate. Stop after
+  generating the Task Plan and wait for human confirmation before Manifests,
+  prompts, readiness, or dashboard generation.
 - Ask at most 8 critical business clarification questions per round and at most 8 critical solution clarification questions per round if needed.
-- Generate the full package only after resolving high-impact ambiguity or documenting assumptions, with `UNVERIFIED` tags where the user accepted gaps.
+- Generate through the Task Plan only after resolving high-impact ambiguity or
+  documenting assumptions, with `UNVERIFIED` tags where the user accepted
+  gaps.
 - Keep generated development items cohesive and reviewable as vertical capability slices; preserve dependency-aware parallel waves.
 
 ## Stop Conditions

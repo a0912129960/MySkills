@@ -16,7 +16,9 @@ Use this reference when converting product behavior into precise requirements an
 - BDD scenarios should be independently testable.
 - Every critical EARS requirement must map to at least one BDD scenario unless explicitly marked `manual-only` or `not-scenario-suitable` with a reason.
 - Gate 2 must map relevant BDD scenarios to Test IDs.
-- Task prompts should request tests before implementation whenever behavior is testable.
+- Task Manifests must mark when TDD applies; `implement-spec-task` establishes
+  red-state evidence before implementation whenever behavior is testable
+  through a public seam.
 - Automated and semi-automated Test IDs require a Test Contract before a task can be marked TDD-ready.
 - TDD-ready automated or semi-automated tasks must define red-state evidence, pass criteria, green-state evidence, and fallback behavior when automation is not possible.
 - Manual validation tasks do not require red-state evidence, but they must define inspection points, pass criteria, evidence output, and user-visible completion evidence.

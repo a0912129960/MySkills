@@ -18,9 +18,11 @@ Use this reference when determining artifact order and stage ownership.
 6. Architecture grounding: existing verification or greenfield design confirmation
 7. Gate 2 solution sketch
 8. Gate 2
-9. Final package
-10. Readiness review
-11. Optional post-implementation convergence
+9. Task planning
+10. Task Plan Gate
+11. Execution artifacts
+12. Readiness review
+13. Optional post-implementation convergence
 
 ## Manifest Requirements
 
@@ -35,6 +37,8 @@ The stage manifest should record:
 - Stale artifact relationships
 - Whether `09-gate1-flow-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
 - Whether `19-gate2-solution-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
+- Whether `32-task-plan-review.md` is pending, human-confirmed, or returned for
+  revision, and which Task IDs are confirmed.
 - Resume instructions
 
 ## Resume Rule

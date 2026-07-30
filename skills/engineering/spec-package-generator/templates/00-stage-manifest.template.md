@@ -2,7 +2,7 @@
 artifactId: 00-stage-manifest
 stage: intake
 status: template
-version: 1
+version: 2
 dependsOn: []
 invalidates: []
 summary: Stage manifest template that defines optimized artifact order.
@@ -40,6 +40,14 @@ openQuestions: []
 - Artifact: `19-gate2-solution-sketch.md`
 - Draft API diagram: `diagrams/api-flow.mmd`
 - Draft cross-project diagram: `diagrams/cross-project-flow.mmd`
+
+## Task Plan Gate Status
+
+- Status: not-started / drafted / waiting-for-user / human-confirmed / revision-requested / superseded
+- Artifact: `32-task-plan-review.md`
+- Confirmed Task IDs:
+- Tasks returned for re-slicing:
+- Gate reopened:
 
 ## Artifact Ownership
 

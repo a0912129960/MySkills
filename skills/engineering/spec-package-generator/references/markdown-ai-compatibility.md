@@ -26,16 +26,18 @@ Provide files in this order:
 14. `gate1-checklist.md`, if present
 15. `gate2-checklist.md`, if present
 16. `31-final-task-index.md`
-17. `34-final-traceability-matrix.md`
-18. `35-final-analysis-report.md`
-19. `35a-final-readiness-result.md`
-20. `36-final-dashboard.html`
-21. `37-implementation-package-approval.md`, if present
-22. `implementation-evidence.md`, if present
-23. `tasks/TASK-xxx.md`
-24. `prompts/TASK-xxx.prompt.md`
-25. `.ai-dev/context/constitution.md`, if present
-26. `.ai-dev/context/project-context.md`, if present
+17. `tasks/TASK-xxx.md`
+18. `32-task-plan-review.md`
+19. `manifests/TASK-xxx.execution.yaml`
+20. `34-final-traceability-matrix.md`
+21. `35-final-analysis-report.md`
+22. `35a-final-readiness-result.md`
+23. `36-final-dashboard.html`
+24. `37-implementation-package-approval.md`, if present
+25. `implementation-evidence.md`, if present
+26. `prompts/TASK-xxx.prompt.md`
+27. `.ai-dev/context/constitution.md`, if present
+28. `.ai-dev/context/project-context.md`, if present
 
 For Gate 1 business review, provide:
 
@@ -72,21 +74,15 @@ SVG files are for visual review. Markdown and `.mmd` files remain the AI-readabl
 
 ## Prompting Other AI
 
-Tell the AI:
-
-- Which item to implement.
-- Which files to read first.
-- Which paths are allowed to modify.
-- Which paths are read-only references.
-- To implement only the selected item.
-- To avoid unrelated refactoring.
-- To stop if contracts or high-impact requirements are unclear.
-- To follow the task's TDD and validation section.
+Give the AI the generated
+`$implement-spec-task <manifest-path>` invocation. Do not copy Task rules into a
+second prompt; the executor loads the Task and routing contract from the
+Manifest.
 
 ## Formatting Guidance
 
 - Use stable headings.
 - Use tables for summaries.
 - Use bullet lists for scope, paths, assumptions, and risks.
-- Keep prompts copyable as plain Markdown.
+- Keep Manifest-backed executor invocations copyable as plain Markdown.
 - Avoid putting key instructions only in images or HTML.

@@ -14,6 +14,7 @@
     "./skills/engineering/domain-modeling",
     "./skills/engineering/grill-with-docs",
     "./skills/engineering/implement",
+    "./skills/engineering/implement-spec-task",
     "./skills/engineering/improve-codebase-architecture",
     "./skills/engineering/prototype",
     "./skills/engineering/skill-evaluator",

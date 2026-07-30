@@ -53,6 +53,7 @@ class ManagedWorkflowContractTests(unittest.TestCase):
                 "grill-with-docs",
                 "grilling",
                 "implement",
+                "implement-spec-task",
                 "improve-codebase-architecture",
                 "prototype",
                 "session-checkpoint",

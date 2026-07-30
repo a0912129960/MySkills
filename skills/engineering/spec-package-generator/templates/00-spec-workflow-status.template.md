@@ -2,7 +2,7 @@
 artifactId: 00-spec-workflow-status
 stage: intake
 status: template
-version: 1
+version: 2
 dependsOn: []
 invalidates: []
 summary: Resumable workflow status template.
@@ -37,6 +37,9 @@ openQuestions: []
 - [ ] Gate 2 solution sketch confirmed or skipped as trivial
 - [ ] Gate 2 artifacts drafted
 - [ ] Gate 2 confirmed
+- [ ] Task Plan drafted
+- [ ] Task Plan Gate human-confirmed
+- [ ] Task Execution Manifests generated
 - [ ] Final package generated
 - [ ] Implementation evidence collected
 - [ ] Convergence complete
@@ -65,6 +68,14 @@ openQuestions: []
 - Draft API-flow diagram:
 - Draft cross-project-flow diagram:
 - Human correction notes:
+
+## Task Plan Gate
+
+- Status: not-started / drafted / waiting-for-user / human-confirmed / revision-requested / superseded
+- Review file:
+- Confirmed Task IDs:
+- Tasks returned for re-slicing:
+- Reopened gate:
 
 ## Context Gaps
 

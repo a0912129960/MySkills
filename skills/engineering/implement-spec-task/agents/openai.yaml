@@ -1,0 +1,6 @@
+interface:
+  display_name: "Implement Spec Task"
+  short_description: "Execute one approved spec-package Task and stop for human review"
+  default_prompt: "Use $implement-spec-task <manifest-path> to execute exactly one approved Task."
+policy:
+  allow_implicit_invocation: false

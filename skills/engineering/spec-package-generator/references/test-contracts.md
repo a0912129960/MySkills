@@ -218,7 +218,8 @@ REGRESSION:
   - SOLID, KISS, YAGNI, TDD, minimal change, security, data integrity, compatibility, and completion evidence sections exist.
   - The template describes implementation rules, not feature workflow policy.
 - Expected red-state failure: Implementation rules appear only in `SKILL.md` and not in the constitution template.
-- Pass criteria: Future implementation prompts can load effective constitution rules from context artifacts.
+- Pass criteria: Future Task execution can load effective constitution rules
+  from current project sources and referenced context artifacts.
 - Evidence output: Checklist result.
 - Automation: semi-automated
 - Owner: spec-package-generator maintainer
@@ -231,11 +232,13 @@ REGRESSION:
 - Requirement references: REQ-012, DEC-008
 - Artifact references: `references/context-window-management.md`
 - Inputs: Context-window reference.
-- Fixture: Resume workflow with status, manifest, baseline, and task prompt available.
+- Fixture: Resume workflow with status, stage manifest, baseline, and Task
+  Execution Manifest available.
 - Files inspected: `references/context-window-management.md`
 - Execution method: Static policy review.
 - Assertions:
-  - Status, manifest, summaries, approved baseline, and task-scoped prompts are preferred over full-package reads.
+  - Status, stage manifest, summaries, approved baseline, and the selected Task
+    Execution Manifest are preferred over full-package reads.
   - Escalation to full context is limited to stale, missing, or conflicting artifacts.
 - Expected red-state failure: Reference instructs the AI to read every artifact by default.
 - Pass criteria: Read policy is bounded and stage-aware.
@@ -290,14 +293,17 @@ REGRESSION:
 - Purpose: Verify the dashboard is directly usable after readiness passes.
 - Requirement references: REQ-009
 - Artifact references: `templates/36-final-dashboard.template.html`
-- Inputs: Final dashboard template, task files, prompt files, readiness result.
-- Fixture: Package with two ordered tasks and two prompts.
-- Files inspected: Dashboard template and final task/prompt artifacts.
+- Inputs: Final dashboard template, Task files, Task Plan approval, Execution
+  Manifests, prompt files, and readiness result.
+- Fixture: Package with two ordered Tasks, two Manifests, and two minimal
+  executor prompts.
+- Files inspected: Dashboard template and final Task/Manifest/prompt artifacts.
 - Execution method: Static HTML and manual interaction review.
 - Assertions:
   - Dashboard shows readiness status.
   - Dashboard lists task order.
-  - Each task card has scope, handoff details, prompt textarea, and Copy Prompt button.
+  - Each Task card has scope, handoff details, Manifest-backed executor
+    invocation, and Copy Prompt button.
   - Dashboard has no mandatory post-dashboard approval gate.
 - Expected red-state failure: Dashboard contains summaries but no prompt copy surface.
 - Pass criteria: User can start TASK-001 from the dashboard.
@@ -333,15 +339,20 @@ REGRESSION:
 - Title: Implementation constitution scope
 - Purpose: Verify implementation rules come from effective project constitution artifacts.
 - Requirement references: REQ-005, DEC-006
-- Artifact references: `templates/implementation-constitution.template.md`, `templates/tdd-prompt.template.md`
-- Inputs: Effective constitution and task prompt.
-- Fixture: Task prompt generated after constitution approval.
-- Files inspected: Constitution template and prompt template.
-- Execution method: Prompt scope assertion.
+- Artifact references: `templates/implementation-constitution.template.md`,
+  `templates/task-execution-manifest.template.yaml`,
+  `templates/tdd-prompt.template.md`
+- Inputs: Effective constitution, Task Manifest, and executor prompt.
+- Fixture: Manifest generated after constitution and Task Plan approval.
+- Files inspected: Constitution, Manifest, and prompt templates.
+- Execution method: Authority and execution-routing assertion.
 - Assertions:
-  - Prompts reference effective implementation constitution when implementation rules are needed.
-  - `SKILL.md` remains workflow-level and does not become the implementation-rule SSOT.
-- Expected red-state failure: Prompt includes SOLID/TDD rules without referencing project constitution.
+  - The Manifest requires current project-rule sources to be re-read during
+    Execution Preflight.
+  - The prompt contains only the executor invocation and cannot become the
+    implementation-rule source of truth.
+- Expected red-state failure: Prompt copies SOLID/TDD rules or the Manifest
+  omits current project-rule reread.
 - Pass criteria: Implementation rules are sourced from the effective constitution artifact.
 - Evidence output: Prompt validation note.
 - Automation: semi-automated
@@ -354,13 +365,15 @@ REGRESSION:
 - Purpose: Verify resume and implementation flows use bounded context.
 - Requirement references: REQ-012, DEC-008
 - Artifact references: `references/context-window-management.md`, `templates/tdd-prompt.template.md`
-- Inputs: Status file, manifest, approved baseline, task contract, prompt template.
+- Inputs: Status file, stage manifest, approved baseline, Task contract,
+  Execution Manifest, and prompt template.
 - Fixture: Final package with multiple tasks.
 - Files inspected: Context-window reference and prompt template.
 - Execution method: Read-scope assertion.
 - Assertions:
   - Resume reads status and manifest before broad artifact inspection.
-  - Implementation prompts read task-scoped inputs instead of full packages by default.
+  - The executor loads task-scoped inputs through the selected Manifest instead
+    of reading the full package by default.
   - Full-context reads are reserved for conflicts, stale artifacts, or explicit request.
 - Expected red-state failure: Prompt instructs AI to read all generated artifacts for every task.
 - Pass criteria: Read scope is bounded and justified.
@@ -374,17 +387,26 @@ REGRESSION:
 - Title: Vertical capability slices and safe parallel waves
 - Purpose: Verify final tasks deliver independently demonstrable outcomes and claimed parallel work has safe dependency and ownership contracts.
 - Requirement references: `references/traceability-and-tasking.md`
-- Artifact references: `templates/task.template.md`, `templates/31-final-task-index.template.md`, `templates/tdd-prompt.template.md`, `templates/35a-final-readiness-result.template.md`
-- Inputs: Final task index, two capability tasks, one optional enabler, and derived prompts.
+- Artifact references: `templates/task.template.md`,
+  `templates/31-final-task-index.template.md`,
+  `templates/32-task-plan-review.template.md`,
+  `templates/task-execution-manifest.template.yaml`,
+  `templates/tdd-prompt.template.md`,
+  `templates/35a-final-readiness-result.template.md`
+- Inputs: Final Task index, two capability Tasks, one optional enabler, Task
+  Plan decision, Manifests, and derived prompts.
 - Fixture: A feature that crosses UI, API, and persistence layers and has two non-overlapping acceptance scenarios.
-- Files inspected: Tasking reference and final task, prompt, index, and readiness templates.
+- Files inspected: Tasking reference and final Task, Task Plan, Manifest,
+  prompt, index, and readiness templates.
 - Execution method: Required-field and task-boundary review.
 - Assertions:
   - Each feature task names one cohesive user- or system-observable outcome, a public validation seam, a demo route, and a runnable completion state.
   - Required layers stay in the same capability slice unless a validated enabler or frozen dependency justifies separation.
   - Enablers name the capability tasks they unlock.
   - Parallel tasks record satisfied dependencies, exclusive ownership paths or a frozen shared contract, an integration seam, and an integration owner.
-  - Prompts require completion evidence for the whole slice and allow other workers to run independent eligible tasks.
+  - The Task Plan Gate requires human confirmation before Manifests exist.
+  - Each Manifest selects one formal Task; same-Task Work Units are deferred to
+    Execution Preflight.
 - Expected red-state failure: Tasks are split into database, API, and UI layers that cannot be demonstrated independently, or two tasks claim the same parallel wave with unresolved path ownership.
 - Pass criteria: Every task is an independently reviewable capability slice or justified enabler, and every claimed parallel wave has a safe coordination contract.
 - Evidence output: Static contract checklist and generated-package review note.

@@ -48,12 +48,12 @@
   "summary": {
     "states": {
       "pending": 0,
-      "managed": 42,
+      "managed": 43,
       "deferred": 0,
       "excluded": 50
     },
     "categories": {
-      "engineering": 32,
+      "engineering": 33,
       "productivity": 15,
       "personal": 0,
       "wiki": 38,
@@ -63,6 +63,8 @@
   },
   "skills": [
     {"id": "myskills/ai-handoff", "source_name": "ai-handoff", "managed_name": "ai-handoff", "origin": "myskills", "source_path": "skills/productivity/ai-handoff", "category": "productivity", "state": "managed",
+      "imported_on": "2026-07-24", "owner": "MySkills", "invocation": "explicit", "install_targets": ["codex", "claude-code", "antigravity-cli"]},
+    {"id": "myskills/implement-spec-task", "source_name": "implement-spec-task", "managed_name": "implement-spec-task", "origin": "myskills", "source_path": "skills/engineering/implement-spec-task", "category": "engineering", "state": "managed",
       "imported_on": "2026-07-24", "owner": "MySkills", "invocation": "explicit", "install_targets": ["codex", "claude-code", "antigravity-cli"]},
     {"id": "spec-package-generator/spec-package-generator", "source_name": "spec-package-generator", "managed_name": "spec-package-generator", "origin": "spec-package-generator", "source_path": "skills/spec-package-generator", "category": "engineering", "state": "managed",
       "imported_on": "2026-07-24", "owner": "MySkills", "invocation": "implicit", "install_targets": ["codex", "claude-code", "antigravity-cli"]},

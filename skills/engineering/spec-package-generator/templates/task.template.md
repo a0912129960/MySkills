@@ -2,12 +2,16 @@
 artifactId: task
 stage: final
 status: template
-version: 2
+version: 3
 dependsOn:
   - 31-final-task-index.template.md
   - 30-approved-feature-baseline.template.md
 invalidates:
+  - 32-task-plan-review.template.md
+  - task-execution-manifest.template.yaml
   - tdd-prompt.template.md
+  - 34-final-traceability-matrix.template.md
+  - 35a-final-readiness-result.template.md
 summary: Human-reviewable vertical capability-slice task contract template.
 keyDecisions: []
 openQuestions: []
@@ -60,6 +64,19 @@ File and layer estimates are planning signals, not automatic split gates. Keep t
 - Integration owner:
 - Merge or release order:
 - Conflict-avoidance notes:
+
+These fields describe likely seams between formal Tasks. Do not predefine
+runtime Task Work Units here; `implement-spec-task` proposes those from current
+code during Execution Preflight.
+
+## Execution Contract
+
+- Task Plan Gate decision: pending / human-confirmed / revision-requested
+- Task Execution Manifest: `manifests/TASK-xxx.execution.yaml`
+- Formal Task count for one executor invocation: 1
+- Expected review boundary:
+- Normative artifacts to digest-pin:
+- Current project-rule sources to re-read:
 
 ## In Scope
 
@@ -135,4 +152,4 @@ Acceptance criteria must prove the complete scoped capability outcome, not only 
 - What visible behavior proves this task is complete:
 - Integration handoff:
 - What must be true before starting dependent tasks:
-- Review status: not-started / in-progress / ready-for-review / accepted / blocked / deferred
+- Review status: not-started / awaiting-preflight-approval / in-progress / ready-for-review / changes-requested / accepted / re-slice-required / spec-revision-required / blocked / deferred

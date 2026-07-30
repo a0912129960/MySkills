@@ -56,6 +56,56 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("Do not create a branch, commit, stage, push", workflow)
         self.assertIn("`code-review`", workflow)
 
+    def test_formal_spec_task_executor_is_fail_closed_and_human_gated(
+        self,
+    ) -> None:
+        package = ENGINEERING / "implement-spec-task"
+        workflow = read(package / "SKILL.md")
+        execution = read(package / "references" / "execution-contract.md")
+
+        for required in (
+            "Task Execution Manifest",
+            "Execution Preflight",
+            "one formal Task",
+            "awaiting-preflight-approval",
+            "ready-for-review",
+            "changes-requested",
+            "accepted",
+            "Spec Change Request",
+            "Execution Record",
+            "append-only",
+            "Do not start the next Task",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, f"{workflow}\n{execution}")
+
+        self.assertIn("fail closed", workflow.lower())
+        self.assertIn("Only the human", execution)
+        self.assertIn("Do not create a branch, worktree, commit, stage, push", execution)
+
+    def test_formal_spec_task_executor_controls_same_task_subagents(
+        self,
+    ) -> None:
+        package = ENGINEERING / "implement-spec-task"
+        execution = read(package / "references" / "execution-contract.md")
+        work_unit = read(package / "templates" / "work-unit-brief.template.md")
+
+        for required in (
+            "Task Coordinator",
+            "Task Test Owner",
+            "Task Work Unit",
+            "Work Unit Brief",
+            "exclusive write",
+            "shared files",
+            "read-only",
+            "Integrated Task Validation",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required.lower(), f"{execution}\n{work_unit}".lower())
+
+        self.assertIn("same workspace", execution)
+        self.assertIn("must not interpret the full specification package", work_unit)
+
     def test_code_review_preserves_both_axes_and_smell_baseline(self) -> None:
         workflow = read(ENGINEERING / "code-review" / "SKILL.md")
         baseline = read(
@@ -126,18 +176,20 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
     def test_spec_tasks_re_read_project_rules_and_conditionally_load_design(
         self,
     ) -> None:
-        prompt = read(
+        executor = read(ENGINEERING / "implement-spec-task" / "SKILL.md")
+        manifest = read(
             ENGINEERING
             / "spec-package-generator"
             / "templates"
-            / "tdd-prompt.template.md"
+            / "task-execution-manifest.template.yaml"
         )
-        self.assertIn("AGENTS.md", prompt)
-        self.assertIn("CLAUDE.md", prompt)
-        self.assertIn("PROJECT_RULES.md", prompt)
-        self.assertIn("codebase-design", prompt)
-        self.assertIn("interface", prompt)
-        self.assertIn("seam", prompt)
+        combined = f"{executor}\n{manifest}"
+        self.assertIn("AGENTS.md", combined)
+        self.assertIn("CLAUDE.md", combined)
+        self.assertIn("PROJECT_RULES.md", combined)
+        self.assertIn("codebase-design", combined)
+        self.assertIn("interface", combined)
+        self.assertIn("seam", combined)
 
     def test_greenfield_package_bootstraps_confirmed_project_rules(self) -> None:
         skill = read(ENGINEERING / "spec-package-generator" / "SKILL.md")
@@ -181,11 +233,15 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertNotIn("roughly 3-5 likely files", tasking)
         self.assertNotIn("one screen, one API", tasking)
 
-    def test_spec_tasks_support_safe_parallel_waves(self) -> None:
+    def test_spec_tasks_plan_parallel_waves_but_execute_one_formal_task(
+        self,
+    ) -> None:
         package = ENGINEERING / "spec-package-generator"
         task = read(package / "templates" / "task.template.md")
         index = read(package / "templates" / "31-final-task-index.template.md")
-        prompt = read(package / "templates" / "tdd-prompt.template.md")
+        manifest = read(
+            package / "templates" / "task-execution-manifest.template.yaml"
+        )
 
         for required in (
             "Parallel wave",
@@ -195,7 +251,8 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, f"{task}\n{index}")
-        self.assertIn("Other workers may continue independent eligible tasks", prompt)
+        self.assertIn("formal_task_limit: 1", manifest)
+        self.assertIn("same_task_subagents_allowed: true", manifest)
 
     def test_spec_uses_grill_me_only_as_an_explicit_pause(self) -> None:
         governance = read(
@@ -207,6 +264,89 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("Do not invoke `grill-me` automatically", governance)
         self.assertIn("Ask one decision question at a time", governance)
         self.assertIn("Do not apply the plan during the grilling phase", governance)
+
+    def test_spec_package_requires_task_plan_gate_and_execution_manifests(
+        self,
+    ) -> None:
+        package = ENGINEERING / "spec-package-generator"
+        workflow = read(package / "references" / "workflow.md")
+        manifest = read(
+            package / "templates" / "task-execution-manifest.template.yaml"
+        )
+        task_plan = read(
+            package / "templates" / "32-task-plan-review.template.md"
+        )
+        prompt = read(package / "templates" / "tdd-prompt.template.md")
+
+        self.assertIn("Task Plan Gate", workflow)
+        self.assertIn("Task Plan Gate", task_plan)
+        self.assertIn("human-confirmed", task_plan)
+        for required in (
+            "task_id:",
+            "artifact_digests:",
+            "dependencies:",
+            "allowed_production_paths:",
+            "skill_plan:",
+            "validation:",
+            "evidence:",
+            "freshness:",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, manifest)
+
+        self.assertIn("$implement-spec-task <manifest-path>", prompt)
+        self.assertNotIn("## Before Coding", prompt)
+        self.assertNotIn("## After Coding", prompt)
+        self.assertIn('path: "32-task-plan-review.md"', manifest)
+        self.assertNotIn('path: "35a-final-readiness-result.md"\n      sha256:', manifest)
+        self.assertIn("only_human_accepted_unblocks: true", manifest)
+        self.assertNotIn("safe_deferrals:", manifest)
+        self.assertIn("status_only_mutations:", manifest)
+
+    def test_one_shot_never_bypasses_the_task_plan_gate(self) -> None:
+        workflow = read(
+            ENGINEERING
+            / "spec-package-generator"
+            / "references"
+            / "workflow.md"
+        )
+        self.assertIn(
+            "One-shot mode does not pre-approve or skip the Task Plan Gate",
+            workflow,
+        )
+        self.assertIn(
+            "wait for human confirmation before Manifests",
+            workflow,
+        )
+
+    def test_spec_revision_handoff_is_explicit_and_evidence_backed(self) -> None:
+        package = ENGINEERING / "implement-spec-task"
+        request = read(
+            package / "templates" / "spec-change-request.template.md"
+        )
+        for required in (
+            "Task ID",
+            "Code Evidence",
+            "Classification",
+            "Return Level",
+            "Affected Normative Artifacts",
+            "Partial Change State",
+            "$spec-package-generator",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, request)
+
+        generator = read(ENGINEERING / "spec-package-generator" / "SKILL.md")
+        self.assertIn(
+            "$spec-package-generator <feature-package-path> --revise-from <request-path>",
+            generator,
+        )
+        self.assertIn("reopen Gate 1", generator)
+        self.assertIn("reopen Gate 2", generator)
+        self.assertIn("return to the Task Plan Gate", generator)
+        self.assertIn("already committed or", generator)
+        self.assertIn("remain uncommitted", generator)
+        self.assertIn("Manifest version with new digests", generator)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 artifactId: 35a-final-readiness-result
 stage: final
 status: template
-version: 2
+version: 3
 dependsOn:
   - 34-final-traceability-matrix.template.md
   - 35-final-analysis-report.template.md
@@ -28,6 +28,11 @@ Pass / Fail:
 
 ## Approval
 
+## Validated Manifest Digests
+
+| Task ID | Manifest Path | SHA-256 | Validation Result |
+|---|---|---|---|
+
 ## Required Readiness Checks
 
 | Check | Result | Evidence Artifact | Notes |
@@ -42,8 +47,11 @@ Pass / Fail:
 | Feature tasks are compliant vertical capability slices and enablers are justified |  | `31-final-task-index.md`, `tasks/TASK-xxx.md` |  |
 | Every task has an executable validation or inspection route and independently reviewable evidence |  | `tasks/TASK-xxx.md`, `24-gate2-test-strategy.md` |  |
 | Dependency waves, ownership paths, shared contracts, and integration owners make claimed parallelism safe |  | `31-final-task-index.md`, `tasks/TASK-xxx.md` |  |
-| Task prompts are derived from task contracts and include BDD/Test ID/validation instructions |  | `prompts/TASK-xxx.prompt.md` |  |
-| Dashboard source inputs are ready for rendering |  | `30-approved-feature-baseline.md`, `31-final-task-index.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, `tasks/TASK-xxx.md`, `prompts/TASK-xxx.prompt.md` | Dashboard validation happens after this readiness result and must not be a prerequisite for readiness itself. |
+| Task Plan Gate is human-confirmed for every Manifest |  | `32-task-plan-review.md` |  |
+| Every Manifest selects one Task and has current digests, eligible dependencies, scope, Skill Plan, validation, evidence, and freshness |  | `manifests/TASK-xxx.execution.yaml` |  |
+| Readiness records the current SHA-256 digest of every validated Manifest |  | `manifests/TASK-xxx.execution.yaml` | Avoid a circular Manifest-to-readiness digest. |
+| Task prompts contain only the Manifest-backed executor invocation |  | `prompts/TASK-xxx.prompt.md` |  |
+| Dashboard source inputs are ready for rendering |  | `30-approved-feature-baseline.md`, `31-final-task-index.md`, `32-task-plan-review.md`, `34-final-traceability-matrix.md`, `35-final-analysis-report.md`, `35a-final-readiness-result.md`, `tasks/TASK-xxx.md`, `manifests/TASK-xxx.execution.yaml`, `prompts/TASK-xxx.prompt.md` | Dashboard validation happens after this readiness result and must not be a prerequisite for readiness itself. |
 
 ## Hard Fail Rules
 
@@ -56,4 +64,10 @@ Pass / Fail:
 - Fail when a feature task lacks a cohesive user- or system-observable outcome, end-to-end validation route, or runnable completion state.
 - Fail when a horizontal enabler lacks a concrete validated deliverable, exception justification, or named capability tasks that it unlocks.
 - Fail when tasks claimed to run in parallel have unresolved dependencies, unsafe ownership overlap, an unfrozen required shared contract, or no integration owner.
-- Fail when a task prompt omits required BDD scenarios, Test IDs, validation mode, or validation evidence instructions.
+- Fail when a generated Manifest lacks human Task Plan confirmation, selects
+  more than one formal Task, has an ineligible dependency, omits required
+  execution-routing fields, or has a stale normative artifact digest.
+- Fail when this readiness result does not record and validate the current
+  SHA-256 digest of every Task Execution Manifest.
+- Fail when a prompt restates behavior or execution rules instead of containing
+  only `$implement-spec-task <manifest-path>` and path substitution guidance.

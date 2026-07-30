@@ -22,7 +22,7 @@ class RepositoryContractTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Validated 42 Managed Skill(s)", result.stdout)
+        self.assertIn("Validated 43 Managed Skill(s)", result.stdout)
 
     def test_evaluation_gate_is_available_only_when_explicitly_requested(
         self,
@@ -41,7 +41,7 @@ class RepositoryContractTests(unittest.TestCase):
             result.stderr.count(
                 "missing passing current-digest release pointer"
             ),
-            42,
+            43,
         )
 
 

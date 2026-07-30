@@ -25,7 +25,7 @@ Gate 2 reads the verified context sources or confirmed greenfield design entries
 
 ## Final Package Reads
 
-For final task and prompt generation, prefer:
+For Task planning, prefer:
 
 - `30-approved-feature-baseline.md`
 - `31-final-task-index.md`
@@ -33,19 +33,16 @@ For final task and prompt generation, prefer:
 - effective constitution/context artifacts explicitly referenced by that task
 - exact PRD/EARS/BDD/design sections needed for that task
 
-Avoid rereading every generated artifact for every task unless traceability, readiness, stale artifacts, or contradictions require it.
+After the Task Plan Gate is human-confirmed, generate a Task-scoped Manifest
+with exact artifact paths and digests so the executor can load only what the
+selected Task requires.
 
 ## Prompt Scope
 
-Generated prompts must be task scoped:
-
-- Implement only the selected task.
-- Do not implement future tasks.
-- Do not modify read-only paths.
-- Do not refactor unrelated code.
-- Follow the approved baseline, task contract, technical design, and test strategy.
-
-Prompt files are derived execution entries. They must not redefine task scope or source-of-truth behavior.
+Generated prompts contain only `$implement-spec-task <manifest-path>` and path
+substitution guidance. The Manifest is the bounded execution interface; it
+routes the exact Task, normative inputs, current-rule reread, dependencies,
+paths, Skills, validation, and evidence without copying their content.
 
 ## Escalation To Broader Reads
 

@@ -2,7 +2,7 @@
 
 Use this reference before generating `36-final-dashboard.html`.
 
-Start from `templates/36-final-dashboard.template.html`: keep its embedded CSS and JavaScript layout and fill in the placeholders for header metadata, readiness, dependency and parallel waves, task scope, capability outcome, ownership, task handoff details, traceability, risks, and copyable prompts.
+Start from `templates/36-final-dashboard.template.html`: keep its embedded CSS and JavaScript layout and fill in the placeholders for header metadata, readiness, Task Plan approval, Manifest path, dependency and parallel waves, task scope, capability outcome, ownership, task handoff details, traceability, risks, and copyable executor invocations.
 
 Dashboard validation happens after `35a-final-readiness-result.md` and must not be a prerequisite for readiness itself. The readiness result verifies that dashboard source inputs are ready to render; the rendered dashboard then displays that persisted readiness result.
 
@@ -16,7 +16,7 @@ The dashboard must:
 - Avoid external CDN and network dependencies.
 - Open directly in a browser from the filesystem.
 - Show all AI development items.
-- Include copyable prompts.
+- Include copyable `$implement-spec-task <manifest-path>` invocations.
 - Surface the readiness result from `35a-final-readiness-result.md`.
 
 ## Required Sections
@@ -30,9 +30,13 @@ The dashboard must:
 - BDD scenario coverage for each item
 - Validation mode and required Test IDs for each item
 - Evidence requirements, including red-state and green-state evidence when applicable, and manual inspection evidence for manual Test IDs
-- Per-task review status controls: `not-started`, `in-progress`, `ready-for-review`, `accepted`, `blocked`, and `deferred`
+- Per-task review status controls for `not-started`,
+  `awaiting-preflight-approval`, `in-progress`, `ready-for-review`,
+  `changes-requested`, `accepted`, `re-slice-required`,
+  `spec-revision-required`, `blocked`, and `deferred`
 - Local persistence for per-task review status using `localStorage`, keyed by feature name and task ID
-- A visible task status summary showing accepted, blocked, ready-for-review, in-progress, not-started, deferred, and remaining counts
+- A visible task status summary covering every lifecycle state plus remaining
+  count
 - An export control that produces Markdown status rows suitable for `31-final-task-index.md` or implementation evidence
 - Acceptance criteria
 - Suggested test cases
@@ -49,10 +53,12 @@ Use the Markdown files as the source of truth:
 
 - `30-approved-feature-baseline.md`
 - `31-final-task-index.md`
+- `32-task-plan-review.md`
 - `34-final-traceability-matrix.md`
 - `35-final-analysis-report.md`
 - `35a-final-readiness-result.md`
 - `tasks/TASK-xxx.md`
+- `manifests/TASK-xxx.execution.yaml`
 - `prompts/TASK-xxx.prompt.md`
 
 Do not make the dashboard the only place where important instructions exist.
@@ -65,12 +71,12 @@ Task handoff details such as input files, allowed paths, read-only references, c
 
 The dashboard should make the dependency-aware loop obvious:
 
-1. Select a task whose dependencies are satisfied.
-2. Copy one prompt per worker and run implementation for that task only.
-3. Run non-overlapping tasks in the same wave concurrently when ownership and shared contracts make it safe.
-4. Review each task's capability evidence and handoff criteria independently.
-5. Set each task status to `accepted`, `blocked`, or `deferred`.
-6. Continue to a dependent wave only after its prerequisites meet the recorded eligibility rule.
+1. Select one Task whose dependencies are human-accepted.
+2. Copy its Manifest-backed executor invocation.
+3. Approve Execution Preflight before production edits; same-Task Work Units
+   may then run within exclusive ownership.
+4. Review integrated capability evidence after `ready-for-review`.
+5. Only the human sets `accepted`; do not start the next Task automatically.
 
 ## HTML Boundaries
 

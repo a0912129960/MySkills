@@ -141,7 +141,11 @@
         <div><span class="label">Accepted</span><output data-status-count="accepted">0</output></div>
         <div><span class="label">Blocked</span><output data-status-count="blocked">0</output></div>
         <div><span class="label">Ready</span><output data-status-count="ready-for-review">0</output></div>
+        <div><span class="label">Awaiting Preflight</span><output data-status-count="awaiting-preflight-approval">0</output></div>
         <div><span class="label">In Progress</span><output data-status-count="in-progress">0</output></div>
+        <div><span class="label">Changes Requested</span><output data-status-count="changes-requested">0</output></div>
+        <div><span class="label">Re-slice Required</span><output data-status-count="re-slice-required">0</output></div>
+        <div><span class="label">Spec Revision Required</span><output data-status-count="spec-revision-required">0</output></div>
         <div><span class="label">Not Started</span><output data-status-count="not-started">0</output></div>
         <div><span class="label">Deferred</span><output data-status-count="deferred">0</output></div>
         <div><span class="label">Remaining</span><output data-status-count="remaining">0</output></div>
@@ -159,9 +163,13 @@
               <p class="label">Review Status</p>
               <select aria-label="Review status for {{TASK_ID}}" data-task-id="{{TASK_ID}}" data-task-title="{{TASK_TITLE}}">
                 <option>not-started</option>
+                <option>awaiting-preflight-approval</option>
                 <option>in-progress</option>
                 <option>ready-for-review</option>
+                <option>changes-requested</option>
                 <option>accepted</option>
+                <option>re-slice-required</option>
+                <option>spec-revision-required</option>
                 <option>blocked</option>
                 <option>deferred</option>
               </select>
@@ -290,7 +298,11 @@
         accepted: 0,
         blocked: 0,
         'ready-for-review': 0,
+        'awaiting-preflight-approval': 0,
         'in-progress': 0,
+        'changes-requested': 0,
+        're-slice-required': 0,
+        'spec-revision-required': 0,
         'not-started': 0,
         deferred: 0
       };
@@ -317,11 +329,11 @@
         ``,
         `Copy these rows back into 31-final-task-index.md or use them as implementation-evidence.md status input.`,
         ``,
-        `| Task ID | Status | Reviewer | Review Date | Evidence Link | Blocked Reason | Deferred Reason | Dependencies Satisfied? | Eligible Wave? |`,
-        `|---|---|---|---|---|---|---|---|---|`
+        `| Task ID | Status | Reviewer | Review Date | Manifest | Evidence Link | Blocked / Revision Reason | Deferred Reason | Dependencies Satisfied? | Eligible Wave? |`,
+        `|---|---|---|---|---|---|---|---|---|---|`
       ];
       document.querySelectorAll('select[data-task-id]').forEach((select) => {
-        lines.push(`| ${select.dataset.taskId} | ${select.value} |  |  |  |  |  |  |  |`);
+        lines.push(`| ${select.dataset.taskId} | ${select.value} |  |  |  |  |  |  |  |  |`);
       });
       return lines.join('\n');
     }

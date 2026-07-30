@@ -26,18 +26,18 @@ class AuthoritativeInventoryTests(unittest.TestCase):
         inventory = load_inventory(INVENTORY)
         skills = inventory["skills"]
 
-        self.assertEqual(len(skills), 92)
+        self.assertEqual(len(skills), 93)
         self.assertEqual(
             inventory["summary"],
             {
                 "states": {
                     "pending": 0,
-                    "managed": 42,
+                    "managed": 43,
                     "deferred": 0,
                     "excluded": 50,
                 },
                 "categories": {
-                    "engineering": 32,
+                    "engineering": 33,
                     "productivity": 15,
                     "personal": 0,
                     "wiki": 38,
@@ -166,7 +166,7 @@ class InventoryLoaderTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.strip(),
-            "Validated 92 candidates: 42 managed, 50 excluded.",
+            "Validated 93 candidates: 43 managed, 50 excluded.",
         )
 
 

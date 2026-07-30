@@ -1,6 +1,6 @@
 # MySkills
 
-MySkills is a Windows-first, copy-only distribution of 42 Managed Agent Skills for Codex,
+MySkills is a Windows-first, copy-only distribution of 43 Managed Agent Skills for Codex,
 Claude Code, and Antigravity CLI. The canonical inventory is
 [`inventory/skills.json`](inventory/skills.json); imported snapshots remain usable after their
 former source repositories are archived.
@@ -17,6 +17,7 @@ model selection.
 - Explicit: [`ask-myskills`](skills/engineering/ask-myskills/SKILL.md),
   [`grill-with-docs`](skills/engineering/grill-with-docs/SKILL.md),
   [`implement`](skills/engineering/implement/SKILL.md),
+  [`implement-spec-task`](skills/engineering/implement-spec-task/SKILL.md),
   [`improve-codebase-architecture`](skills/engineering/improve-codebase-architecture/SKILL.md),
   [`skill-evaluator`](skills/engineering/skill-evaluator/SKILL.md), and
   [`to-spec`](skills/engineering/to-spec/SKILL.md).

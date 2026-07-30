@@ -17,18 +17,32 @@ Source -> PRD -> EARS -> BDD -> technical design -> test ID -> task -> implement
 - Require every feature task to name its observable outcome, public validation seam, demo or inspection route, cohesive acceptance bundle, and vertical-slice compliance.
 - Require every task to list primary Test IDs, validation mode, BDD scenarios covered, EARS requirements covered, review focus, allowed-to-modify paths, read-only references, validation contract rows, and completion evidence.
 - Each task must declare one validation mode: `automated`, `semi-automated`, or `manual`. Automated and semi-automated tasks require red-state and green-state evidence. Manual tasks do not require red-state evidence, but must define concrete before/after inspection evidence and user-visible pass criteria.
-- `31-final-task-index.md` must include the cross-session task review status table. Individual task files define scope and handoff; the task index owns shared accepted/blocked/deferred status.
+- `31-final-task-index.md` must include the complete cross-session executor
+  lifecycle. Individual task files define scope and handoff; only the human may
+  set shared `accepted` status in the task index.
+- After drafting the Task index and Task files, run the Task Plan Gate. Require
+  human confirmation of each capability or enabler, dependency, public test
+  boundary, and review scope before generating its execution Manifest.
+- Do not define Task Work Units in the specification. Record likely seams and
+  ownership signals only; `implement-spec-task` proposes runtime Work Units
+  from the current code during Execution Preflight.
 - For greenfield projects, generate bootstrap tasks before feature behavior tasks when foundational files or tooling do not exist yet. Typical bootstrap tasks include project initialization, package/workspace setup, test runner setup, lint/type-check setup, app shell/routing setup, database tooling setup, and environment configuration.
 - Bootstrap tasks may use `manual` or `semi-automated` validation based on file existence, package scripts, configuration checks, or human inspection. Do not require executable red-state test evidence before the test runner exists.
 
 ## Parallel Development Rules
 
-- Build a dependency DAG and assign each task to a parallel wave. A task is eligible when its required dependencies are accepted or explicitly deferred with a safe exception.
-- Permit tasks in the same wave to run concurrently only when their allowed-to-modify paths do not overlap, or when a frozen shared contract and integration owner make the overlap safe.
+- Build a dependency DAG and assign each Task to a parallel wave. A Task is
+  eligible only when every required dependency is human-`accepted`.
+- Put Tasks in the same planned wave only when their allowed-to-modify paths do
+  not overlap, or when a frozen shared contract and integration owner make
+  future concurrency safe.
 - Record exclusive ownership paths, shared read-only contracts, expected integration seam, merge or release order, and integration owner for each concurrent task.
 - Prefer contract-first coordination over layer-first task splitting. A shared contract may be an enabler task when it is independently validated and unlocks named consumer/provider capability slices.
-- Each worker implements only one selected task. This does not prevent other workers from implementing other eligible, non-overlapping tasks at the same time.
-- Do not start a dependent wave until prerequisite tasks are accepted or the task index records an explicit safe deferral.
+- Each first-version executor invocation implements exactly one selected formal
+  Task. Keep parallel-wave data for future scheduling, but do not use one
+  invocation to execute multiple formal Tasks.
+- Do not start a dependent wave until every prerequisite Task is
+  human-`accepted`.
 
 ## Boundary Examples
 
@@ -50,15 +64,10 @@ If all slices require a new project skeleton or a frozen shared contract, create
 
 ## Prompt Rules
 
-- Each prompt must be derived from one task.
-- Each prompt must say to implement only that task.
-- Each prompt must require the AI to stop after the selected task is implemented and report evidence; it must not continue to another task.
-- Each prompt must say not to modify read-only projects or future items.
-- Each prompt must include the human verification handoff: what command or inspection to run, what evidence to report, and what must be true before starting the next task.
-- Each prompt must report changed files, validation evidence, and the human review checklist before handoff.
-- A dependent task may start only after its prerequisites are accepted or explicitly deferred with a safe exception in `31-final-task-index.md` or implementation evidence. Independent eligible tasks may run concurrently.
-- Each prompt must identify the capability outcome, public validation seam, parallel wave, dependency state, exclusive modify paths, shared contracts, and integration handoff before coding.
-- Each prompt must require the AI to identify BDD scenarios, EARS requirements, Test IDs, validation mode, and validation contract rows before coding.
-- For automated and semi-automated Test IDs, each prompt must require red-state evidence before production-code changes and green-state evidence after implementation.
-- For manual Test IDs, each prompt must require explicit before/after inspection evidence and a user-visible result instead of red-state evidence.
-- For bootstrap Test IDs, each prompt must use the bootstrap validation contract and must not invent a test-runner command before that command is created by the task.
+- Each prompt is derived from exactly one Task Execution Manifest.
+- Each prompt contains only `$implement-spec-task <manifest-path>` and path
+  substitution guidance.
+- Put Task scope, dependencies, paths, Skill Plan, validation, evidence, and
+  freshness in the Task or Manifest, never in the prompt.
+- A dependent Task may start only after every prerequisite is
+  human-`accepted` in `31-final-task-index.md`.

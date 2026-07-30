@@ -74,6 +74,9 @@ Use these stage values:
 - `solution-draft`
 - `solution-feedback`
 - `ready-to-finalize`
+- `task-planning`
+- `task-plan-gate`
+- `execution-artifacts`
 - `finalizing`
 - `readiness-review`
 - `convergence`
@@ -123,6 +126,8 @@ When readiness is in progress, the status file must also show:
 
 - Approved baseline file
 - Task index file
+- Task Plan Gate file and confirmed Task IDs
+- Task Execution Manifest files
 - Task prompt files
 - Traceability file
 - Analysis file
@@ -146,14 +151,25 @@ When waiting on an early Gate 2 solution sketch, the status file must show:
 - Draft cross-project-flow diagram path, if applicable
 - Provider/consumer direction, solution assumptions, Test ID direction, capability-slice boundaries, parallel ownership seams, and blocking questions awaiting confirmation
 
+When waiting on the Task Plan Gate, the status file must show:
+
+- Current stage: `task-plan-gate`
+- Waiting for user: `yes`
+- Task index and Task file paths
+- Capability or enabler boundary, dependency, public test boundary, and review
+  scope decisions awaiting confirmation
+- That Manifests and prompts are blocked until human confirmation
+
 ## Completion
 
 Mark `complete` only when:
 
 - Final package files exist.
 - Dashboard exists.
+- Task Plan Gate is human-confirmed for every generated Manifest.
 - No pending blocking questions remain.
 - No context gap remains unresolved or unaccepted.
 - In greenfield mode, no planned component needed by Gate 2 remains unconfirmed.
 - Optional post-implementation convergence completed, if implementation evidence was provided.
-- The next action is to use the generated prompts for future development work.
+- The next action is to invoke `implement-spec-task` with one generated Task
+  Manifest.

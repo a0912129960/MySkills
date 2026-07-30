@@ -1,0 +1,117 @@
+schema_version: 1
+manifest_id: "<feature-slug>/<task-id>"
+manifest_version: 1
+package_root: ".ai-dev/features/<feature-slug>"
+
+task:
+  task_id: "<TASK-xxx>"
+  task_file: "tasks/<TASK-xxx>.md"
+  task_type: "capability-slice"
+  selected_formal_task_count: 1
+  initial_lifecycle_state: "not-started"
+
+approvals:
+  task_plan:
+    artifact: "32-task-plan-review.md"
+    status: "human-confirmed"
+    confirmed_task_id: "<TASK-xxx>"
+  package_readiness:
+    artifact: "35a-final-readiness-result.md"
+    result: "pass"
+    manifest_digest_verified_by_readiness: true
+
+artifact_digests:
+  algorithm: "sha256"
+  normative:
+    - path: "30-approved-feature-baseline.md"
+      sha256: "<digest>"
+    - path: "31-final-task-index.md"
+      sha256: "<digest>"
+    - path: "tasks/<TASK-xxx>.md"
+      sha256: "<digest>"
+    - path: "24-gate2-test-strategy.md"
+      sha256: "<digest>"
+    - path: "32-task-plan-review.md"
+      sha256: "<digest>"
+
+freshness:
+  digest_pinned_artifacts_required: true
+  reread_current_project_rules: true
+  rule_sources:
+    - "AGENTS.md"
+    - "CLAUDE.md"
+    - "PROJECT_RULES.md"
+    - "<applicable architecture and ADR paths>"
+  compatible_rule_change_requires_preflight_reconfirmation: true
+  conflicting_rule_change_state: "spec-revision-required"
+
+dependencies:
+  required:
+    - task_id: "<TASK-yyy>"
+      required_state: "accepted"
+  only_human_accepted_unblocks: true
+
+scope:
+  allowed_production_paths:
+    - "<path>"
+  allowed_evidence_and_status_paths:
+    - "implementation-evidence.md"
+    - "execution/<TASK-xxx>/records/"
+    - "execution/<TASK-xxx>/preflight.md"
+    - "execution/<TASK-xxx>/spec-change-requests/"
+  status_only_mutations:
+    - path: "31-final-task-index.md"
+      section: "Task Review Status"
+      allowed_fields:
+        - "Status"
+        - "Evidence Link"
+        - "Blocked / Revision Reason"
+  read_only_paths:
+    - "<path>"
+  prohibited_paths:
+    - "<path>"
+  normative_spec_artifacts_are_read_only: true
+
+coordination:
+  formal_task_limit: 1
+  same_task_subagents_allowed: true
+  shared_workspace: true
+  automatic_branch_worktree_commit_merge_push: false
+  work_units_defined_at_execution_preflight: true
+  exclusive_write_ownership_required: true
+  shared_files_single_writer: "task-coordinator"
+
+skill_plan:
+  mandatory:
+    - "code-review"
+  tdd:
+    required_when_public_seam_is_automatable: true
+  conditional:
+    - skill: "codebase-design"
+      when: "interface, seam, adapter, dependency direction, or architectural responsibility changes"
+  additional_allowed_with_justification: true
+
+validation:
+  task_test_owner_required: true
+  task_level_red_state_required_when_tdd_applies: true
+  required_test_ids:
+    - "<TEST-ID>"
+  focused_commands:
+    - "<command>"
+  integrated_task_validation:
+    - "<command or inspection>"
+  ai_code_review_required: true
+  human_review_required: true
+
+evidence:
+  implementation_evidence_index: "implementation-evidence.md"
+  execution_records_dir: "execution/<TASK-xxx>/records/"
+  execution_record_mode: "append-only"
+  preflight_path: "execution/<TASK-xxx>/preflight.md"
+  spec_change_requests_dir: "execution/<TASK-xxx>/spec-change-requests/"
+
+executor:
+  skill: "implement-spec-task"
+  invocation: "$implement-spec-task <manifest-path>"
+  stop_after_state: "ready-for-review"
+  next_task_automatic: false
