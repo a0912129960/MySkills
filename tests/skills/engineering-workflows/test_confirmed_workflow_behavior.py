@@ -395,9 +395,22 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
             "must not become active until post-Gate-1",
             workflow,
         )
+        self.assertIn(
+            "activate only the highest-impact resolvable Architecture",
+            workflow,
+        )
+        self.assertIn("do not present a batch request", workflow)
         self.assertNotIn(
             "ask immediately for any missing architecture sources",
             workflow,
+        )
+        self.assertIn(
+            "no active decision Question\n  ID",
+            status_tracking,
+        )
+        self.assertIn(
+            "no critical blocking\n  Question ID remains",
+            status_tracking,
         )
         self.assertNotIn("grill-me", package_contract_text)
         self.assertNotIn("grill-with-doc", package_contract_text)

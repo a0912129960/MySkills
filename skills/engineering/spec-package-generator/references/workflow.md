@@ -138,7 +138,11 @@ Required behavior:
 - Re-check carried-over facts from `.ai-dev/context/project-context.md` when present.
 - Read the actual code entry points, contracts, or documents for the in-scope systems.
 - Directory names alone are not verification.
-- If any source is `missing` or `user-will-provide`, set the workflow to `blocked` and `waiting-for-user`, list exactly what is needed, and wait.
+- If any source is `missing` or `user-will-provide`, persist every source gap
+  in the inventory and question register, set the workflow to `blocked` and
+  `waiting-for-user`, activate only the highest-impact resolvable Architecture
+  Source question, and wait. Keep remaining source gaps as Question ID
+  references; do not present a batch request.
 - Never invent architecture. If the user explicitly accepts a gap, mark it `accepted-unverified` and tag the related Gate 2 content `UNVERIFIED`.
 - Record verified facts, source paths, statuses, and risk levels in `00-context-inventory.md`.
 - Gate 2 derives `proposed-context-update.md` from verified inventory facts and the approved solution review; do not create or update it as the primary verification ledger.

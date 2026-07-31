@@ -161,8 +161,10 @@ When waiting on an early flow sketch, the status file must show:
 - Gate 1 decision clarification: `complete`
 - Sketch file path
 - Draft user-flow diagram path
-- The single active flow decision or final sketch confirmation request
-- Material-assumption Decision IDs and any remaining blocking Question IDs
+- The single final sketch confirmation request and no active decision Question
+  ID
+- Material-assumption Decision IDs and confirmation that no critical blocking
+  Question ID remains
 
 When waiting on an early Gate 2 solution sketch, the status file must show:
 
@@ -172,7 +174,9 @@ When waiting on an early Gate 2 solution sketch, the status file must show:
 - Sketch file path
 - Draft API-flow diagram path
 - Draft cross-project-flow diagram path, if applicable
-- Provider/consumer direction, solution assumptions, Test ID direction, capability-slice boundaries, parallel ownership seams, and blocking questions awaiting confirmation
+- Provider/consumer direction, solution assumptions, Test ID direction,
+  capability-slice boundaries, parallel ownership seams, resolved solution
+  Decision IDs, and any deferred non-blocking Question IDs
 
 While a draft sketch is being created or revised to reflect unresolved
 decisions, keep the current stage at the applicable
