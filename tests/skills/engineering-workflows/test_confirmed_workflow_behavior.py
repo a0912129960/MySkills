@@ -266,10 +266,13 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
             package / "templates" / "00-stage-manifest.template.md"
         )
         workflow = read(package / "references" / "workflow.md")
+        status_tracking = read(package / "references" / "status-tracking.md")
         grill_me = read(PRODUCTIVITY / "grill-me" / "SKILL.md")
         grill_with_docs = read(ENGINEERING / "grill-with-docs" / "SKILL.md")
-        package_markdown = "\n".join(
-            read(path) for path in sorted(package.rglob("*.md"))
+        package_contract_text = "\n".join(
+            read(path)
+            for path in sorted(package.rglob("*"))
+            if path.is_file() and path.suffix in {".md", ".yaml", ".yml"}
         )
 
         self.assertIn("## Durable Grilling Protocol", governance)
@@ -277,20 +280,60 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("Only after all writes succeed", governance)
         self.assertIn("append a Decision ID", governance)
         self.assertIn("currently existing stage-owned affected", governance)
+        self.assertIn("- Recommended answer and brief rationale", governance)
         self.assertIn("Active Question ID", status)
         self.assertIn("Previous answer persisted", status)
         self.assertIn("Ask exactly one active question at a time", questions)
         self.assertIn("durable one-question loop", workflow)
-        self.assertIn("Durable decision clarification", stage_manifest)
+        gate1_clarification = stage_manifest.index(
+            "4. Gate 1 durable decision clarification"
+        )
+        gate1_sketch = stage_manifest.index("5. Gate 1 flow sketch")
+        architecture_grounding = stage_manifest.index("7. Architecture grounding")
+        gate2_clarification = stage_manifest.index(
+            "8. Gate 2 durable decision clarification"
+        )
+        gate2_sketch = stage_manifest.index("9. Gate 2 solution sketch")
+        self.assertLess(gate1_clarification, gate1_sketch)
+        self.assertLess(architecture_grounding, gate2_clarification)
+        self.assertLess(gate2_clarification, gate2_sketch)
         self.assertIn(
             "## Durable Decision Clarification Status",
             stage_manifest_template,
         )
-        self.assertNotIn("grill-me", package_markdown)
-        self.assertNotIn("grill-with-doc", package_markdown)
+        self.assertIn("`gate1-decision-clarification`", stage_manifest_template)
+        self.assertIn("`gate2-decision-clarification`", stage_manifest_template)
+        self.assertNotIn("- Active Question ID:", stage_manifest_template)
+        self.assertNotIn("mirrored from", stage_manifest)
+        self.assertIn(
+            "sole owner of the active\nQuestion ID",
+            status_tracking,
+        )
+        self.assertNotIn("grill-me", package_contract_text)
+        self.assertNotIn("grill-with-doc", package_contract_text)
         self.assertNotIn("spec-package-generator", grill_me)
         self.assertNotIn("spec-package-generator", grill_with_docs)
         self.assertNotIn("normal batch clarification", governance)
+
+    def test_spec_evaluation_does_not_mix_decision_and_micro_gate_questions(
+        self,
+    ) -> None:
+        cases = json.loads(
+            (ROOT / "evaluations" / "cases" / "spec-package-generator.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        core_cases = {case["id"]: case for case in cases["core_cases"]}
+        intake = core_cases["greenfield-intake-micro-gate"]
+
+        self.assertIn(
+            "Do not ask for flow-sketch confirmation until",
+            intake["prompt"],
+        )
+        self.assertIn(
+            "without also requesting flow-sketch confirmation",
+            intake["oracle"]["expected_outcome"],
+        )
 
     def test_spec_package_requires_task_plan_gate_and_execution_manifests(
         self,

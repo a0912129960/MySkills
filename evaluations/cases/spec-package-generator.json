@@ -7,11 +7,11 @@
   "core_cases": [
     {
       "id": "greenfield-intake-micro-gate",
-      "version": 1,
+      "version": 2,
       "role": "normal",
-      "prompt": "Begin an AI-ready specification package from requirements/offline-bookmark-importer.md. This is a greenfield project and the import flow is non-trivial. Create the required intake and governance files under .ai-dev/features/offline-bookmark-importer/, draft the Gate 1 flow sketch and authoritative user-flow Mermaid source, surface the unresolved duplicate policy and technology choices, and stop for flow-sketch confirmation before generating the full Gate 1 review.",
+      "prompt": "Begin an AI-ready specification package from requirements/offline-bookmark-importer.md. This is a greenfield project and the import flow is non-trivial. Create the required intake and governance files under .ai-dev/features/offline-bookmark-importer/, draft the Gate 1 flow sketch and authoritative user-flow Mermaid source, and surface the unresolved duplicate policy and technology choices. Start durable clarification by persisting and asking only the highest-impact decision question. Do not ask for flow-sketch confirmation until the critical business decisions are resolved.",
       "oracle": {
-        "expected_outcome": "The workflow records greenfield mode, preserves the source requirement, creates durable question and decision memory plus the flow sketch and user-flow.mmd, persists exactly one active blocking decision with a recommendation, queues dependent decisions, and stops without Gate 1, Gate 2, final, or production-code artifacts.",
+        "expected_outcome": "The workflow records greenfield mode, preserves the source requirement, creates durable question and decision memory plus the draft flow sketch and user-flow.mmd, persists exactly one active blocking decision with a recommendation, queues dependent decisions, and stops for that decision answer without also requesting flow-sketch confirmation or generating downstream artifacts.",
         "assertions": [
           {
             "id": "creates-intake-files",
@@ -42,7 +42,7 @@
             "id": "stops-before-full-gate",
             "kind": "trajectory",
             "trajectory_observation": "verified-absence",
-            "description": "does not create 10-gate1-prd.md, Gate 2 artifacts, final tasks, readiness, dashboard, or production code before flow-sketch confirmation",
+            "description": "does not request flow-sketch confirmation, create 10-gate1-prd.md, Gate 2 artifacts, final tasks, readiness, dashboard, or production code before the active decision is resolved",
             "required": true
           }
         ]
@@ -105,11 +105,11 @@
         },
         {
           "path": ".ai-dev/features/session-history/00-spec-workflow-status.md",
-          "content": "# Spec Workflow Status\n\n## Current State\n\n- Current stage: clarification\n- Current status: waiting-for-user\n- Waiting for user: yes\n\n## Durable Decision Loop\n\n- Active Question ID: Q-BIZ-001\n- Active question persisted: yes\n- Previous answer persisted: not-applicable\n- Decision log updated: not-applicable\n- Affected specification artifacts updated: not-applicable\n\n## Next AI Action\n\nPersist the answer to Q-BIZ-001 before selecting another question.\n"
+          "content": "# Spec Workflow Status\n\n## Current State\n\n- Current stage: gate1-decision-clarification\n- Current status: waiting-for-user\n- Waiting for user: yes\n\n## Durable Decision Loop\n\n- Active Question ID: Q-BIZ-001\n- Active question persisted: yes\n- Previous answer persisted: not-applicable\n- Decision log updated: not-applicable\n- Affected specification artifacts updated: not-applicable\n\n## Next AI Action\n\nPersist the answer to Q-BIZ-001 before selecting another question.\n"
         },
         {
           "path": ".ai-dev/features/session-history/00-stage-manifest.md",
-          "content": "# Stage Manifest\n\n- Current stage: clarification\n- Resume stage: clarification\n\n## Durable Decision Clarification Status\n\n- Status: waiting-for-user\n- Decision log: `14-decision-log.md`\n- Open-question register: `15-open-questions.md`\n- Active Question ID: Q-BIZ-001\n"
+          "content": "# Stage Manifest\n\n- Current stage: gate1-decision-clarification\n- Resume stage: gate1-decision-clarification\n\n## Durable Decision Clarification Status\n\n- Decision log: `14-decision-log.md`\n- Open-question register: `15-open-questions.md`\n- Active-question source: `00-spec-workflow-status.md`\n\n| Phase | Stage ID | Status | Depends On |\n|---|---|---|---|\n| Gate 1 | `gate1-decision-clarification` | waiting-for-user | `context-scan` |\n| Gate 2 | `gate2-decision-clarification` | not-started | `greenfield-design-confirmation` |\n"
         },
         {
           "path": ".ai-dev/features/session-history/00-context-inventory.md",

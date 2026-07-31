@@ -58,6 +58,7 @@ Every critical question must be recorded with:
 - Layer: Business, EARS, BDD, Architecture Source, Greenfield Technology, Solution, Test Contract, or Task Split
 - Question
 - Why it matters
+- Recommended answer and brief rationale
 - Default assumption if unanswered
 - Affected artifacts
 - Blocking status
@@ -117,9 +118,11 @@ Run this protocol whenever a critical decision is unresolved:
    of asking the user to repeat it.
 3. Identify the highest-impact unresolved question whose dependencies are
    resolved. Add or update its row in `15-open-questions.md`.
-4. Before asking, set that Question ID as the single active question in
-   `00-spec-workflow-status.md`, set `waiting-for-user`, and make the next AI
-   action "record this answer before selecting another question."
+4. Before asking, set the applicable Gate 1 or Gate 2 clarification stage in
+   `00-stage-manifest.md` to `waiting-for-user`. Set the Question ID as the
+   single active question only in `00-spec-workflow-status.md`, set
+   `waiting-for-user`, and make the next AI action "record this answer before
+   selecting another question."
 5. Ask only that question using the human-facing format above, then stop.
 6. On the next turn, persist the user's answer first. Set the question to
    `answered`; if the answer is ambiguous, keep it active and ask one focused
@@ -131,11 +134,12 @@ Run this protocol whenever a critical decision is unresolved:
 8. Update `00-spec-workflow-status.md` with the recorded decision, affected
    files, remaining blockers, and next AI action. Only after all writes succeed
    may another question become active.
-9. When no critical question remains, ask one final shared-understanding or
-   applicable micro-gate confirmation question. Continue the normal Gate
-   workflow after confirmation.
+9. When no critical question remains, set the applicable clarification stage
+   in `00-stage-manifest.md` to `complete`, then ask one final
+   shared-understanding or applicable micro-gate confirmation question.
+   Continue the normal Gate workflow after confirmation.
 
-Specification writes in steps 3-8 are the interview's durable memory, not
+Specification writes in steps 3-9 are the interview's durable memory, not
 implementation of the plan. Never mutate production code. Preserve Gate
 ownership: Gate 1 answers may update only intake/governance and Gate 1
 artifacts; Gate 2 answers may update Gate 2 artifacts; project context remains

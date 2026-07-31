@@ -13,17 +13,18 @@ Use this reference when determining artifact order and stage ownership.
 1. Intake
 2. Stage manifest
 3. Context scan
-4. Durable decision clarification
+4. Gate 1 durable decision clarification
 5. Gate 1 flow sketch
 6. Gate 1
 7. Architecture grounding: existing verification or greenfield design confirmation
-8. Gate 2 solution sketch
-9. Gate 2
-10. Task planning
-11. Task Plan Gate
-12. Execution artifacts
-13. Readiness review
-14. Optional post-implementation convergence
+8. Gate 2 durable decision clarification
+9. Gate 2 solution sketch
+10. Gate 2
+11. Task planning
+12. Task Plan Gate
+13. Execution artifacts
+14. Readiness review
+15. Optional post-implementation convergence
 
 ## Manifest Requirements
 
@@ -36,8 +37,8 @@ The stage manifest should record:
 - Artifact ownership
 - Stage dependencies
 - Stale artifact relationships
-- Durable clarification status, `14-decision-log.md`,
-  `15-open-questions.md`, and the active Question ID mirrored from
+- Separate Gate 1 and Gate 2 durable clarification stage statuses, plus links
+  to `14-decision-log.md`, `15-open-questions.md`, and
   `00-spec-workflow-status.md`
 - Whether `09-gate1-flow-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
 - Whether `19-gate2-solution-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
@@ -52,6 +53,8 @@ When resuming a package:
 - Read `00-spec-workflow-status.md` first.
 - Read `00-stage-manifest.md` second.
 - Follow the manifest's next-action entry.
+- Treat `00-spec-workflow-status.md` as the sole owner of the active Question
+  ID. The manifest records clarification phase order and status only.
 - Do not infer order from file numbers alone.
 
 If `00-stage-manifest.md` is missing but generated artifacts exist:

@@ -2,7 +2,7 @@
 artifactId: 00-stage-manifest
 stage: intake
 status: template
-version: 2
+version: 3
 dependsOn: []
 invalidates: []
 summary: Stage manifest template that defines optimized artifact order.
@@ -28,11 +28,14 @@ openQuestions: []
 
 ## Durable Decision Clarification Status
 
-- Status: not-started / in-progress / waiting-for-user / complete / superseded
 - Decision log: `14-decision-log.md`
 - Open-question register: `15-open-questions.md`
-- Active Question ID:
 - Active-question source: `00-spec-workflow-status.md`
+
+| Phase | Stage ID | Status | Depends On |
+|---|---|---|---|
+| Gate 1 | `gate1-decision-clarification` | not-started / in-progress / waiting-for-user / complete / superseded | `context-scan` |
+| Gate 2 | `gate2-decision-clarification` | not-started / in-progress / waiting-for-user / complete / superseded | `architecture-verification` or `greenfield-design-confirmation` |
 
 ## Gate 1 Flow Sketch Status
 

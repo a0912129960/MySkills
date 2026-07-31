@@ -11,7 +11,9 @@ Every feature package must include:
 00-stage-manifest.md
 ```
 
-`00-spec-workflow-status.md` is the resume point. `00-stage-manifest.md` is the order source of truth.
+`00-spec-workflow-status.md` is the resume point and sole owner of the active
+Question ID. `00-stage-manifest.md` is the order source of truth and records
+clarification phase status without copying that ID.
 
 ## When To Read Them
 
@@ -67,12 +69,13 @@ Use these stage values:
 - `intake`
 - `stage-manifest`
 - `context-scan`
-- `clarification`
+- `gate1-decision-clarification`
 - `gate1-flow-sketch`
 - `business-draft`
 - `business-feedback`
 - `architecture-verification`
 - `greenfield-design-confirmation`
+- `gate2-decision-clarification`
 - `gate2-solution-sketch`
 - `solution-draft`
 - `solution-feedback`
@@ -118,7 +121,11 @@ Do not ask the user to repeat:
 - Previously provided architecture sources
 - Previously confirmed greenfield technology and architecture decisions
 
-If the status file and generated files disagree, treat the status file as the navigation aid and the manifest plus generated artifacts as the source artifacts. Reconcile by updating the status file with what is actually present.
+If the status file and generated files disagree, treat the status file as the
+navigation aid and active-Question-ID authority, `15-open-questions.md` as the
+question-row authority, and the manifest plus generated artifacts as the stage
+order and specification authorities. Reconcile each field from its owner
+instead of copying a stale Question ID from the manifest.
 
 ## Workflow State
 

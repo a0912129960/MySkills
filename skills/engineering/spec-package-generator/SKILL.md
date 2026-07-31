@@ -79,6 +79,9 @@ the next unresolved question.
 Treat `14-decision-log.md`, `15-open-questions.md`, and
 `00-spec-workflow-status.md` as resumable interview memory. Re-read them on
 every resumed turn so a large specification does not depend on chat context.
+`00-spec-workflow-status.md` alone owns the active Question ID; the stage
+manifest records separate Gate 1 and Gate 2 clarification phase statuses
+without copying that ID.
 Specification recording is part of this workflow and is not implementation.
 Never edit production code while grilling.
 
