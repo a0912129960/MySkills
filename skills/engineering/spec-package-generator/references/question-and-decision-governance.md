@@ -154,14 +154,22 @@ Run this protocol whenever a critical decision is unresolved:
 8. Update `00-spec-workflow-status.md` with the recorded decision, affected
    files, remaining blockers, and next AI action. Only after all writes succeed
    may another question become active.
-9. When no critical question remains for the owning stage, set that
-   clarification or architecture-grounding stage in `00-stage-manifest.md` to
-   `complete`. If it is a Gate 1 or Gate 2 clarification stage, update its
-   draft sketch from the resolved decisions, then ask one final
-   shared-understanding or applicable micro-gate confirmation question.
-   Architecture grounding instead advances to Gate 2 clarification. Continue
-   the normal Gate workflow after any required confirmation; Task Split
-   clarification returns to Task Plan Gate confirmation.
+9. When no critical question remains for the owning stage, complete the
+   durable transition before asking for anything else:
+   - For Gate 1 or Gate 2 clarification, set that clarification stage in
+     `00-stage-manifest.md` to `complete` and update its draft sketch from the
+     resolved decisions. In `00-spec-workflow-status.md`, clear the Active
+     Question ID to `none`, set the current stage to `gate1-flow-sketch` or
+     `gate2-solution-sketch`, set `waiting-for-user`, and make the next action
+     persist the sketch confirmation or correction. In
+     `00-stage-manifest.md`, set Current stage and Resume stage to that same
+     sketch stage and set its confirmation status to `waiting-for-user`. Only
+     after those writes succeed, ask exactly one final sketch confirmation or
+     correction request.
+   - For architecture grounding, set the grounding stage to `complete` and
+     advance to Gate 2 clarification without asking a confirmation question.
+   - For Task Split clarification, clear the Active Question ID and return to
+     the Task Plan Gate confirmation state.
 
 Specification writes in steps 3-9 are the interview's durable memory, not
 implementation of the plan. Never mutate production code. Preserve Gate

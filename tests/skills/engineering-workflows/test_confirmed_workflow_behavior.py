@@ -362,13 +362,26 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
             governance,
         )
         self.assertIn(
-            "Architecture grounding instead advances to Gate 2 clarification",
+            "For architecture grounding, set the grounding stage to `complete`",
             governance,
+        )
+        self.assertIn(
+            "advance to Gate 2 clarification without asking a confirmation question",
+            governance.replace("\n     ", " "),
         )
         self.assertIn(
             "Task Split questions belong to `task-plan-gate`",
             governance,
         )
+        for transition_contract in (
+            "clear the Active\n     Question ID to `none`",
+            "set the current stage to `gate1-flow-sketch` or",
+            "set Current stage and Resume stage to that same",
+            "set its confirmation status to `waiting-for-user`",
+            "ask exactly one final sketch confirmation or",
+        ):
+            with self.subTest(transition_contract=transition_contract):
+                self.assertIn(transition_contract, governance)
         self.assertIn(
             "`openQuestions` contains Question IDs only",
             governance,
@@ -478,6 +491,28 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn(
             "queues the technology decision for post-Gate-1",
             intake["oracle"]["expected_outcome"],
+        )
+
+        existing = core_cases["existing-project-source-boundary"]
+        existing_assertions = {
+            assertion["id"]: assertion
+            for assertion in existing["oracle"]["assertions"]
+        }
+        self.assertIn(
+            "activate and ask only the single highest-impact resolvable Architecture Source question",
+            existing["prompt"],
+        )
+        self.assertIn(
+            "exactly one active Architecture Source Question ID",
+            existing["oracle"]["expected_outcome"],
+        )
+        self.assertIn("persists-source-gap-queue", existing_assertions)
+        self.assertIn("asks-one-source-question", existing_assertions)
+        self.assertEqual(
+            "tool-trace",
+            existing_assertions["asks-one-source-question"][
+                "trajectory_observation"
+            ],
         )
 
     def test_spec_package_requires_task_plan_gate_and_execution_manifests(
