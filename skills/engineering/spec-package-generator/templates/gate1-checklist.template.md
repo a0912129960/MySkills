@@ -2,7 +2,7 @@
 artifactId: gate1-checklist
 stage: gate1
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-source-requirement.template.md
   - 00-spec-workflow-status.template.md
@@ -11,6 +11,8 @@ dependsOn:
   - 11-gate1-ears.template.md
   - 12-gate1-bdd.template.feature
   - 13-gate1-review.template.html
+  - 14-decision-log.template.md
+  - 15-open-questions.template.md
 invalidates: []
 summary: Gate 1 review checklist template.
 keyDecisions: []
@@ -36,15 +38,16 @@ openQuestions: []
 - [ ] `12-gate1-bdd.feature` exists and is ready for review.
 - [ ] `13-gate1-review.html` exists as a derived review surface.
 - [ ] `diagrams/user-flow.mmd` exists.
-- [ ] `14-decision-log.md` exists if decisions were made.
-- [ ] `15-open-questions.md` exists if open or resolved questions were recorded.
+- [ ] `14-decision-log.md` exists as durable decision memory.
+- [ ] `15-open-questions.md` exists as the canonical question register.
 
 ## PRD Checks
 
 - [ ] Goal, users, scope, and non-scope are explicit.
 - [ ] Business workflow and business rules are stated.
 - [ ] Assumptions are visible.
-- [ ] Blocking questions are clearly marked.
+- [ ] No critical blocking Question ID remains unresolved.
+- [ ] Question and Decision IDs link to the canonical governance artifacts.
 
 ## EARS Checks
 
@@ -63,6 +66,6 @@ openQuestions: []
 
 ## Review Decision
 
-- [ ] Gate 1 contradictions are resolved or listed as Blocking.
+- [ ] Gate 1 contradictions and critical blocking questions are resolved.
 - [ ] Non-blocking questions are recorded for later stages.
 - [ ] User approval or requested changes are recorded in workflow status.

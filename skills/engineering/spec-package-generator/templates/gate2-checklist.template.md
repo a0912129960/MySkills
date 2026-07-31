@@ -2,7 +2,7 @@
 artifactId: gate2-checklist
 stage: gate2
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-context-inventory.template.md
   - 19-gate2-solution-sketch.template.md
@@ -12,6 +12,8 @@ dependsOn:
   - 24-gate2-test-strategy.template.md
   - 25-gate2-review.template.html
   - proposed-context-update.template.md
+  - 14-decision-log.template.md
+  - 15-open-questions.template.md
 invalidates: []
 summary: Gate 2 review checklist template.
 keyDecisions: []
@@ -23,7 +25,7 @@ openQuestions: []
 ## Technical Boundary
 
 - [ ] Gate 2 started only after Gate 1 approval.
-- [ ] Existing architecture sources were inspected or explicitly recorded as missing; greenfield planned architecture was confirmed as design.
+- [ ] Existing architecture sources were inspected or explicitly accepted as UNVERIFIED; greenfield planned architecture was confirmed as design.
 - [ ] Missing critical existing evidence blocks readiness unless formally accepted as UNVERIFIED risk; greenfield planned components needed by Gate 2 are confirmed-design.
 - [ ] Gate 2 produced proposed context updates only.
 - [ ] Gate 2 did not write to current project context.
@@ -39,6 +41,7 @@ openQuestions: []
 - [ ] `25-gate2-review.html` exists as a derived review surface.
 - [ ] `proposed-context-update.md` exists when new context facts discovered during Gate 2 should be proposed for future update.
 - [ ] Gate 2 diagrams exist when the design includes flows or cross-project interactions.
+- [ ] Gate 2 decision clarification is complete and no critical blocking Question ID remains unresolved.
 
 ## Impact Checks
 

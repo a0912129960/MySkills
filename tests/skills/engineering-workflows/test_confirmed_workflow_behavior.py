@@ -279,6 +279,13 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         gate1_prd_template = read(
             package / "templates" / "10-gate1-prd.template.md"
         )
+        lifecycle_example = read(package / "examples" / "full-lifecycle.md")
+        gate1_checklist = read(
+            package / "templates" / "gate1-checklist.template.md"
+        )
+        gate2_checklist = read(
+            package / "templates" / "gate2-checklist.template.md"
+        )
         grill_me = read(PRODUCTIVITY / "grill-me" / "SKILL.md")
         grill_with_docs = read(ENGINEERING / "grill-with-docs" / "SKILL.md")
         package_contract_text = "\n".join(
@@ -411,6 +418,22 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn(
             "no critical blocking\n  Question ID remains",
             status_tracking,
+        )
+        self.assertIn(
+            "During Gate 1 clarification, persist and ask one eligible business decision at a time",
+            lifecycle_example,
+        )
+        self.assertIn(
+            "During Gate 2 clarification, persist and ask one eligible solution decision at a time",
+            lifecycle_example,
+        )
+        self.assertIn(
+            "No critical blocking Question ID remains unresolved",
+            gate1_checklist,
+        )
+        self.assertIn(
+            "Gate 2 decision clarification is complete",
+            gate2_checklist,
         )
         self.assertNotIn("grill-me", package_contract_text)
         self.assertNotIn("grill-with-doc", package_contract_text)
