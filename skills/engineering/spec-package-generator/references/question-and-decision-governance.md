@@ -21,6 +21,9 @@ Use this reference for cross-stage questions, answers, and decision history.
   fields. Derived review surfaces may render a non-authoritative summary from
   the canonical row and must be regenerated when it changes.
 - `14-decision-log.md` is the sole owner of normalized material rulings.
+- In artifact frontmatter, `openQuestions` contains Question IDs only and
+  `keyDecisions` contains Decision IDs only. Never embed mutable question rows
+  or ruling text in those metadata arrays.
 - Resolved open questions are not deleted; they are marked `resolved` and linked to a Decision ID.
 - Blocking questions prevent gate approval and readiness.
 - Do not ask every possible question mechanically. Extract answers from the requirement when present, record low-risk assumptions when safe, and ask only when the missing answer affects PRD, EARS, BDD, test strategy, task scope, release safety, or architecture validity.

@@ -267,6 +267,9 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         )
         workflow = read(package / "references" / "workflow.md")
         status_tracking = read(package / "references" / "status-tracking.md")
+        markdown_compatibility = read(
+            package / "references" / "markdown-ai-compatibility.md"
+        )
         source_requirement = read(
             package / "templates" / "00-source-requirement.template.md"
         )
@@ -365,6 +368,14 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn(
             "Task Split questions belong to `task-plan-gate`",
             governance,
+        )
+        self.assertIn(
+            "`openQuestions` contains Question IDs only",
+            governance,
+        )
+        self.assertIn(
+            "only canonical Question IDs in `openQuestions`",
+            markdown_compatibility,
         )
         self.assertIn("## Intake Question References", source_requirement)
         self.assertNotIn("## Intake Questions\n", source_requirement)

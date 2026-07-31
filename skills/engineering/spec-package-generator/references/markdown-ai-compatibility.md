@@ -84,5 +84,7 @@ Manifest.
 - Use stable headings.
 - Use tables for summaries.
 - Use bullet lists for scope, paths, assumptions, and risks.
+- Store only canonical Question IDs in `openQuestions` frontmatter and Decision
+  IDs in `keyDecisions` frontmatter.
 - Keep Manifest-backed executor invocations copyable as plain Markdown.
 - Avoid putting key instructions only in images or HTML.
