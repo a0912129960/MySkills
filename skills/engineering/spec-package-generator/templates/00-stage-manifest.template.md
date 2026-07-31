@@ -26,6 +26,14 @@ openQuestions: []
 | Order | Stage ID | Artifact | Purpose | Status | Depends On |
 |---|---|---|---|---|---|
 
+## Durable Decision Clarification Status
+
+- Status: not-started / in-progress / waiting-for-user / complete / superseded
+- Decision log: `14-decision-log.md`
+- Open-question register: `15-open-questions.md`
+- Active Question ID:
+- Active-question source: `00-spec-workflow-status.md`
+
 ## Gate 1 Flow Sketch Status
 
 - Required: yes/no (required in greenfield mode)

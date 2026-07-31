@@ -11,12 +11,12 @@
       "role": "normal",
       "prompt": "Begin an AI-ready specification package from requirements/offline-bookmark-importer.md. This is a greenfield project and the import flow is non-trivial. Create the required intake and governance files under .ai-dev/features/offline-bookmark-importer/, draft the Gate 1 flow sketch and authoritative user-flow Mermaid source, surface the unresolved duplicate policy and technology choices, and stop for flow-sketch confirmation before generating the full Gate 1 review.",
       "oracle": {
-        "expected_outcome": "The workflow records greenfield mode, preserves the source requirement, creates status, stage manifest, context inventory, flow sketch, and user-flow.mmd, presents the blocking decisions, and stops at the sketch micro-gate without Gate 1, Gate 2, final, or production-code artifacts.",
+        "expected_outcome": "The workflow records greenfield mode, preserves the source requirement, creates durable question and decision memory plus the flow sketch and user-flow.mmd, persists exactly one active blocking decision with a recommendation, queues dependent decisions, and stops without Gate 1, Gate 2, final, or production-code artifacts.",
         "assertions": [
           {
             "id": "creates-intake-files",
             "kind": "deterministic",
-            "description": "creates 00-source-requirement.md, 00-spec-workflow-status.md, 00-stage-manifest.md, and 00-context-inventory.md in the feature folder",
+            "description": "creates 00-source-requirement.md, 00-spec-workflow-status.md, 00-stage-manifest.md, 00-context-inventory.md, 14-decision-log.md, and 15-open-questions.md in the feature folder",
             "required": true
           },
           {
@@ -28,7 +28,14 @@
           {
             "id": "creates-flow-micro-gate",
             "kind": "deterministic",
-            "description": "creates 09-gate1-flow-sketch.md and diagrams/user-flow.mmd and asks for confirmation of duplicate behavior and material assumptions",
+            "description": "creates 09-gate1-flow-sketch.md and diagrams/user-flow.mmd, persists the duplicate-policy question before asking it, and presents exactly one active question with a recommended answer while keeping other unresolved choices in durable state",
+            "required": true
+          },
+          {
+            "id": "durable-one-question-loop",
+            "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
+            "description": "writes the active Question ID to 00-spec-workflow-status.md and its full row to 15-open-questions.md before asking exactly one user-facing decision question",
             "required": true
           },
           {
@@ -49,36 +56,43 @@
       ]
     },
     {
-      "id": "contradictory-retention-rules",
+      "id": "resume-and-persist-active-decision",
       "version": 1,
       "role": "boundary",
-      "prompt": "Start a specification package from requirements/session-history.md. The source simultaneously requires that no session content is ever stored and that every full session remain persisted for 90 days. Preserve the contradiction, record it as a blocking business question, and stop before generating approval-ready Gate 1 artifacts or inventing a compromise.",
+      "prompt": "Resume the existing session-history feature package. My answer to active question Q-BIZ-001 is: never store session content; retain only non-content audit metadata for 90 days. Persist and apply this answer before selecting anything else, then ask at most one next unresolved decision question.",
       "oracle": {
-        "expected_outcome": "The intake records both incompatible retention statements, marks the requirement blocked and waiting for user resolution, asks one focused retention question, and creates no approval-ready downstream package.",
+        "expected_outcome": "The workflow resumes from durable package state, preserves the contradictory raw source, records the human answer, creates a normalized Decision ID, resolves Q-BIZ-001, updates status and affected existing specification artifacts before selecting another question, and asks no more than one next question.",
         "assertions": [
           {
-            "id": "records-both-rules",
+            "id": "preserves-raw-source",
             "kind": "deterministic",
-            "description": "00-source-requirement.md preserves both no-storage and 90-day full-session retention requirements",
+            "description": "00-source-requirement.md continues to preserve both original contradictory retention statements while recording the later resolution separately",
             "required": true
           },
           {
-            "id": "marks-blocked",
-            "kind": "deterministic",
-            "description": "workflow status identifies the retention conflict as blocking and waiting for user input",
+            "id": "persists-before-next-question",
+            "kind": "trajectory",
+            "trajectory_observation": "tool-trace",
+            "description": "updates 15-open-questions.md, 14-decision-log.md, and 00-spec-workflow-status.md with the answer and ruling before presenting any next question",
             "required": true
           },
           {
-            "id": "does-not-invent-resolution",
+            "id": "resolves-active-question",
+            "kind": "deterministic",
+            "description": "Q-BIZ-001 is resolved with a Decision ID stating that session content is never stored and non-content audit metadata is retained for 90 days",
+            "required": true
+          },
+          {
+            "id": "one-next-question-maximum",
             "kind": "human-rubric",
-            "description": "asks the user to choose or reconcile the retention behavior without silently weakening either rule",
+            "description": "after persistence succeeds, the response asks at most one next unresolved decision question with a recommendation",
             "required": true
           },
           {
             "id": "stops-downstream-work",
             "kind": "trajectory",
             "trajectory_observation": "verified-absence",
-            "description": "does not create Gate 2, final tasks, prompts, readiness, dashboard, or production changes while the business rule conflicts",
+            "description": "does not create Gate 2, final tasks, prompts, readiness, dashboard, production changes, CONTEXT.md, or ADR files",
             "required": true
           }
         ]
@@ -86,8 +100,28 @@
       "safety": "temporary-workspace",
       "fixtures": [
         {
-          "path": "requirements/session-history.md",
-          "content": "# Session history\n\nFor privacy, the system must never store session content. For audit, the system must persist every full session for 90 days and make it retrievable.\n"
+          "path": ".ai-dev/features/session-history/00-source-requirement.md",
+          "content": "# Source Requirement\n\n## Raw Requirement\n\nFor privacy, the system must never store session content. For audit, the system must persist every full session for 90 days and make it retrievable.\n"
+        },
+        {
+          "path": ".ai-dev/features/session-history/00-spec-workflow-status.md",
+          "content": "# Spec Workflow Status\n\n## Current State\n\n- Current stage: clarification\n- Current status: waiting-for-user\n- Waiting for user: yes\n\n## Durable Decision Loop\n\n- Active Question ID: Q-BIZ-001\n- Active question persisted: yes\n- Previous answer persisted: not-applicable\n- Decision log updated: not-applicable\n- Affected specification artifacts updated: not-applicable\n\n## Next AI Action\n\nPersist the answer to Q-BIZ-001 before selecting another question.\n"
+        },
+        {
+          "path": ".ai-dev/features/session-history/00-stage-manifest.md",
+          "content": "# Stage Manifest\n\n- Current stage: clarification\n- Resume stage: clarification\n\n## Durable Decision Clarification Status\n\n- Status: waiting-for-user\n- Decision log: `14-decision-log.md`\n- Open-question register: `15-open-questions.md`\n- Active Question ID: Q-BIZ-001\n"
+        },
+        {
+          "path": ".ai-dev/features/session-history/00-context-inventory.md",
+          "content": "# Context Inventory\n\n- Project mode: greenfield\n- No architecture facts are needed to resolve Q-BIZ-001.\n"
+        },
+        {
+          "path": ".ai-dev/features/session-history/14-decision-log.md",
+          "content": "# Decision Log\n\n| Decision ID | Question / Issue | Answer / Ruling | Affected Artifacts | Date |\n|---|---|---|---|---|\n"
+        },
+        {
+          "path": ".ai-dev/features/session-history/15-open-questions.md",
+          "content": "# Open Questions\n\n| Question ID | Depends On | Layer | Question | Why It Matters | Recommended Answer | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Answer | Decision Link | Status |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| Q-BIZ-001 | none | Business | What retention rule resolves the source contradiction? | Defines privacy and audit behavior. | Never store content; retain non-content audit metadata for 90 days. | none | 00-source-requirement.md | yes |  |  | open |\n"
         }
       ]
     },

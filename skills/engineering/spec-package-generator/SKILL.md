@@ -1,6 +1,6 @@
 ---
 name: spec-package-generator
-description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses a manifest-driven two-gate PRD/EARS/BDD workflow, human-confirmed vertical capability tasks, YAML execution manifests, readiness checks, dashboard handoff, and post-implementation convergence."
+description: "Generate an AI-ready specification package from a requirement, discussed spec, or wish list. This specification-only skill uses durable one-question-at-a-time grilling, a manifest-driven two-gate PRD/EARS/BDD workflow, human-confirmed vertical capability tasks, YAML execution manifests, readiness checks, dashboard handoff, and post-implementation convergence."
 ---
 
 # Spec Package Generator Skill
@@ -60,12 +60,27 @@ When the user asks to generate a spec from a requirement:
 3. Create or update `00-spec-workflow-status.md`.
 4. Create or update `00-stage-manifest.md`; it is the artifact order authority.
 5. Detect project mode as `greenfield` or `existing`, run the intake lightweight context scan, and create `00-context-inventory.md`.
-6. In existing mode, ask for missing architecture sources immediately; these questions do not count against clarification budgets and do not block Gate 1. In greenfield mode, ask for missing technology or planned architecture decisions instead.
-7. Ask up to 8 critical business clarification questions per round when needed for a useful Gate 1 draft. Use the Gate 1 clarification matrix and human-facing question format in `references/question-and-decision-governance.md`, and use additional rounds only when the previous answers reveal new blocking ambiguity.
+6. In existing mode, queue missing architecture-source questions immediately; they do not block Gate 1. In greenfield mode, queue missing technology or planned architecture decisions instead. Present either kind through the same one-question loop.
+7. Create or update `14-decision-log.md` and `15-open-questions.md`. Run the durable grilling protocol in `references/question-and-decision-governance.md` for every unresolved critical decision: inspect discoverable facts, persist one active question, ask it with a recommendation, wait, then record and apply the answer before asking the next question.
 8. Before full Gate 1 generation, create `09-gate1-flow-sketch.md` and draft `diagrams/user-flow.mmd` when the flow is not trivial, and always do this for greenfield projects, so the user can correct the business flow early. Stop for this micro-gate until the user confirms or revises the sketch.
 9. Produce Gate 1 artifacts and stop for final Gate 1 confirmation. `13-gate1-review.html` is the only required human review surface for final Gate 1 confirmation; Markdown and feature files remain authoritative details linked from it.
 
 The lightweight context scan may read `.ai-dev/context/project-context.md` if it exists, but only to identify known systems and missing sources. It must not perform architecture verification, load constitution or implementation guidance, or update project context.
+
+## Durable Grilling
+
+Use the `grilling` decision-tree behavior as native workflow behavior. Do not
+switch to a separate interview mode. Ask exactly one decision question per turn
+and include a recommended answer. Persist the active question before asking it.
+After the user answers, first update the open question, decision log, status,
+and any stage-owned affected specification artifacts; only then select and ask
+the next unresolved question.
+
+Treat `14-decision-log.md`, `15-open-questions.md`, and
+`00-spec-workflow-status.md` as resumable interview memory. Re-read them on
+every resumed turn so a large specification does not depend on chat context.
+Specification recording is part of this workflow and is not implementation.
+Never edit production code while grilling.
 
 ## Workflow Stages
 
@@ -77,6 +92,8 @@ Create or update:
 - `00-spec-workflow-status.md`
 - `00-stage-manifest.md`
 - `00-context-inventory.md`
+- `14-decision-log.md`
+- `15-open-questions.md`
 - `09-gate1-flow-sketch.md` when the flow is not trivial or project mode is greenfield
 
 Track every relevant existing system or planned greenfield component in `00-context-inventory.md`. In existing mode, missing sources may proceed through Gate 1 but block Gate 2 unless the user explicitly accepts an `UNVERIFIED` risk. In greenfield mode, missing implementation files do not block Gate 2; planned architecture must be confirmed by the user and recorded as `confirmed-design`.
@@ -102,7 +119,7 @@ Gate 1 must be EARS/BDD-ready:
 - Every core user scenario must be extracted, safely assumed, or represented by a blocking question.
 - Every critical EARS requirement must map to at least one BDD scenario unless marked `manual-only` or `not-scenario-suitable` with a reason.
 - Gate 1 review must include the user-flow diagram and the human confirmation points that affect PRD, EARS, BDD, test strategy, or task scope.
-- Gate 1 review must list material assumptions as explicit confirm/override items. Unconfirmed material assumptions block Gate 1 approval and readiness; low-risk non-material assumptions may remain recorded without blocking.
+- Gate 1 review must list material assumptions and their individual Decision IDs as audit items. Resolve each material assumption through the one-question loop before Gate 1 approval; low-risk non-material assumptions may remain recorded without blocking.
 
 Ask the user to confirm or revise Gate 1 before proceeding.
 
@@ -122,7 +139,7 @@ Do not update `.ai-dev/context/project-context.md` here. Record verified facts, 
 
 Run after deep architecture verification for existing projects, or after greenfield architecture design confirmation for greenfield projects, and before Gate 2 artifacts.
 
-Ask up to 8 critical solution clarification questions per round when verified architecture or greenfield planned architecture leaves more than one reasonable design choice. Use the Gate 2 solution clarification matrix and focused grilling protocol in `references/question-and-decision-governance.md`. Focus on API contracts, data/query approach, integration mechanics, permissions/security, error handling, validation, logging/audit, release order, compatibility when verified released contracts or active consumers exist, greenfield technology choices, Test ID coverage, capability-slice boundaries, and parallel ownership seams. Use additional rounds only when the user's answers reveal new blocking technical ambiguity.
+Use the durable grilling protocol when verified architecture or greenfield planned architecture leaves more than one reasonable design choice. Ask and persist exactly one critical solution decision at a time. Focus on API contracts, data/query approach, integration mechanics, permissions/security, error handling, validation, logging/audit, release order, compatibility when verified released contracts or active consumers exist, greenfield technology choices, Test ID coverage, capability-slice boundaries, and parallel ownership seams.
 
 Before Gate 2 can be confirmed, the test strategy must define Test IDs for relevant BDD scenarios and enough Test Contract data to support TDD when automation or semi-automation is expected.
 
@@ -263,7 +280,7 @@ Gate 2 produces only `proposed-context-update.md`. `verified-context-update.md` 
 ## Modes
 
 - Default mode: intake -> project mode detection -> Gate 1 -> confirmation -> existing verification or greenfield design confirmation -> Gate 2 -> confirmation -> final package.
-- Gate 1 review mode: produce or revise business artifacts only, using up to 8 critical business questions per round.
+- Gate 1 review mode: produce or revise business artifacts only, resolving critical business decisions through the durable one-question loop.
 - Gate 2 review mode: verify existing architecture or confirm greenfield planned architecture, ask solution clarification questions when needed, produce or revise the solution sketch and solution artifacts, and stop before final package.
 - Finalize mode: produce the Task Plan Gate, then after human confirmation produce Manifest, prompt, traceability, readiness, and dashboard artifacts.
 - One-shot mode: allowed only when the user explicitly asks to pre-approve Gate

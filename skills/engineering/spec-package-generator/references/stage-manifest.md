@@ -13,16 +13,17 @@ Use this reference when determining artifact order and stage ownership.
 1. Intake
 2. Stage manifest
 3. Context scan
-4. Gate 1 flow sketch
-5. Gate 1
-6. Architecture grounding: existing verification or greenfield design confirmation
-7. Gate 2 solution sketch
-8. Gate 2
-9. Task planning
-10. Task Plan Gate
-11. Execution artifacts
-12. Readiness review
-13. Optional post-implementation convergence
+4. Durable decision clarification
+5. Gate 1 flow sketch
+6. Gate 1
+7. Architecture grounding: existing verification or greenfield design confirmation
+8. Gate 2 solution sketch
+9. Gate 2
+10. Task planning
+11. Task Plan Gate
+12. Execution artifacts
+13. Readiness review
+14. Optional post-implementation convergence
 
 ## Manifest Requirements
 
@@ -35,6 +36,9 @@ The stage manifest should record:
 - Artifact ownership
 - Stage dependencies
 - Stale artifact relationships
+- Durable clarification status, `14-decision-log.md`,
+  `15-open-questions.md`, and the active Question ID mirrored from
+  `00-spec-workflow-status.md`
 - Whether `09-gate1-flow-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
 - Whether `19-gate2-solution-sketch.md` is required, skipped as trivial, confirmed, or superseded. It is required in greenfield mode.
 - Whether `32-task-plan-review.md` is pending, human-confirmed, or returned for

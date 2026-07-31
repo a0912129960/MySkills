@@ -84,14 +84,17 @@ Diagram source: `diagrams/cross-project-flow.mmd`
 | Provider | Consumer | Contract / Integration | Release Order Concern |
 |---|---|---|---|
 
-## Key Solution Assumptions To Confirm Or Override
+## Key Solution Assumption Decision Audit
 
-| Assumption ID | Assumption | Suggested Default | Affected Artifacts | Blocking? | User Decision |
-|---|---|---|---|---|---|
+Resolve unresolved material assumptions one at a time through the durable
+decision loop before Gate 2 approval.
+
+| Assumption ID | Assumption | Recommended Answer | Affected Artifacts | Blocking? | Decision ID | Status |
+|---|---|---|---|---|---|---|
 
 ## Blocking Solution Questions
 
-| Question ID | Question | Suggested Default | Why It Matters | Affected Artifacts | Blocking? | Answer |
+| Question ID | Question | Recommended Answer | Why It Matters | Affected Artifacts | Blocking? | Answer |
 |---|---|---|---|---|---|---|
 
 ## Initial Test ID Coverage Direction

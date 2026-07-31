@@ -12,13 +12,13 @@ Gate 1 stage:
 - `00-spec-workflow-status.md`
 - `00-stage-manifest.md`
 - `00-context-inventory.md`
+- `14-decision-log.md`; required durable cross-stage decision memory
+- `15-open-questions.md`; required durable cross-stage question queue
 - `09-gate1-flow-sketch.md` when the flow is not trivial or project mode is greenfield; early micro-gate artifact before full Gate 1 generation
 - `10-gate1-prd.md`
 - `11-gate1-ears.md`
 - `12-gate1-bdd.feature`
 - `13-gate1-review.html`
-- `14-decision-log.md` if created; cross-stage governance log updated as questions are answered
-- `15-open-questions.md` if created; cross-stage governance register updated across stages
 - `gate1-checklist.md` if created; optional derived Gate 1 review checklist
 - `diagrams/user-flow.mmd`
 - `diagrams/user-flow.svg` when a renderer is available
@@ -174,11 +174,16 @@ It must link to the authoritative Markdown and feature files and include the exa
 
 ## `14-decision-log.md`
 
-Cross-stage governance log for material decisions, answers, and affected artifacts.
+Required cross-stage governance log for material decisions, answers, and
+affected artifacts. Append a resolved ruling before asking the next decision
+question.
 
 ## `15-open-questions.md`
 
-Cross-stage governance register for unresolved questions, status, and decision links.
+Required cross-stage governance register and interview queue for unresolved
+questions, dependencies, status, recommendations, answers, and decision links.
+Only one row may be the active user-facing question at a time; the status file
+names that Question ID.
 
 ## `gate1-checklist.md`
 

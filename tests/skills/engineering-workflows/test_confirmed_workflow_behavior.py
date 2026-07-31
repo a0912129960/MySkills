@@ -254,16 +254,43 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("formal_task_limit: 1", manifest)
         self.assertIn("same_task_subagents_allowed: true", manifest)
 
-    def test_spec_uses_grill_me_only_as_an_explicit_pause(self) -> None:
+    def test_spec_uses_durable_one_question_grilling(self) -> None:
+        package = ENGINEERING / "spec-package-generator"
         governance = read(
-            ENGINEERING
-            / "spec-package-generator"
-            / "references"
-            / "question-and-decision-governance.md"
+            package / "references" / "question-and-decision-governance.md"
         )
-        self.assertIn("Do not invoke `grill-me` automatically", governance)
-        self.assertIn("Ask one decision question at a time", governance)
-        self.assertIn("Do not apply the plan during the grilling phase", governance)
+        status = read(package / "templates" / "00-spec-workflow-status.template.md")
+        questions = read(package / "templates" / "15-open-questions.template.md")
+        stage_manifest = read(package / "references" / "stage-manifest.md")
+        stage_manifest_template = read(
+            package / "templates" / "00-stage-manifest.template.md"
+        )
+        workflow = read(package / "references" / "workflow.md")
+        grill_me = read(PRODUCTIVITY / "grill-me" / "SKILL.md")
+        grill_with_docs = read(ENGINEERING / "grill-with-docs" / "SKILL.md")
+        package_markdown = "\n".join(
+            read(path) for path in sorted(package.rglob("*.md"))
+        )
+
+        self.assertIn("## Durable Grilling Protocol", governance)
+        self.assertIn("Ask exactly one active decision question", governance)
+        self.assertIn("Only after all writes succeed", governance)
+        self.assertIn("append a Decision ID", governance)
+        self.assertIn("currently existing stage-owned affected", governance)
+        self.assertIn("Active Question ID", status)
+        self.assertIn("Previous answer persisted", status)
+        self.assertIn("Ask exactly one active question at a time", questions)
+        self.assertIn("durable one-question loop", workflow)
+        self.assertIn("Durable decision clarification", stage_manifest)
+        self.assertIn(
+            "## Durable Decision Clarification Status",
+            stage_manifest_template,
+        )
+        self.assertNotIn("grill-me", package_markdown)
+        self.assertNotIn("grill-with-doc", package_markdown)
+        self.assertNotIn("spec-package-generator", grill_me)
+        self.assertNotIn("spec-package-generator", grill_with_docs)
+        self.assertNotIn("normal batch clarification", governance)
 
     def test_spec_package_requires_task_plan_gate_and_execution_manifests(
         self,

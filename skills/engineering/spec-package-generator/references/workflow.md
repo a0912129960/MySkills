@@ -21,14 +21,14 @@ intake
   -> read 00-stage-manifest.md
   -> preserve source requirement
   -> detect project mode: greenfield or existing
-  -> lightweight context scan -> 00-context-inventory.md (missing sources -> ask user, does not block Gate 1)
-  -> business clarification questions (max 8 per round, business layer only)
+  -> lightweight context scan -> 00-context-inventory.md (missing sources -> durable one-question queue, does not block Gate 1)
+  -> durable grilling -> persist and resolve one business decision at a time
   -> 09-gate1-flow-sketch.md + draft user-flow diagram when the flow is not trivial or project mode is greenfield -> user confirms/revises the sketch
   -> Gate 1: 10-gate1-prd.md + 11-gate1-ears.md + 12-gate1-bdd.feature + 13-gate1-review.html + optional gate1-checklist.md + user-flow diagram
   -> Gate 1 confirmation
   -> existing mode: deep architecture verification
   -> greenfield mode: planned architecture and schema design confirmation
-  -> solution clarification questions (max 8 per round, solution layer only; optional explicit focused grilling for high-risk decision trees)
+  -> durable grilling -> persist and resolve one solution decision at a time
   -> 19-gate2-solution-sketch.md + draft api-flow/cross-project diagrams when applicable or project mode is greenfield -> user confirms/revises the solution sketch
   -> Gate 2: 20-gate2-project-impact.md + 21-gate2-technical-design.md + 22-gate2-constitution-compliance.md + 24-gate2-test-strategy.md + proposed-context-update.md + 25-gate2-review.html + optional gate2-checklist.md + api-flow/cross-project diagrams
   -> Gate 2 confirmation
@@ -53,10 +53,16 @@ The agent should:
 - Create or update `00-spec-workflow-status.md`.
 - Read `00-stage-manifest.md` if it exists, then follow the manifest order.
 - Read `.ai-dev/context/project-context.md` first if it exists for lightweight scan only, then create `00-context-inventory.md`.
-- In existing mode, ask for any missing architecture sources immediately; these do not count against the clarification budget and do not block Gate 1. In greenfield mode, ask for missing technology or planned architecture decisions instead.
-- Ask only critical business clarification questions that block a useful business draft. Ask at most 8 questions in one round; if the answers reveal new blocking ambiguity, ask a focused follow-up round instead of overloading the user.
+- In existing mode, queue any missing architecture-source questions immediately;
+  they do not block Gate 1. In greenfield mode, queue missing technology or
+  planned architecture decisions instead. Present either kind through the same
+  durable one-question loop.
+- Create or update `14-decision-log.md` and `15-open-questions.md`, then ask only
+  critical business decisions that block a useful business draft. Use the
+  durable grilling protocol: persist and ask exactly one question, wait, and
+  record and apply its answer before selecting another.
 - Use the Gate 1 clarification matrix from `references/question-and-decision-governance.md` to classify extracted facts, assumptions, and blocking questions.
-- Produce `09-gate1-flow-sketch.md` during clarification when the flow is not trivial, and always produce it for greenfield projects. The sketch micro-gate must include the draft scenario list, operation flow, user-flow diagram, up to 8 critical business questions, and material assumptions to confirm or override. Stop for user confirmation or revision before full Gate 1 review generation.
+- Produce `09-gate1-flow-sketch.md` during clarification when the flow is not trivial, and always produce it for greenfield projects. The sketch micro-gate must include the draft scenario list, operation flow, user-flow diagram, the current unresolved-question state, and the material-assumption decision audit. Stop for one user confirmation or revision request before full Gate 1 review generation.
 - When stopping for the sketch micro-gate, include the review artifact path, Mermaid source path, SVG path when available, and a concise diagram preview or summary in the chat response.
 - Generate the Gate 1 business artifacts and `diagrams/user-flow.mmd`; render `diagrams/user-flow.svg` when a renderer is available.
 - Ask the user to confirm or revise the business draft.
@@ -78,13 +84,15 @@ Required behavior:
 - Create the stage manifest if it does not exist.
 - Complete the lightweight context scan before Gate 1 artifacts: read `.ai-dev/context/project-context.md` if it exists, then create `00-context-inventory.md`. In existing mode, ask immediately for any missing architecture sources. In greenfield mode, ask for missing technology or planned architecture decisions.
 - Use the Gate 1 clarification matrix to classify extracted facts, assumptions, and blocking questions.
-- Before full Gate 1 artifact generation, create `09-gate1-flow-sketch.md` and a draft `diagrams/user-flow.mmd` when the flow is not trivial or project mode is greenfield. Include the sketch, up to 8 critical questions, and material assumptions in the same micro-gate, then wait for user confirmation or correction.
+- Before full Gate 1 artifact generation, create `09-gate1-flow-sketch.md` and a draft `diagrams/user-flow.mmd` when the flow is not trivial or project mode is greenfield. Include the sketch, current unresolved-question state, and material assumptions in the same micro-gate, then wait for user confirmation or correction.
 - Present the sketch and diagram paths in chat when waiting for confirmation.
 - Create the business review artifacts only.
 - Keep Gate 1 product-only: no architecture verification, no project-context write-back, no constitution loading, no implementation guidance.
 - Ensure every core scenario is extracted, safely assumed, or covered by a blocking question before Gate 1 approval.
 - Ensure every critical EARS requirement has BDD coverage or an explicit exception reason.
-- Present material assumptions as explicit confirm/override items in the Gate 1 review. Unconfirmed material assumptions block Gate 1 approval.
+- Resolve material assumptions individually through the durable one-question
+  loop. Present them with their Decision IDs as audit items in the Gate 1
+  review; unconfirmed material assumptions block Gate 1 approval.
 - Treat `13-gate1-review.html` as the primary and only required human review surface for final Gate 1 confirmation; Markdown and feature files remain authoritative details linked from it.
 - Ask the user to confirm or revise the draft.
 
@@ -122,18 +130,33 @@ Required behavior:
 - Do not block on missing code, schemas, entry points, or test runners that do not exist yet.
 - Convert the confirmed Gate 1 behavior into planned architecture facts in `00-context-inventory.md` with status `planned` or `confirmed-design`.
 - Draft the intended project structure, package boundaries, API routes or contracts, database or storage model, auth approach, test runner, build tooling, deployment target, and integration boundaries when applicable.
-- Ask up to 8 critical technology and architecture questions per round when more than one reasonable greenfield choice exists.
+- Resolve critical technology and architecture choices through the durable
+  one-question loop when more than one reasonable greenfield choice exists.
 - Treat user-confirmed planned architecture as the Gate 2 grounding source. Label it `confirmed-design`, not `verified`.
 - Use `proposed-context-update.md` to record reusable planned architecture facts, but do not write `.ai-dev/context/project-context.md` before convergence.
 - If later implementation evidence contradicts the confirmed design, convergence owns the correction.
 
 ## Solution Clarification
 
-Ask at most 8 critical solution clarification questions per round using the Gate 2 solution clarification matrix from `references/question-and-decision-governance.md`. Cover API contract shape, DB schema or query approach, integration mechanics, permission/security decisions, error-code and validation design, logging/audit behavior, release constraints, contract compatibility only when verified released contracts or active consumers exist, Test ID coverage, capability-slice boundaries, parallel ownership seams, and greenfield technology choices when project mode is `greenfield`.
+Resolve critical solution decisions one at a time using the Gate 2 solution
+clarification matrix and durable grilling protocol from
+`references/question-and-decision-governance.md`. Cover API contract shape, DB
+schema or query approach, integration mechanics, permission/security decisions,
+error-code and validation design, logging/audit behavior, release constraints,
+contract compatibility only when verified released contracts or active
+consumers exist, Test ID coverage, capability-slice boundaries, parallel
+ownership seams, and greenfield technology choices when project mode is
+`greenfield`.
 
-Prefer deriving answers from verified architecture before asking. If answers reveal new blocking technical ambiguity, ask a focused follow-up round. If verification reveals a conflict with confirmed business behavior, that is a Gate Re-Open Rule event, not a solution question.
+Prefer deriving answers from verified architecture before asking. If an answer
+reveals new blocking technical ambiguity, persist the dependent question and
+ask it only after the current answer is recorded and applied. If verification
+reveals a conflict with confirmed business behavior, that is a Gate Re-Open
+Rule event, not a solution question.
 
-Use focused grilling only when the user explicitly requests `grill-me` and the unresolved choices form a high-impact decision tree. Follow the pause-and-resume protocol in `references/question-and-decision-governance.md`; do not replace normal clarification with a mandatory interview.
+Use the same durable loop automatically for every critical decision. Keep
+clarification inside this workflow so its governance artifacts remain the
+single resumable decision record.
 
 Before Gate 2 confirmation, `24-gate2-test-strategy.md` must map relevant BDD scenarios to Test IDs and define Test Contract data for automated and semi-automated validation.
 
@@ -273,7 +296,9 @@ Rules:
 - One-shot mode does not pre-approve or skip the Task Plan Gate. Stop after
   generating the Task Plan and wait for human confirmation before Manifests,
   prompts, readiness, or dashboard generation.
-- Ask at most 8 critical business clarification questions per round and at most 8 critical solution clarification questions per round if needed.
+- Resolve any critical business or solution decisions through the durable
+  one-question loop. One-shot pre-approval permits documented assumptions, but
+  it does not permit batching unresolved human decisions.
 - Generate through the Task Plan only after resolving high-impact ambiguity or
   documenting assumptions, with `UNVERIFIED` tags where the user accepted
   gaps.

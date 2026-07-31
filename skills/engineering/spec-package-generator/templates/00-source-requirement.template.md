@@ -36,7 +36,7 @@ Use this section when the source is a wish list, loose idea list, or discussion 
 
 ## Intake Questions
 
-| Question ID | Question | Why It Matters | Suggested Default | Blocking? | Answer |
+| Question ID | Question | Why It Matters | Recommended Answer | Blocking? | Answer |
 |---|---|---|---|---|---|
 
 ## Notes

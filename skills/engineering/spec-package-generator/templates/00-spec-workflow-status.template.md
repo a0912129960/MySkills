@@ -46,11 +46,21 @@ openQuestions: []
 
 ## Pending User Questions
 
+## Durable Decision Loop
+
+- Active Question ID:
+- Active question persisted: yes/no
+- Previous answer persisted: yes/no/not-applicable
+- Decision log updated: yes/no/not-applicable
+- Affected specification artifacts updated: yes/no/not-applicable
+- Remaining blocking Question IDs:
+- Next resolvable Question ID:
+
 ## Answered Questions And Decisions
 
 ## Assumptions
 
-### Material Assumptions Pending Confirm/Override
+### Material Assumptions Pending One-Question Resolution
 
 ## Gate 1 Flow Sketch
 

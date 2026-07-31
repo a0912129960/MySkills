@@ -59,10 +59,13 @@ flowchart TD
 | Question ID | Question | Why It Matters | Blocking? | Default If Unanswered |
 |---|---|---|---|---|
 
-## Material Assumptions To Confirm Or Override
+## Material Assumption Decision Audit
 
-| Assumption ID | Assumption | Affected Artifacts | Confirm / Override | Notes |
-|---|---|---|---|---|
+Resolve unresolved material assumptions one at a time through the durable
+decision loop before final Gate 1 approval.
+
+| Assumption ID | Assumption | Affected Artifacts | Decision ID | Status | Notes |
+|---|---|---|---|---|---|
 
 ## Human Correction Notes
 

@@ -13,9 +13,12 @@ openQuestions: []
 
 # Open Questions
 
-When asking these questions to the user, present them as a numbered batch with suggested default, affected artifacts, and blocking status so the user can answer in one reply.
+Ask exactly one active question at a time. Persist it here and in
+`00-spec-workflow-status.md` before asking. After the answer, update this row,
+the linked decision, and affected specification artifacts before activating
+another question.
 
 Allowed status values: `open`, `answered`, `resolved`, `deferred`, `superseded`.
 
-| Question ID | Layer | Question | Why It Matters | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Answer | Decision Link | Status |
-|---|---|---|---|---|---|---|---|---|---|
+| Question ID | Depends On | Layer | Question | Why It Matters | Recommended Answer | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Answer | Decision Link | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|

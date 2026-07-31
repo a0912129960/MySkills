@@ -40,6 +40,9 @@ Update the status file whenever:
 - The user provides an architecture source.
 - Critical questions are asked.
 - The user answers questions.
+- The active durable-grilling question changes.
+- An answer is persisted, converted to a decision, or applied to affected
+  specification artifacts.
 - Assumptions are made or accepted.
 - `09-gate1-flow-sketch.md` is created, revised, confirmed, skipped as trivial, or superseded.
 - `19-gate2-solution-sketch.md` is created, revised, confirmed, skipped as trivial, or superseded.
@@ -100,6 +103,12 @@ Use these status values:
 
 When resuming, continue from `Next AI Action`.
 
+Before asking any new clarification question, re-read the active question and
+decision state from `00-spec-workflow-status.md`, `14-decision-log.md`, and
+`15-open-questions.md`. If the latest user answer has not been persisted, record
+and apply it first. Never reconstruct the decision history from chat when the
+durable artifacts exist.
+
 Do not ask the user to repeat:
 
 - Answered questions
@@ -117,10 +126,14 @@ When waiting for the user, the status file must show:
 
 - `Waiting for user: yes`
 - Current status: `waiting-for-user`
-- The exact pending questions or confirmation request
+- Exactly one active Question ID and its exact question, or one confirmation
+  request
 - Which output is blocked
 - What the user can answer next
 - Any stale or superseded artifacts that need regeneration
+- Whether the active question is persisted in `15-open-questions.md`
+- That the next AI action is to persist the answer before selecting another
+  question
 
 When readiness is in progress, the status file must also show:
 
@@ -140,7 +153,8 @@ When waiting on an early flow sketch, the status file must show:
 - Waiting for user: `yes`
 - Sketch file path
 - Draft user-flow diagram path
-- Flow decisions, material assumptions, and blocking questions awaiting confirmation
+- The single active flow decision or final sketch confirmation request
+- Material-assumption Decision IDs and any remaining blocking Question IDs
 
 When waiting on an early Gate 2 solution sketch, the status file must show:
 
