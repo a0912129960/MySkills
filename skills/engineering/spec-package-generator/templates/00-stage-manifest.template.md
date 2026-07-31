@@ -2,7 +2,7 @@
 artifactId: 00-stage-manifest
 stage: intake
 status: template
-version: 3
+version: 4
 dependsOn: []
 invalidates: []
 summary: Stage manifest template that defines optimized artifact order.
@@ -31,6 +31,8 @@ openQuestions: []
 - Decision log: `14-decision-log.md`
 - Open-question register: `15-open-questions.md`
 - Active-question source: `00-spec-workflow-status.md`
+- Drafting rule: each clarification stage may create and revise its draft
+  sketch; its following sketch stage owns confirmation only
 
 | Phase | Stage ID | Status | Depends On |
 |---|---|---|---|
@@ -41,6 +43,8 @@ openQuestions: []
 
 - Required: yes/no (required in greenfield mode)
 - Status: not-started / drafted / waiting-for-user / confirmed / skipped-trivial / superseded
+- Draft owner: `gate1-decision-clarification`
+- Confirmation owner: `gate1-flow-sketch`
 - Artifact: `09-gate1-flow-sketch.md`
 - Draft diagram: `diagrams/user-flow.mmd`
 
@@ -48,6 +52,8 @@ openQuestions: []
 
 - Required: yes/no (required in greenfield mode)
 - Status: not-started / drafted / waiting-for-user / confirmed / skipped-trivial / superseded
+- Draft owner: `gate2-decision-clarification`
+- Confirmation owner: `gate2-solution-sketch`
 - Artifact: `19-gate2-solution-sketch.md`
 - Draft API diagram: `diagrams/api-flow.mmd`
 - Draft cross-project diagram: `diagrams/cross-project-flow.mmd`

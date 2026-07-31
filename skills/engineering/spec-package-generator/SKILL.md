@@ -60,9 +60,18 @@ When the user asks to generate a spec from a requirement:
 3. Create or update `00-spec-workflow-status.md`.
 4. Create or update `00-stage-manifest.md`; it is the artifact order authority.
 5. Detect project mode as `greenfield` or `existing`, run the intake lightweight context scan, and create `00-context-inventory.md`.
-6. In existing mode, queue missing architecture-source questions immediately; they do not block Gate 1. In greenfield mode, queue missing technology or planned architecture decisions instead. Present either kind through the same one-question loop.
-7. Create or update `14-decision-log.md` and `15-open-questions.md`. Run the durable grilling protocol in `references/question-and-decision-governance.md` for every unresolved critical decision: inspect discoverable facts, persist one active question, ask it with a recommendation, wait, then record and apply the answer before asking the next question.
-8. Before full Gate 1 generation, create `09-gate1-flow-sketch.md` and draft `diagrams/user-flow.mmd` when the flow is not trivial, and always do this for greenfield projects, so the user can correct the business flow early. Stop for this micro-gate until the user confirms or revises the sketch.
+6. In existing mode, queue missing architecture-source questions immediately;
+   they do not block Gate 1 and must not become active until post-Gate-1
+   architecture grounding. In greenfield mode, queue technology and planned
+   architecture questions for post-Gate-1 design confirmation unless a choice
+   changes user-visible Gate 1 behavior.
+7. Create or update `14-decision-log.md` and `15-open-questions.md`. Run the durable grilling protocol in `references/question-and-decision-governance.md` for every unresolved critical decision: inspect discoverable facts, persist one active question, ask it with a recommendation and rationale, wait, then record and apply the answer before asking the next question.
+8. During Gate 1 clarification, create and revise
+   `09-gate1-flow-sketch.md` and draft `diagrams/user-flow.mmd` when the flow is
+   not trivial, and always do this for greenfield projects. Resolve all critical
+   business decisions before moving to the separate flow-sketch confirmation
+   stage; never ask a decision question and sketch-confirmation question in the
+   same turn.
 9. Produce Gate 1 artifacts and stop for final Gate 1 confirmation. `13-gate1-review.html` is the only required human review surface for final Gate 1 confirmation; Markdown and feature files remain authoritative details linked from it.
 
 The lightweight context scan may read `.ai-dev/context/project-context.md` if it exists, but only to identify known systems and missing sources. It must not perform architecture verification, load constitution or implementation guidance, or update project context.
@@ -82,6 +91,8 @@ every resumed turn so a large specification does not depend on chat context.
 `00-spec-workflow-status.md` alone owns the active Question ID; the stage
 manifest records separate Gate 1 and Gate 2 clarification phase statuses
 without copying that ID.
+Clarification stages own draft-sketch creation and decision-driven updates;
+their following sketch stages own only final human confirmation or correction.
 Specification recording is part of this workflow and is not implementation.
 Never edit production code while grilling.
 
@@ -140,7 +151,10 @@ Do not update `.ai-dev/context/project-context.md` here. Record verified facts, 
 
 ### Solution Clarification
 
-Run after deep architecture verification for existing projects, or after greenfield architecture design confirmation for greenfield projects, and before Gate 2 artifacts.
+Run after deep architecture verification for existing projects, or after
+greenfield architecture design confirmation for greenfield projects, and
+before full Gate 2 artifacts. This stage owns creation and decision-driven
+revision of the draft Gate 2 solution sketch.
 
 Use the durable grilling protocol when verified architecture or greenfield planned architecture leaves more than one reasonable design choice. Ask and persist exactly one critical solution decision at a time. Focus on API contracts, data/query approach, integration mechanics, permissions/security, error handling, validation, logging/audit, release order, compatibility when verified released contracts or active consumers exist, greenfield technology choices, Test ID coverage, capability-slice boundaries, and parallel ownership seams.
 
@@ -148,9 +162,18 @@ Before Gate 2 can be confirmed, the test strategy must define Test IDs for relev
 
 ### Gate 2 Solution Sketch
 
-Before full Gate 2 generation, create `19-gate2-solution-sketch.md` and draft `diagrams/api-flow.mmd` plus `diagrams/cross-project-flow.mmd` when applicable, so the user can correct the technical flow early. In greenfield mode, always create this sketch. Stop for this micro-gate until the user confirms or revises the sketch.
+During solution clarification, create and revise
+`19-gate2-solution-sketch.md` and draft `diagrams/api-flow.mmd` plus
+`diagrams/cross-project-flow.mmd` when applicable. In greenfield mode, always
+create this sketch. After all critical solution decisions are resolved, move
+to `gate2-solution-sketch` and stop for one confirmation or revision request.
 
-The sketch must be derived from verified inventory entries, `confirmed-design` greenfield entries, or explicitly accepted `UNVERIFIED` risks. It should cover draft API flow, cross-project responsibility direction, provider/consumer boundaries, material solution assumptions, blocking solution questions, initial Test ID direction, capability-slice boundaries, and parallel ownership seams.
+The sketch must be derived from verified inventory entries,
+`confirmed-design` greenfield entries, or explicitly accepted `UNVERIFIED`
+risks. It should cover draft API flow, cross-project responsibility direction,
+provider/consumer boundaries, material solution assumptions, canonical
+blocking-question references, initial Test ID direction, capability-slice
+boundaries, and parallel ownership seams.
 
 ### Gate 2: Solution Review
 

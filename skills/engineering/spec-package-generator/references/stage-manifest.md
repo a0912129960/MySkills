@@ -13,12 +13,12 @@ Use this reference when determining artifact order and stage ownership.
 1. Intake
 2. Stage manifest
 3. Context scan
-4. Gate 1 durable decision clarification
-5. Gate 1 flow sketch
+4. Gate 1 durable decision clarification and flow-sketch drafting
+5. Gate 1 flow-sketch confirmation
 6. Gate 1
 7. Architecture grounding: existing verification or greenfield design confirmation
-8. Gate 2 durable decision clarification
-9. Gate 2 solution sketch
+8. Gate 2 durable decision clarification and solution-sketch drafting
+9. Gate 2 solution-sketch confirmation
 10. Gate 2
 11. Task planning
 12. Task Plan Gate
@@ -45,6 +45,12 @@ The stage manifest should record:
 - Whether `32-task-plan-review.md` is pending, human-confirmed, or returned for
   revision, and which Task IDs are confirmed.
 - Resume instructions
+
+The clarification stages own initial creation and decision-driven revision of
+their draft sketch artifacts. A draft sketch may therefore exist while its
+clarification stage is `waiting-for-user`. The following sketch stage owns only
+the final human confirmation or correction request and must not begin until the
+applicable clarification stage is `complete`.
 
 ## Resume Rule
 

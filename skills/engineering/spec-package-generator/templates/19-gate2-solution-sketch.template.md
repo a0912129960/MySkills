@@ -2,12 +2,13 @@
 artifactId: 19-gate2-solution-sketch
 stage: gate2-solution-sketch
 status: template
-version: 2
+version: 3
 dependsOn:
   - 00-context-inventory.template.md
   - 10-gate1-prd.template.md
   - 11-gate1-ears.template.md
   - 12-gate1-bdd.template.feature
+  - 15-open-questions.template.md
 invalidates:
   - 20-gate2-project-impact.template.md
   - 21-gate2-technical-design.template.md
@@ -89,13 +90,16 @@ Diagram source: `diagrams/cross-project-flow.mmd`
 Resolve unresolved material assumptions one at a time through the durable
 decision loop before Gate 2 approval.
 
-| Assumption ID | Assumption | Recommended Answer | Affected Artifacts | Blocking? | Decision ID | Status |
-|---|---|---|---|---|---|---|
+Do not copy mutable question or answer fields here. Link each assumption to its
+canonical question or normalized decision.
 
-## Blocking Solution Questions
+| Assumption ID | Assumption Summary | Affected Artifacts | Question / Decision Link |
+|---|---|---|---|
 
-| Question ID | Question | Recommended Answer | Why It Matters | Affected Artifacts | Blocking? | Answer |
-|---|---|---|---|---|---|---|
+## Blocking Solution Question References
+
+| Question ID | Solution Area / Purpose | Canonical Register |
+|---|---|---|
 
 ## Initial Test ID Coverage Direction
 

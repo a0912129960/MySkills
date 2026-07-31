@@ -22,14 +22,14 @@ intake
   -> preserve source requirement
   -> detect project mode: greenfield or existing
   -> lightweight context scan -> 00-context-inventory.md (missing sources -> durable one-question queue, does not block Gate 1)
-  -> durable grilling -> persist and resolve one business decision at a time
-  -> 09-gate1-flow-sketch.md + draft user-flow diagram when the flow is not trivial or project mode is greenfield -> user confirms/revises the sketch
+  -> durable grilling + flow-sketch drafting -> persist and resolve one business decision at a time while updating the draft
+  -> after critical business decisions are resolved -> user confirms/revises 09-gate1-flow-sketch.md and the draft user-flow diagram
   -> Gate 1: 10-gate1-prd.md + 11-gate1-ears.md + 12-gate1-bdd.feature + 13-gate1-review.html + optional gate1-checklist.md + user-flow diagram
   -> Gate 1 confirmation
   -> existing mode: deep architecture verification
   -> greenfield mode: planned architecture and schema design confirmation
-  -> durable grilling -> persist and resolve one solution decision at a time
-  -> 19-gate2-solution-sketch.md + draft api-flow/cross-project diagrams when applicable or project mode is greenfield -> user confirms/revises the solution sketch
+  -> durable grilling + solution-sketch drafting -> persist and resolve one solution decision at a time while updating the draft
+  -> after critical solution decisions are resolved -> user confirms/revises 19-gate2-solution-sketch.md and draft api-flow/cross-project diagrams
   -> Gate 2: 20-gate2-project-impact.md + 21-gate2-technical-design.md + 22-gate2-constitution-compliance.md + 24-gate2-test-strategy.md + proposed-context-update.md + 25-gate2-review.html + optional gate2-checklist.md + api-flow/cross-project diagrams
   -> Gate 2 confirmation
   -> task planning: 30-approved-feature-baseline.md + 31-final-task-index.md + tasks
@@ -47,22 +47,33 @@ When the user says something like "read this file and generate the spec", start 
 The agent should:
 
 - Read the requirement file or pasted requirement.
-- If the source is a wish list, loose idea list, or discussion notes, break it down in `00-source-requirement.md` before drafting Gate 1: map each wish item to an inferred goal, user scenario, ambiguity or gap, suggested assumption, clarification question, and decision status.
+- If the source is a wish list, loose idea list, or discussion notes, break it
+  down in `00-source-requirement.md` before drafting Gate 1: map each wish item
+  to an inferred goal, user scenario, ambiguity or gap, suggested assumption,
+  and canonical Question/Decision ID references.
 - Detect project mode and record it in `00-spec-workflow-status.md` and `00-context-inventory.md`: use `greenfield` when the project or feature has no existing implementation sources to verify; use `existing` when relevant code, contracts, schemas, or docs already exist.
 - Infer the feature name, or ask for it if unclear.
 - Create or update `00-spec-workflow-status.md`.
 - Read `00-stage-manifest.md` if it exists, then follow the manifest order.
 - Read `.ai-dev/context/project-context.md` first if it exists for lightweight scan only, then create `00-context-inventory.md`.
 - In existing mode, queue any missing architecture-source questions immediately;
-  they do not block Gate 1. In greenfield mode, queue missing technology or
-  planned architecture decisions instead. Present either kind through the same
-  durable one-question loop.
+  they do not block Gate 1 and must not become active until post-Gate-1
+  architecture grounding. In greenfield mode, queue missing technology or
+  planned architecture decisions for post-Gate-1 design confirmation unless a
+  choice changes user-visible Gate 1 behavior.
 - Create or update `14-decision-log.md` and `15-open-questions.md`, then ask only
   critical business decisions that block a useful business draft. Use the
-  durable grilling protocol: persist and ask exactly one question, wait, and
-  record and apply its answer before selecting another.
+  durable grilling protocol as the durable one-question loop: persist and ask
+  exactly one question, wait, and record and apply its answer before selecting
+  another.
 - Use the Gate 1 clarification matrix from `references/question-and-decision-governance.md` to classify extracted facts, assumptions, and blocking questions.
-- Produce `09-gate1-flow-sketch.md` during clarification when the flow is not trivial, and always produce it for greenfield projects. The sketch micro-gate must include the draft scenario list, operation flow, user-flow diagram, the current unresolved-question state, and the material-assumption decision audit. Stop for one user confirmation or revision request before full Gate 1 review generation.
+- Produce and revise `09-gate1-flow-sketch.md` during clarification when the
+  flow is not trivial, and always produce it for greenfield projects. The draft
+  must include the scenario list, operation flow, user-flow diagram, canonical
+  unresolved-question references, and material-assumption decision audit.
+  Resolve all critical business decisions first, mark Gate 1 clarification
+  complete, then stop for exactly one sketch confirmation or revision request
+  before full Gate 1 review generation.
 - When stopping for the sketch micro-gate, include the review artifact path, Mermaid source path, SVG path when available, and a concise diagram preview or summary in the chat response.
 - Generate the Gate 1 business artifacts and `diagrams/user-flow.mmd`; render `diagrams/user-flow.svg` when a renderer is available.
 - Ask the user to confirm or revise the business draft.
@@ -78,13 +89,25 @@ Gate 1 is the default for normal feature specification requests.
 Required behavior:
 
 - Save the source requirement.
-- For wish lists or loose notes, convert the raw wishes into inferred goals, user scenarios, ambiguities, assumptions, clarification questions, and decision status in `00-source-requirement.md`.
+- For wish lists or loose notes, convert the raw wishes into inferred goals,
+  user scenarios, ambiguities, assumptions, and canonical Question/Decision ID
+  references in `00-source-requirement.md`.
 - Detect and record project mode as `greenfield` or `existing`.
 - Create or update the workflow status file.
 - Create the stage manifest if it does not exist.
-- Complete the lightweight context scan before Gate 1 artifacts: read `.ai-dev/context/project-context.md` if it exists, then create `00-context-inventory.md`. In existing mode, ask immediately for any missing architecture sources. In greenfield mode, ask for missing technology or planned architecture decisions.
+- Complete the lightweight context scan before Gate 1 artifacts: read
+  `.ai-dev/context/project-context.md` if it exists, then create
+  `00-context-inventory.md`. In existing mode, queue missing architecture
+  sources for post-Gate-1 architecture grounding. In greenfield mode, queue
+  technology or planned architecture decisions for post-Gate-1 design
+  confirmation unless they change user-visible Gate 1 behavior.
 - Use the Gate 1 clarification matrix to classify extracted facts, assumptions, and blocking questions.
-- Before full Gate 1 artifact generation, create `09-gate1-flow-sketch.md` and a draft `diagrams/user-flow.mmd` when the flow is not trivial or project mode is greenfield. Include the sketch, current unresolved-question state, and material assumptions in the same micro-gate, then wait for user confirmation or correction.
+- During Gate 1 clarification, create and revise
+  `09-gate1-flow-sketch.md` and draft `diagrams/user-flow.mmd` when the flow is
+  not trivial or project mode is greenfield. Reference unresolved questions
+  from `15-open-questions.md` without copying their mutable fields. After all
+  critical business decisions are resolved, move to `gate1-flow-sketch` and
+  wait for one user confirmation or correction.
 - Present the sketch and diagram paths in chat when waiting for confirmation.
 - Create the business review artifacts only.
 - Keep Gate 1 product-only: no architecture verification, no project-context write-back, no constitution loading, no implementation guidance.
@@ -162,17 +185,26 @@ Before Gate 2 confirmation, `24-gate2-test-strategy.md` must map relevant BDD sc
 
 ## Gate 2 Solution Sketch
 
-Runs after deep architecture verification or greenfield architecture design confirmation and solution clarification, before full Gate 2 artifacts.
+Drafting starts during solution clarification after deep architecture
+verification or greenfield architecture design confirmation. Final sketch
+confirmation runs only after critical solution clarification is complete and
+before full Gate 2 artifacts.
 
 Required behavior:
 
-- Create `19-gate2-solution-sketch.md`.
-- Create draft `diagrams/api-flow.mmd`.
-- Create draft `diagrams/cross-project-flow.mmd` when multiple projects or systems are involved.
+- Create and revise `19-gate2-solution-sketch.md` during solution clarification.
+- Create and revise draft `diagrams/api-flow.mmd` during clarification.
+- Create and revise draft `diagrams/cross-project-flow.mmd` during
+  clarification when multiple projects or systems are involved.
 - For greenfield projects, create the solution sketch even when the solution appears simple, because the sketch confirms the planned technical shape before task generation.
 - Derive every participant, responsibility, and call from `00-context-inventory.md` entries with status `verified`, `confirmed-design`, or explicitly accepted `UNVERIFIED`.
-- Include project responsibility split, provider/consumer direction, key solution assumptions, blocking solution questions, initial Test ID coverage direction, capability-slice boundaries, and parallel ownership seams.
-- Stop and wait for user confirmation or correction before full Gate 2 artifact generation.
+- Include project responsibility split, provider/consumer direction, key
+  solution assumptions, canonical blocking-question references, initial Test ID
+  coverage direction, capability-slice boundaries, and parallel ownership
+  seams.
+- Resolve all critical solution decisions, mark Gate 2 clarification complete,
+  then stop and wait for one user confirmation or correction before full Gate 2
+  artifact generation.
 - Present the solution sketch path, diagram paths, and exact confirmation or correction request in chat when waiting for confirmation.
 - Record the sketch state in `00-spec-workflow-status.md` and `00-stage-manifest.md`.
 

@@ -2,10 +2,11 @@
 artifactId: 10-gate1-prd
 stage: gate1
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-source-requirement.template.md
   - 00-context-inventory.template.md
+  - 15-open-questions.template.md
 invalidates:
   - 11-gate1-ears.template.md
   - 12-gate1-bdd.template.feature
@@ -48,9 +49,10 @@ Scenario field status values: `extracted`, `assumed`, `asked`, `blocking`, `not-
 
 ## Assumptions
 
-## Open Questions
+## Open Question References
 
-Open question status values are tracked in `15-open-questions.md`: `open`, `answered`, `resolved`, `deferred`, `superseded`.
+Mutable question content and status are tracked only in
+`15-open-questions.md`.
 
-| Question ID | Layer | Question | Why It Matters | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Decision Link |
-|---|---|---|---|---|---|---|---|
+| Question ID | Product Area / Purpose | Canonical Register |
+|---|---|---|

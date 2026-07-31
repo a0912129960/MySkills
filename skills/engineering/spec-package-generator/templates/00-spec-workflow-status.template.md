@@ -2,7 +2,7 @@
 artifactId: 00-spec-workflow-status
 stage: intake
 status: template
-version: 2
+version: 3
 dependsOn: []
 invalidates: []
 summary: Resumable workflow status template.
@@ -44,7 +44,7 @@ openQuestions: []
 - [ ] Implementation evidence collected
 - [ ] Convergence complete
 
-## Pending User Questions
+## Pending User Question References
 
 ## Durable Decision Loop
 
@@ -56,9 +56,9 @@ openQuestions: []
 - Remaining blocking Question IDs:
 - Next resolvable Question ID:
 
-## Answered Questions And Decisions
+## Recent Decision References
 
-## Assumptions
+## Assumption References
 
 ### Material Assumptions Pending One-Question Resolution
 

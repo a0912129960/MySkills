@@ -267,6 +267,18 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         )
         workflow = read(package / "references" / "workflow.md")
         status_tracking = read(package / "references" / "status-tracking.md")
+        source_requirement = read(
+            package / "templates" / "00-source-requirement.template.md"
+        )
+        gate1_sketch_template = read(
+            package / "templates" / "09-gate1-flow-sketch.template.md"
+        )
+        gate2_sketch_template = read(
+            package / "templates" / "19-gate2-solution-sketch.template.md"
+        )
+        gate1_prd_template = read(
+            package / "templates" / "10-gate1-prd.template.md"
+        )
         grill_me = read(PRODUCTIVITY / "grill-me" / "SKILL.md")
         grill_with_docs = read(ENGINEERING / "grill-with-docs" / "SKILL.md")
         package_contract_text = "\n".join(
@@ -281,19 +293,25 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         self.assertIn("append a Decision ID", governance)
         self.assertIn("currently existing stage-owned affected", governance)
         self.assertIn("- Recommended answer and brief rationale", governance)
+        self.assertIn("Recommended Answer / Rationale", questions)
         self.assertIn("Active Question ID", status)
         self.assertIn("Previous answer persisted", status)
+        self.assertIn("## Pending User Question References", status)
+        self.assertNotIn("## Pending User Questions\n", status)
+        self.assertNotIn("## Answered Questions And Decisions", status)
         self.assertIn("Ask exactly one active question at a time", questions)
         self.assertIn("durable one-question loop", workflow)
         gate1_clarification = stage_manifest.index(
-            "4. Gate 1 durable decision clarification"
+            "4. Gate 1 durable decision clarification and flow-sketch drafting"
         )
-        gate1_sketch = stage_manifest.index("5. Gate 1 flow sketch")
+        gate1_sketch = stage_manifest.index("5. Gate 1 flow-sketch confirmation")
         architecture_grounding = stage_manifest.index("7. Architecture grounding")
         gate2_clarification = stage_manifest.index(
-            "8. Gate 2 durable decision clarification"
+            "8. Gate 2 durable decision clarification and solution-sketch drafting"
         )
-        gate2_sketch = stage_manifest.index("9. Gate 2 solution sketch")
+        gate2_sketch = stage_manifest.index(
+            "9. Gate 2 solution-sketch confirmation"
+        )
         self.assertLess(gate1_clarification, gate1_sketch)
         self.assertLess(architecture_grounding, gate2_clarification)
         self.assertLess(gate2_clarification, gate2_sketch)
@@ -303,11 +321,83 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         )
         self.assertIn("`gate1-decision-clarification`", stage_manifest_template)
         self.assertIn("`gate2-decision-clarification`", stage_manifest_template)
+        self.assertIn(
+            "Draft owner: `gate1-decision-clarification`",
+            stage_manifest_template,
+        )
+        self.assertIn(
+            "Confirmation owner: `gate1-flow-sketch`",
+            stage_manifest_template,
+        )
+        self.assertIn(
+            "Draft owner: `gate2-decision-clarification`",
+            stage_manifest_template,
+        )
+        self.assertIn(
+            "Confirmation owner: `gate2-solution-sketch`",
+            stage_manifest_template,
+        )
         self.assertNotIn("- Active Question ID:", stage_manifest_template)
         self.assertNotIn("mirrored from", stage_manifest)
         self.assertIn(
             "sole owner of the active\nQuestion ID",
             status_tracking,
+        )
+        self.assertIn(
+            "`15-open-questions.md` is the sole owner of each question's text",
+            governance,
+        )
+        self.assertIn(
+            "architecture verification or greenfield design confirmation for",
+            governance,
+        )
+        self.assertIn(
+            "Architecture grounding instead advances to Gate 2 clarification",
+            governance,
+        )
+        self.assertIn(
+            "Task Split questions belong to `task-plan-gate`",
+            governance,
+        )
+        self.assertIn("## Intake Question References", source_requirement)
+        self.assertNotIn("## Intake Questions\n", source_requirement)
+        self.assertNotIn(
+            "| Question ID | Question | Why It Matters |",
+            source_requirement,
+        )
+        self.assertIn("## Critical Question References", gate1_sketch_template)
+        self.assertIn(
+            "| Question ID | Flow Area / Purpose | Canonical Register |",
+            gate1_sketch_template,
+        )
+        self.assertIn(
+            "## Blocking Solution Question References",
+            gate2_sketch_template,
+        )
+        self.assertIn(
+            "| Question ID | Solution Area / Purpose | Canonical Register |",
+            gate2_sketch_template,
+        )
+        self.assertNotIn(
+            "| Question ID | Question | Recommended Answer",
+            gate2_sketch_template,
+        )
+        self.assertIn("## Open Question References", gate1_prd_template)
+        self.assertIn(
+            "| Question ID | Product Area / Purpose | Canonical Register |",
+            gate1_prd_template,
+        )
+        self.assertNotIn(
+            "| Question ID | Layer | Question |",
+            gate1_prd_template,
+        )
+        self.assertIn(
+            "must not become active until post-Gate-1",
+            workflow,
+        )
+        self.assertNotIn(
+            "ask immediately for any missing architecture sources",
+            workflow,
         )
         self.assertNotIn("grill-me", package_contract_text)
         self.assertNotIn("grill-with-doc", package_contract_text)
@@ -332,6 +422,14 @@ class ConfirmedWorkflowBehaviorTests(unittest.TestCase):
         )
         self.assertIn(
             "without also requesting flow-sketch confirmation",
+            intake["oracle"]["expected_outcome"],
+        )
+        self.assertIn(
+            "during Gate 1 clarification",
+            intake["oracle"]["expected_outcome"],
+        )
+        self.assertIn(
+            "queues the technology decision for post-Gate-1",
             intake["oracle"]["expected_outcome"],
         )
 

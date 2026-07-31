@@ -5,6 +5,9 @@ Use this reference when deciding which artifact owns a rule and what must be reg
 ## Authority Levels
 
 - Normative: source requirement, PRD, EARS, BDD, confirmed Gate 2 solution sketch, technical design, constitution compliance, test strategy, approved baseline, task index, task files, Task Plan Gate, traceability, readiness, convergence.
+- Decision governance: `15-open-questions.md` owns mutable question rows,
+  `14-decision-log.md` owns normalized material rulings, and
+  `00-spec-workflow-status.md` owns the single active Question ID.
 - Execution-routing: Task Execution Manifests. They bind normative artifacts
   and runtime policy without redefining Task behavior.
 - Derived: review HTML, dashboard, prompts, summaries, diagrams.

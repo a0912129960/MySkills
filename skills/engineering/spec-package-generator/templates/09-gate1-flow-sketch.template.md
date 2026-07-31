@@ -2,10 +2,11 @@
 artifactId: 09-gate1-flow-sketch
 stage: gate1-flow-sketch
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-source-requirement.template.md
   - 00-context-inventory.template.md
+  - 15-open-questions.template.md
 invalidates:
   - 10-gate1-prd.template.md
   - 11-gate1-ears.template.md
@@ -41,7 +42,7 @@ This is an early review artifact. Confirm or correct this sketch before the full
 
 Use this section only when state transitions matter.
 
-| State | Trigger | Next State | Business Rule | Open Question |
+| State | Trigger | Next State | Business Rule | Question ID |
 |---|---|---|---|---|
 
 ## Draft User Flow Diagram
@@ -54,18 +55,21 @@ flowchart TD
   Start([Start]) --> Confirm[Replace with draft business flow]
 ```
 
-## Critical Questions
+## Critical Question References
 
-| Question ID | Question | Why It Matters | Blocking? | Default If Unanswered |
-|---|---|---|---|---|
+Keep mutable question text, recommendation and rationale, answer, blocking
+status, and lifecycle status only in `15-open-questions.md`.
+
+| Question ID | Flow Area / Purpose | Canonical Register |
+|---|---|---|
 
 ## Material Assumption Decision Audit
 
 Resolve unresolved material assumptions one at a time through the durable
 decision loop before final Gate 1 approval.
 
-| Assumption ID | Assumption | Affected Artifacts | Decision ID | Status | Notes |
-|---|---|---|---|---|---|
+| Assumption ID | Assumption Summary | Affected Artifacts | Question / Decision Link |
+|---|---|---|---|
 
 ## Human Correction Notes
 

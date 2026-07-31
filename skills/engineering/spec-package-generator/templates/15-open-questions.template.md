@@ -2,7 +2,7 @@
 artifactId: 15-open-questions
 stage: cross-stage
 status: template
-version: 1
+version: 2
 dependsOn:
   - 00-spec-workflow-status.template.md
 invalidates: []
@@ -20,5 +20,5 @@ another question.
 
 Allowed status values: `open`, `answered`, `resolved`, `deferred`, `superseded`.
 
-| Question ID | Depends On | Layer | Question | Why It Matters | Recommended Answer | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Answer | Decision Link | Status |
+| Question ID | Depends On | Layer | Question | Why It Matters | Recommended Answer / Rationale | Default Assumption If Unanswered | Affected Artifacts | Blocking? | Answer | Decision Link | Status |
 |---|---|---|---|---|---|---|---|---|---|---|---|

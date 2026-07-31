@@ -72,6 +72,11 @@ Include:
 - Date generated
 - Notes about missing source material
 
+Wish-list breakdowns may reference Question IDs and Decision IDs for
+provenance, but must not copy mutable recommendations, answers, blocking flags,
+decision status, or question lifecycle status. `15-open-questions.md` owns
+question rows and `14-decision-log.md` owns normalized material rulings.
+
 ## `00-spec-workflow-status.md`
 
 Track the resumable workflow state.
@@ -83,9 +88,9 @@ Include:
 - Waiting-for-user flag
 - Next AI Action
 - Progress checklist
-- Pending user questions
-- Answered questions and decisions
-- Accepted assumptions
+- Pending Question ID references
+- Recent Decision ID references
+- Assumption Question/Decision references
 - Context gaps summary
 - Generated files
 - Files still needed
@@ -123,7 +128,9 @@ Rules:
 
 ## `09-gate1-flow-sketch.md`
 
-Use as the early human confirmation micro-gate when the business flow is not trivial. Always use it in greenfield mode.
+Draft and revise it during Gate 1 decision clarification when the business flow
+is not trivial. Always use it in greenfield mode. Move to its human-confirmation
+micro-gate only after critical Gate 1 decisions are resolved.
 
 Include:
 
@@ -131,10 +138,12 @@ Include:
 - Draft operation flow
 - Draft state model when relevant
 - Draft `diagrams/user-flow.mmd` status
-- Critical questions and material assumptions
+- Canonical critical-question references and material-assumption decision links
 - Human correction notes
 
-Stop after creating it and wait for user confirmation or revision before producing full Gate 1 PRD/EARS/BDD/review artifacts.
+Do not request sketch confirmation merely because the draft now exists. After
+Gate 1 clarification is complete, stop for one confirmation or revision request
+before producing full Gate 1 PRD/EARS/BDD/review artifacts.
 
 ## `.ai-dev/context/project-context.md`
 
@@ -183,7 +192,9 @@ question.
 Required cross-stage governance register and interview queue for unresolved
 questions, dependencies, status, recommendations, answers, and decision links.
 Only one row may be the active user-facing question at a time; the status file
-names that Question ID.
+names that Question ID. This file alone owns each question's mutable text,
+recommendation and rationale, answer, blocking flag, decision link, and
+lifecycle status.
 
 ## `gate1-checklist.md`
 
@@ -193,7 +204,10 @@ This file must not redefine behavior.
 
 ## `19-gate2-solution-sketch.md`
 
-Use as the early human confirmation micro-gate after existing architecture verification or greenfield architecture design confirmation and before full Gate 2 generation.
+Draft and revise it during Gate 2 decision clarification after existing
+architecture verification or greenfield architecture design confirmation. Use
+it as the human-confirmation micro-gate only after critical solution decisions
+are resolved and before full Gate 2 generation.
 
 Include:
 
@@ -203,13 +217,17 @@ Include:
 - Project responsibility split
 - Provider / consumer direction
 - Key solution assumptions
-- Blocking solution questions
+- Canonical blocking-solution-question references
 - Initial Test ID coverage direction
 - Initial vertical capability-slice boundaries
 - Initial dependency waves, parallel ownership, and integration seams
 - Human correction notes
 
-Stop after creating it and wait for user confirmation or revision before producing full Gate 2 artifacts. If project mode is `existing` and the solution is trivial, record the skip reason in the status file and manifest. Do not skip this sketch in greenfield mode.
+Do not request confirmation merely because the draft now exists. After Gate 2
+clarification is complete, stop for one confirmation or revision request before
+producing full Gate 2 artifacts. If project mode is `existing` and the solution
+is trivial, record the skip reason in the status file and manifest. Do not skip
+this sketch in greenfield mode.
 
 ## `20-gate2-project-impact.md`
 

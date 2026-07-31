@@ -14,6 +14,13 @@ Use this reference for cross-stage questions, answers, and decision history.
   stable decision-memory location.
 - File numbers indicate earliest creation only.
 - Lifecycle and update permissions are controlled by `00-stage-manifest.md`.
+- `15-open-questions.md` is the sole owner of each question's text,
+  recommendation and rationale, answer, blocking flag, decision link, and
+  lifecycle status. Normative and resumable artifacts may retain a Question ID
+  and a concise purpose or source-gap summary, but must not copy those mutable
+  fields. Derived review surfaces may render a non-authoritative summary from
+  the canonical row and must be regenerated when it changes.
+- `14-decision-log.md` is the sole owner of normalized material rulings.
 - Resolved open questions are not deleted; they are marked `resolved` and linked to a Decision ID.
 - Blocking questions prevent gate approval and readiness.
 - Do not ask every possible question mechanically. Extract answers from the requirement when present, record low-risk assumptions when safe, and ask only when the missing answer affects PRD, EARS, BDD, test strategy, task scope, release safety, or architecture validity.
@@ -67,10 +74,16 @@ Every critical question must be recorded with:
 - Status
 
 Architecture-source questions are mandatory whenever `00-context-inventory.md`
-has a missing in-scope source. Queue them with the other questions and present
-only the single highest-impact resolvable question. They do not block Gate 1.
+has a missing in-scope source. Queue them during intake, but do not activate
+them before Gate 1 because they do not block business clarification or Gate 1.
+After Gate 1 confirmation, present only the single highest-impact resolvable
+architecture-grounding question.
 
-In greenfield mode, architecture-source questions are replaced by greenfield technology questions. These questions are mandatory when the choice affects Gate 2 design, test strategy, task order, or generated prompts.
+In greenfield mode, architecture-source questions are replaced by greenfield
+technology questions. Queue them for post-Gate-1 design confirmation when the
+choice affects Gate 2 design, test strategy, task order, or generated prompts.
+If a technology constraint changes user-visible behavior, ask the behavior
+decision at Gate 1 and defer the technology implementation choice.
 
 ## Human-Facing Question Presentation
 
@@ -117,12 +130,16 @@ Run this protocol whenever a critical decision is unresolved:
 2. Resolve discoverable facts from the environment. Record the evidence instead
    of asking the user to repeat it.
 3. Identify the highest-impact unresolved question whose dependencies are
-   resolved. Add or update its row in `15-open-questions.md`.
-4. Before asking, set the applicable Gate 1 or Gate 2 clarification stage in
-   `00-stage-manifest.md` to `waiting-for-user`. Set the Question ID as the
-   single active question only in `00-spec-workflow-status.md`, set
-   `waiting-for-user`, and make the next AI action "record this answer before
-   selecting another question."
+   resolved and whose layer is eligible for the current gate. Add or update its
+   complete canonical row in `15-open-questions.md`.
+4. Before asking, set the question's owning stage in `00-stage-manifest.md` to
+   `waiting-for-user`: Gate 1 clarification for Business/EARS/BDD,
+   architecture verification or greenfield design confirmation for
+   Architecture Source/Greenfield Technology, and Gate 2 clarification for
+   Solution/Test Contract. Task Split questions belong to `task-plan-gate`.
+   Set the Question ID as the single active question only in
+   `00-spec-workflow-status.md`, set `waiting-for-user`, and make the next AI
+   action "record this answer before selecting another question."
 5. Ask only that question using the human-facing format above, then stop.
 6. On the next turn, persist the user's answer first. Set the question to
    `answered`; if the answer is ambiguous, keep it active and ask one focused
@@ -134,16 +151,24 @@ Run this protocol whenever a critical decision is unresolved:
 8. Update `00-spec-workflow-status.md` with the recorded decision, affected
    files, remaining blockers, and next AI action. Only after all writes succeed
    may another question become active.
-9. When no critical question remains, set the applicable clarification stage
-   in `00-stage-manifest.md` to `complete`, then ask one final
+9. When no critical question remains for the owning stage, set that
+   clarification or architecture-grounding stage in `00-stage-manifest.md` to
+   `complete`. If it is a Gate 1 or Gate 2 clarification stage, update its
+   draft sketch from the resolved decisions, then ask one final
    shared-understanding or applicable micro-gate confirmation question.
-   Continue the normal Gate workflow after confirmation.
+   Architecture grounding instead advances to Gate 2 clarification. Continue
+   the normal Gate workflow after any required confirmation; Task Split
+   clarification returns to Task Plan Gate confirmation.
 
 Specification writes in steps 3-9 are the interview's durable memory, not
 implementation of the plan. Never mutate production code. Preserve Gate
 ownership: Gate 1 answers may update only intake/governance and Gate 1
 artifacts; Gate 2 answers may update Gate 2 artifacts; project context remains
 convergence-only.
+
+Do not activate an Architecture Source, Greenfield Technology, Solution, Test
+Contract, or Task Split question during Gate 1 unless the unresolved choice is
+itself user-visible business behavior. Queue it until its owning stage.
 
 ## Gate 1 Scenario Checklist
 

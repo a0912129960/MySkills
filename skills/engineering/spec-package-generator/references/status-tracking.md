@@ -133,8 +133,8 @@ When waiting for the user, the status file must show:
 
 - `Waiting for user: yes`
 - Current status: `waiting-for-user`
-- Exactly one active Question ID and its exact question, or one confirmation
-  request
+- Exactly one active Question ID, or one confirmation request. Read mutable
+  question content from that ID's row in `15-open-questions.md`
 - Which output is blocked
 - What the user can answer next
 - Any stale or superseded artifacts that need regeneration
@@ -158,6 +158,7 @@ When waiting on an early flow sketch, the status file must show:
 
 - Current stage: `gate1-flow-sketch`
 - Waiting for user: `yes`
+- Gate 1 decision clarification: `complete`
 - Sketch file path
 - Draft user-flow diagram path
 - The single active flow decision or final sketch confirmation request
@@ -167,10 +168,16 @@ When waiting on an early Gate 2 solution sketch, the status file must show:
 
 - Current stage: `gate2-solution-sketch`
 - Waiting for user: `yes`
+- Gate 2 decision clarification: `complete`
 - Sketch file path
 - Draft API-flow diagram path
 - Draft cross-project-flow diagram path, if applicable
 - Provider/consumer direction, solution assumptions, Test ID direction, capability-slice boundaries, parallel ownership seams, and blocking questions awaiting confirmation
+
+While a draft sketch is being created or revised to reflect unresolved
+decisions, keep the current stage at the applicable
+`gate1-decision-clarification` or `gate2-decision-clarification` stage. Move to
+the sketch stage only after no critical decision question remains active.
 
 When waiting on the Task Plan Gate, the status file must show:
 
