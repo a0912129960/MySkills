@@ -66,6 +66,33 @@ def _validate_attestations(root: Path) -> list[str]:
     return module.validate_repository(root)
 
 
+def _validate_spec_package_definitions(root: Path) -> list[str]:
+    module_path = (
+        root
+        / "skills"
+        / "engineering"
+        / "spec-package-generator"
+        / "scripts"
+        / "validate_definitions.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "myskills_spec_package_definitions",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        return [f"Cannot load specification package definition validator: {module_path}"]
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (OSError, ImportError, RuntimeError, ValueError) as error:
+        return [f"Cannot execute specification package definition validator: {error}"]
+    definition_root = module_path.parents[1] / "references"
+    return [
+        f"Invalid specification package definition: {message}"
+        for message in module.validate_definition_plane(definition_root)
+    ]
+
+
 def validate_repository(
     root: Path = ROOT,
     *,
@@ -221,6 +248,8 @@ def validate_repository(
     }
     if None in imported_dates:
         errors.append("Every Managed Skill must record imported_on provenance")
+
+    errors.extend(_validate_spec_package_definitions(root))
 
     if require_attestations:
         errors.extend(_validate_attestations(root))

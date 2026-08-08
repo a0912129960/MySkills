@@ -1,0 +1,23 @@
+schema_version: 1
+roles:
+  current_id_index: {purpose: Lists the only active specification IDs., ai_use: Use Controller graph output to route impact; do not infer meaning from the list.}
+  requirement_records: {purpose: Owns current observable requirements., ai_use: Read only requirements selected by the current impact query.}
+  bdd_records: {purpose: Owns current acceptance scenarios., ai_use: Read selected scenarios when defining or implementing observable behavior.}
+  design_records: {purpose: Owns current technical decisions and project impacts., ai_use: Read selected design records for implementation constraints.}
+  test_records: {purpose: Owns current verification contracts., ai_use: Read selected tests to know entry points and pass criteria.}
+  task_records: {purpose: Owns current vertical implementation tasks., ai_use: Read selected Task content to understand its outcome and coverage.}
+  task_manifest: {purpose: Binds one active Task to its exact execution inputs and prompt., ai_use: Read only the manifest for the selected Task.}
+  dashboard_view: {purpose: Shows the latest read-only task surface to the User., ai_use: Never treat this derived view as specification authority.}
+  active_question: {purpose: Stores the one durable question and its answer., ai_use: Read only while resuming or completing its active transaction.}
+  candidate_discussion: {purpose: Holds temporary discussion needed by the active question., ai_use: Use only while the owning transaction is active; it is not Current.}
+  candidate_application_plan: {purpose: Stores the exact before/after rewrite transaction., ai_use: Normally consume the Controller summary; inspect only for recovery or conflict.}
+  candidate_review: {purpose: Presents temporary candidate information to the User., ai_use: Never use this view as specification authority.}
+  decision_archive: {purpose: Retains compact historical questions and decisions., ai_use: Load only for an explicit history request; never use it as Current.}
+  workflow_state: {purpose: Resumes the one active specification transaction., ai_use: Read first through Controller resume output; never use as specification meaning.}
+  task_state: {purpose: Tracks the latest execution state of active Tasks., ai_use: Read through task execution routing; it does not redefine Task meaning.}
+  id_allocation_state: {purpose: Prevents reuse of issued specification and decision IDs., ai_use: Controller-only; never load as specification context.}
+  validation_result: {purpose: Proves legality of one exact evaluated package checkpoint., ai_use: Use only for qualification or recovery evidence.}
+  validator_attempt: {purpose: Enforces the three-repair limit for one invalid episode., ai_use: Validator-only; never interpret as specification progress.}
+  project_context: {purpose: Owns reusable verified facts about the project., ai_use: Load only when the selected work needs project facts.}
+  project_rule_source: {purpose: Owns current implementation rules when no external owner exists., ai_use: "Load conditionally before implementation, never as Feature history."}
+  migration_plan: {purpose: Maps one legacy Feature package into the current architecture., ai_use: Use only through migration resume; ordinary specification work must not load it.}

@@ -1,0 +1,369 @@
+schema_version: 1
+
+vocabulary:
+  scopes: [feature, project]
+  feature_areas: [current, candidate, history, control]
+  multiplicities: [singleton, singleton_stream, one_per_bound_id]
+  writers:
+    - package_controller
+    - task_execution_controller
+    - package_validator
+    - user_view_renderer
+    - migration_adapter
+    - project_context_controller
+  authorities:
+    - active_id_membership
+    - normative
+    - routing
+    - derived_view
+    - candidate
+    - candidate_view
+    - cold_history
+    - mutable_state
+    - validation_evidence
+    - external_current
+    - candidate_migration
+  load_policies:
+    - routed
+    - impact_selected
+    - selected_task_only
+    - explicit_user_review_only
+    - active_transaction_only
+    - explicit_history_request_only
+    - first_read
+    - qualification_only
+    - task_execution_only
+    - never_as_spec_context
+    - explicit_project_context
+    - conditional_external_rule
+    - migration_only
+  lifecycles:
+    - persistent_current
+    - while_id_active
+    - latest_view_only
+    - active_transaction
+    - retained_cold
+    - latest_state_only
+    - monotonic_feature_state
+    - latest_result_only
+    - active_migration_only
+
+package:
+  root_policy:
+    closed_world: true
+    exact_case: true
+    reject_symlinks: true
+    reject_empty_directories: true
+    max_directory_depth: 2
+    recursive_wildcards: forbidden
+  areas:
+    current: {path: current, authority_scope: managed_current, unknown_files: reject}
+    candidate: {path: candidate, authority_scope: temporary_non_authoritative, unknown_files: reject}
+    history: {path: history, authority_scope: cold_non_authoritative, unknown_files: reject}
+    control: {path: control, authority_scope: operational_state, unknown_files: reject}
+
+roles:
+  current_id_index:
+    scope: feature
+    area: current
+    path: id-index.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: active_id_membership
+    load_policy: routed
+    lifecycle: persistent_current
+    contract: current_id_index_v1
+    guide: current_id_index
+    producer: {kind: programmatic, source: package_controller}
+  requirement_records:
+    scope: feature
+    area: current
+    path: records/requirements.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: normative
+    load_policy: impact_selected
+    lifecycle: persistent_current
+    contract: requirement_records_v1
+    guide: requirement_records
+    producer: {kind: programmatic, source: package_controller}
+  bdd_records:
+    scope: feature
+    area: current
+    path: records/bdd.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: normative
+    load_policy: impact_selected
+    lifecycle: persistent_current
+    contract: bdd_records_v1
+    guide: bdd_records
+    producer: {kind: template, source: 12-gate1-bdd.template.feature}
+  design_records:
+    scope: feature
+    area: current
+    path: records/design.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: normative
+    load_policy: impact_selected
+    lifecycle: persistent_current
+    contract: design_records_v1
+    guide: design_records
+    producer: {kind: template, source: 21-gate2-technical-design.template.md}
+  test_records:
+    scope: feature
+    area: current
+    path: records/tests.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: normative
+    load_policy: impact_selected
+    lifecycle: persistent_current
+    contract: test_records_v1
+    guide: test_records
+    producer: {kind: programmatic, source: package_controller}
+  task_records:
+    scope: feature
+    area: current
+    path: records/tasks.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: normative
+    load_policy: impact_selected
+    lifecycle: persistent_current
+    contract: task_records_v1
+    guide: task_records
+    producer: {kind: template, source: task.template.md}
+  task_manifest:
+    scope: feature
+    area: current
+    path_pattern: manifests/{task_id}.yaml
+    placeholder_bindings: {task_id: TASK}
+    multiplicity: one_per_bound_id
+    writer: package_controller
+    authority: routing
+    load_policy: selected_task_only
+    lifecycle: while_id_active
+    contract: task_manifest_v1
+    guide: task_manifest
+    producer: {kind: template, source: task-execution-manifest.template.yaml}
+  dashboard_view:
+    scope: feature
+    area: current
+    path: views/dashboard.html
+    multiplicity: singleton
+    writer: user_view_renderer
+    authority: derived_view
+    load_policy: explicit_user_review_only
+    lifecycle: latest_view_only
+    contract: dashboard_view_v1
+    guide: dashboard_view
+    producer: {kind: template, source: 36-final-dashboard.template.html}
+  active_question:
+    scope: feature
+    area: candidate
+    path: question.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: candidate
+    load_policy: active_transaction_only
+    lifecycle: active_transaction
+    cleanup: after_owning_transaction_commit
+    contract: active_question_v1
+    guide: active_question
+    producer: {kind: template, source: 15-open-questions.template.md}
+  candidate_discussion:
+    scope: feature
+    area: candidate
+    path: discussion.md
+    multiplicity: singleton
+    writer: package_controller
+    authority: candidate
+    load_policy: active_transaction_only
+    lifecycle: active_transaction
+    cleanup: after_owning_transaction_commit
+    contract: candidate_discussion_v1
+    guide: candidate_discussion
+    producer: {kind: programmatic, source: package_controller}
+  candidate_application_plan:
+    scope: feature
+    area: candidate
+    path: application-plan.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: candidate
+    load_policy: active_transaction_only
+    lifecycle: active_transaction
+    cleanup: after_owning_transaction_commit
+    contract: candidate_application_plan_v1
+    guide: candidate_application_plan
+    producer: {kind: programmatic, source: package_controller}
+  candidate_review:
+    scope: feature
+    area: candidate
+    path: review.html
+    multiplicity: singleton
+    writer: user_view_renderer
+    authority: candidate_view
+    load_policy: explicit_user_review_only
+    lifecycle: active_transaction
+    cleanup: after_owning_transaction_commit
+    contract: candidate_review_v1
+    guide: candidate_review
+    producer: {kind: template, source: 13-gate1-review.template.html}
+  decision_archive:
+    scope: feature
+    area: history
+    path: decisions.yaml
+    multiplicity: singleton_stream
+    writer: package_controller
+    authority: cold_history
+    load_policy: explicit_history_request_only
+    lifecycle: retained_cold
+    contract: decision_archive_v1
+    guide: decision_archive
+    producer: {kind: template, source: 14-decision-log.template.md}
+  workflow_state:
+    scope: feature
+    area: control
+    path: workflow-state.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: mutable_state
+    load_policy: first_read
+    lifecycle: latest_state_only
+    contract: workflow_state_v1
+    guide: workflow_state
+    producer: {kind: template, source: 00-spec-workflow-status.template.md}
+  task_state:
+    scope: feature
+    area: control
+    path: task-state.yaml
+    multiplicity: singleton
+    writer: task_execution_controller
+    authority: mutable_state
+    load_policy: task_execution_only
+    lifecycle: latest_state_only
+    contract: task_state_v1
+    guide: task_state
+    producer: {kind: template, source: implement-spec-task/execution-preflight.template.md}
+  id_allocation_state:
+    scope: feature
+    area: control
+    path: id-allocation.yaml
+    multiplicity: singleton
+    writer: package_controller
+    authority: mutable_state
+    load_policy: never_as_spec_context
+    lifecycle: monotonic_feature_state
+    contract: id_allocation_state_v1
+    guide: id_allocation_state
+    producer: {kind: programmatic, source: package_controller}
+  validation_result:
+    scope: feature
+    area: control
+    path: validation-result.json
+    multiplicity: singleton
+    writer: package_validator
+    authority: validation_evidence
+    load_policy: qualification_only
+    lifecycle: latest_result_only
+    contract: validation_result_v1
+    guide: validation_result
+    producer: {kind: programmatic, source: package_validator}
+  validator_attempt:
+    scope: feature
+    area: control
+    path: validator-attempt.json
+    multiplicity: singleton
+    writer: package_validator
+    authority: mutable_state
+    load_policy: never_as_spec_context
+    lifecycle: active_transaction
+    cleanup: after_owning_transaction_commit
+    contract: validator_attempt_v1
+    guide: validator_attempt
+    producer: {kind: programmatic, source: package_validator}
+  project_context:
+    scope: project
+    path: .ai-dev/context/project-context.md
+    multiplicity: singleton
+    writer: project_context_controller
+    authority: external_current
+    load_policy: explicit_project_context
+    lifecycle: persistent_current
+    contract: project_context_v1
+    guide: project_context
+    producer: {kind: programmatic, source: project_context_controller}
+  project_rule_source:
+    scope: project
+    path: .ai-dev/context/implementation-rules.md
+    multiplicity: singleton
+    writer: project_context_controller
+    authority: external_current
+    load_policy: conditional_external_rule
+    lifecycle: persistent_current
+    contract: project_rule_source_v1
+    guide: project_rule_source
+    producer: {kind: programmatic, source: project_context_controller}
+  migration_plan:
+    scope: project
+    path_pattern: .ai-dev/migrations/{feature}.yaml
+    placeholder_bindings: {feature: FEATURE_SLUG}
+    multiplicity: one_per_bound_id
+    writer: migration_adapter
+    authority: candidate_migration
+    load_policy: migration_only
+    lifecycle: active_migration_only
+    cleanup: after_owning_transaction_commit
+    contract: migration_plan_v1
+    guide: migration_plan
+    producer: {kind: programmatic, source: migration_adapter}
+
+repository_migration:
+  disposition_enum: [rewrite, merge_replace, render_none, retire, external_current]
+  template_dispositions:
+    - {source: 00-context-inventory.template.md, disposition: merge_replace, target_role: candidate_discussion}
+    - {source: 00-source-requirement.template.md, disposition: merge_replace, target_role: requirement_records}
+    - {source: 00-spec-workflow-status.template.md, disposition: rewrite, target_role: workflow_state}
+    - {source: 00-stage-manifest.template.md, disposition: retire, target_role: null}
+    - {source: 09-gate1-flow-sketch.template.md, disposition: merge_replace, target_role: candidate_review}
+    - {source: 10-gate1-prd.template.md, disposition: merge_replace, target_role: requirement_records}
+    - {source: 11-gate1-ears.template.md, disposition: merge_replace, target_role: requirement_records}
+    - {source: 12-gate1-bdd.template.feature, disposition: rewrite, target_role: bdd_records}
+    - {source: 13-gate1-review.template.html, disposition: rewrite, target_role: candidate_review}
+    - {source: 14-decision-log.template.md, disposition: rewrite, target_role: decision_archive}
+    - {source: 15-open-questions.template.md, disposition: rewrite, target_role: active_question}
+    - {source: 19-gate2-solution-sketch.template.md, disposition: merge_replace, target_role: candidate_review}
+    - {source: 20-gate2-project-impact.template.md, disposition: merge_replace, target_role: design_records}
+    - {source: 21-gate2-technical-design.template.md, disposition: rewrite, target_role: design_records}
+    - {source: 22-gate2-constitution-compliance.template.md, disposition: merge_replace, target_role: design_records}
+    - {source: 24-gate2-test-strategy.template.md, disposition: merge_replace, target_role: test_records}
+    - {source: 25-gate2-review.template.html, disposition: merge_replace, target_role: candidate_review}
+    - {source: 30-approved-feature-baseline.template.md, disposition: retire, target_role: null}
+    - {source: 31-final-task-index.template.md, disposition: merge_replace, target_role: task_records}
+    - {source: 32-task-plan-review.template.md, disposition: merge_replace, target_role: candidate_review}
+    - {source: 34-final-traceability-matrix.template.md, disposition: render_none, target_role: null}
+    - {source: 35a-final-readiness-result.template.md, disposition: retire, target_role: null}
+    - {source: 35-final-analysis-report.template.md, disposition: retire, target_role: null}
+    - {source: 36-final-dashboard.template.html, disposition: rewrite, target_role: dashboard_view}
+    - {source: 37-implementation-package-approval.template.md, disposition: retire, target_role: null}
+    - {source: 40-convergence-report.template.md, disposition: render_none, target_role: null}
+    - {source: constitution.template.md, disposition: retire, target_role: null}
+    - {source: constitution-amendment.template.md, disposition: retire, target_role: null}
+    - {source: gate1-checklist.template.md, disposition: retire, target_role: null}
+    - {source: gate2-checklist.template.md, disposition: retire, target_role: null}
+    - {source: implementation-constitution.template.md, disposition: external_current, target_role: project_rule_source}
+    - {source: implementation-evidence.template.md, disposition: render_none, target_role: null}
+    - {source: project-context.template.md, disposition: external_current, target_role: project_context}
+    - {source: proposed-context-update.template.md, disposition: render_none, target_role: null}
+    - {source: task.template.md, disposition: rewrite, target_role: task_records}
+    - {source: task-execution-manifest.template.yaml, disposition: rewrite, target_role: task_manifest}
+    - {source: tdd-prompt.template.md, disposition: retire, target_role: null}
+    - {source: test-case-contract.template.md, disposition: merge_replace, target_role: test_records}
+    - {source: verified-context-update.template.md, disposition: external_current, target_role: project_context}
+    - {source: implement-spec-task/execution-preflight.template.md, disposition: rewrite, target_role: task_state}
+    - {source: implement-spec-task/execution-record.template.md, disposition: retire, target_role: null}
+    - {source: implement-spec-task/spec-change-request.template.md, disposition: merge_replace, target_role: candidate_discussion}
+    - {source: implement-spec-task/work-unit-brief.template.md, disposition: render_none, target_role: null}

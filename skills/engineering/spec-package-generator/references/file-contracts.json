@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "contracts": {
+    "current_id_index_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["ids"], "properties": {"ids": {"type": "array", "unique": true, "item_kind": "current_id"}}},
+      "checks": ["canonical_id_order", "exact_active_definition_set"],
+      "id_scan": "all_string_scalars"
+    },
+    "requirement_records_v1": {
+      "format": "yaml",
+      "record_class": "REQUIREMENT",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_yaml_comments"],
+      "id_scan": "all_string_scalars"
+    },
+    "bdd_records_v1": {
+      "format": "yaml",
+      "record_class": "BDD",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_yaml_comments"],
+      "id_scan": "all_string_scalars"
+    },
+    "design_records_v1": {
+      "format": "yaml",
+      "record_class": "DESIGN",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_yaml_comments"],
+      "id_scan": "all_string_scalars"
+    },
+    "test_records_v1": {
+      "format": "yaml",
+      "record_class": "TEST",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_yaml_comments"],
+      "id_scan": "all_string_scalars"
+    },
+    "task_records_v1": {
+      "format": "yaml",
+      "record_class": "TASK",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_yaml_comments"],
+      "id_scan": "all_string_scalars"
+    },
+    "task_manifest_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["task_id", "execution_input_ids", "prompt"], "properties": {"task_id": {"id_class": "TASK"}, "execution_input_ids": {"type": "array", "item_kind": "current_id"}, "prompt": {"type": "string", "min_length": 1}}},
+      "checks": ["filename_matches_task_id", "active_task_binding"],
+      "id_scan": "all_string_scalars"
+    },
+    "dashboard_view_v1": {
+      "format": "html",
+      "checks": ["safe_local_links", "no_embedded_mutable_state"],
+      "id_scan": "none"
+    },
+    "active_question_v1": {
+      "format": "yaml",
+      "record_class": "QUESTION",
+      "checks": ["common_record_envelope", "class_content_schema", "single_record"],
+      "id_scan": "structured_fields_only"
+    },
+    "candidate_discussion_v1": {
+      "format": "markdown",
+      "checks": ["utf8_text"],
+      "id_scan": "none"
+    },
+    "candidate_application_plan_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["basis", "allocation_baseline", "expected_final_current_fingerprint", "operations"]},
+      "checks": ["application_plan_contract", "operation_target_uniqueness", "exact_delta_truth_table"],
+      "id_scan": "structured_fields_only"
+    },
+    "candidate_review_v1": {
+      "format": "html",
+      "checks": ["safe_local_links", "no_authoritative_claim"],
+      "id_scan": "none"
+    },
+    "decision_archive_v1": {
+      "format": "yaml",
+      "record_class": "DECISION",
+      "container": "records",
+      "checks": ["common_record_envelope", "class_content_schema", "no_spec_ids", "no_yaml_comments"],
+      "id_scan": "decision_ids_only"
+    },
+    "workflow_state_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["phase", "active_question", "plan_fingerprint"], "properties": {"phase": {"enum": ["discussing", "planning", "applying_current", "validating", "finalizing", "pass"]}, "active_question": {"type": ["string", "null"]}, "plan_fingerprint": {"type": ["string", "null"]}}},
+      "checks": ["phase_conditioned_nullability"],
+      "id_scan": "structured_fields_only"
+    },
+    "task_state_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["tasks"]},
+      "checks": ["task_key_matches_active_task", "closed_task_lifecycle"],
+      "id_scan": "structured_fields_only"
+    },
+    "id_allocation_state_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["highest_issued"], "properties": {"highest_issued": {"required_keys": ["REQ", "BDD", "DESIGN", "TEST", "TASK", "DECISION"], "integer_range": [0, 999]}}},
+      "checks": ["closed_counter_set", "active_suffix_not_above_high_water"],
+      "id_scan": "none"
+    },
+    "validation_result_v1": {
+      "format": "json",
+      "closed_shape": {"required": ["result", "evaluated_checkpoint_fingerprint", "current_fingerprint", "package_schema_fingerprint", "file_contracts_fingerprint", "id_schema_fingerprint", "allocation_fingerprint", "validator_version", "canonicalizer_version", "transaction_kind", "transaction_fingerprint", "findings"]},
+      "checks": ["result_nullability_truth_table", "stable_finding_codes"],
+      "id_scan": "structured_fields_only"
+    },
+    "validator_attempt_v1": {
+      "format": "json",
+      "closed_shape": {"required": ["repair_count", "last_evaluated"], "properties": {"repair_count": {"type": "integer", "minimum": 0, "maximum": 3}, "last_evaluated": {"required": ["kind", "fingerprint", "result"]}}},
+      "checks": ["invalid_episode_exactly_once"],
+      "id_scan": "none"
+    },
+    "project_context_v1": {
+      "format": "markdown",
+      "checks": ["current_verified_facts_only", "no_update_log"],
+      "id_scan": "none"
+    },
+    "project_rule_source_v1": {
+      "format": "markdown",
+      "checks": ["current_rules_only", "conditional_owner"],
+      "id_scan": "none"
+    },
+    "migration_plan_v1": {
+      "format": "yaml",
+      "closed_shape": {"required": ["feature", "source_inventory", "allocation_floor", "operations", "expected_final_current_fingerprint"]},
+      "checks": ["sealed_by_presence", "source_disposition_complete", "reserved_target_ids"],
+      "id_scan": "structured_fields_only"
+    }
+  }
+}

@@ -1,0 +1,148 @@
+schema_version: 1
+common_record:
+  type: object
+  required: [id, content]
+  additional_properties: false
+
+allocation:
+  minimum: 1
+  maximum: 999
+  width: 3
+  counters: [REQ, BDD, DESIGN, TEST, TASK, DECISION]
+  current_plan_counters: [REQ, BDD, DESIGN, TEST, TASK]
+  monotonic: true
+  reuse: forbidden
+  gaps: allowed
+  wrap: forbidden
+
+classes:
+  REQUIREMENT:
+    prefix: REQ
+    scope: current
+    id_pattern: '^REQ-[0-9]{3}$'
+    allocation_counter: REQ
+    definition_role: requirement_records
+    indexed: true
+    content_schema:
+      type: object
+      required: [statement]
+      additional_properties: false
+      properties:
+        statement: {type: string, min_length: 1}
+  BDD:
+    prefix: BDD
+    scope: current
+    id_pattern: '^BDD-[0-9]{3}$'
+    allocation_counter: BDD
+    definition_role: bdd_records
+    indexed: true
+    content_schema:
+      type: object
+      required: [scenario, given, when, then, requirements]
+      additional_properties: false
+      properties:
+        scenario: {type: string, min_length: 1}
+        given: {type: array, min_items: 1, items: {type: string, min_length: 1}}
+        when: {type: array, min_items: 1, items: {type: string, min_length: 1}}
+        then: {type: array, min_items: 1, items: {type: string, min_length: 1}}
+        requirements: {type: array, min_items: 1, unique: true, items: {id_class: REQUIREMENT}}
+  DESIGN:
+    prefix: DESIGN
+    scope: current
+    id_pattern: '^DESIGN-[0-9]{3}$'
+    allocation_counter: DESIGN
+    definition_role: design_records
+    indexed: true
+    content_schema:
+      type: object
+      required: [decision, requirements]
+      additional_properties: false
+      properties:
+        decision: {type: string, min_length: 1}
+        requirements: {type: array, min_items: 1, unique: true, items: {id_class: REQUIREMENT}}
+  TEST:
+    prefix: TEST
+    scope: current
+    id_pattern: '^TEST-[0-9]{3}$'
+    allocation_counter: TEST
+    definition_role: test_records
+    indexed: true
+    content_schema:
+      type: object
+      required: [method, verifies, entry_point, pass_criteria]
+      additional_properties: false
+      properties:
+        method: {type: string, enum: [automated, semi-automated, manual]}
+        verifies: {type: array, min_items: 1, unique: true, items: {id_class_any_of: [REQUIREMENT, BDD]}}
+        entry_point: {type: string, min_length: 1}
+        pass_criteria: {type: array, min_items: 1, items: {type: string, min_length: 1}}
+  TASK:
+    prefix: TASK
+    scope: current
+    id_pattern: '^TASK-[0-9]{3}$'
+    allocation_counter: TASK
+    definition_role: task_records
+    indexed: true
+    content_schema:
+      type: object
+      required: [title, outcome, covers, depends_on]
+      additional_properties: false
+      properties:
+        title: {type: string, min_length: 1}
+        outcome: {type: string, min_length: 1}
+        covers: {type: array, min_items: 1, unique: true, items: {id_class_any_of: [REQUIREMENT, BDD, DESIGN, TEST]}}
+        depends_on: {type: array, unique: true, items: {id_class: TASK}}
+  QUESTION:
+    prefix: Q
+    scope: candidate_control
+    id_pattern: '^Q-[0-9]{3}$'
+    allocation_counter: DECISION
+    definition_role: active_question
+    indexed: false
+    content_schema:
+      type: object
+      required: [question, answer]
+      additional_properties: false
+      properties:
+        question: {type: string, min_length: 1, max_length: 1000}
+        answer: {type: [string, 'null'], min_length: 1, max_length: 2000}
+  DECISION:
+    prefix: DEC
+    scope: cold_history
+    id_pattern: '^DEC-[0-9]{3}$'
+    allocation_counter: DECISION
+    definition_role: decision_archive
+    indexed: false
+    content_schema:
+      type: object
+      required: [question, decision]
+      additional_properties: false
+      properties:
+        question: {type: string, min_length: 1}
+        decision: {type: string, min_length: 1}
+
+relationships:
+  - {from_class: BDD, field: requirements, to_classes: [REQUIREMENT], minimum: 1}
+  - {from_class: DESIGN, field: requirements, to_classes: [REQUIREMENT], minimum: 1}
+  - {from_class: TEST, field: verifies, to_classes: [REQUIREMENT, BDD], minimum: 1}
+  - {from_class: TASK, field: covers, to_classes: [REQUIREMENT, BDD, DESIGN, TEST], minimum: 1}
+  - {from_class: TASK, field: depends_on, to_classes: [TASK], minimum: 0, acyclic: true}
+
+rejected_legacy_patterns:
+  - {name: functional_requirement, pattern: '(?<![A-Z0-9-])FR-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: ears_requirement, pattern: '(?<![A-Z0-9-])EARS-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: scenario, pattern: '(?<![A-Z0-9-])SCN-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: open_question, pattern: '(?<![A-Z0-9-])OQ-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: project, pattern: '(?<![A-Z0-9-])PRJ-[0-9]{4}(?![A-Z0-9-])'}
+  - {name: acceptance_criterion, pattern: '(?<![A-Z0-9-])AC-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: spec_change_request, pattern: '(?<![A-Z0-9-])SCR-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: typed_question, pattern: '(?<![A-Z0-9-])Q-[A-Z]+-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: typed_test, pattern: '(?<![A-Z0-9-])TEST-[A-Z]+-[0-9]{3}(?![A-Z0-9-])'}
+  - {name: bdd_scenario, pattern: '(?<![A-Z0-9-])BDD-SCENARIO-[0-9]{3}(?![A-Z0-9-])'}
+
+scan_policy:
+  ascii_case_sensitive: true
+  authoritative_and_routing_string_scalars: all
+  yaml_comments: forbidden
+  candidate_prose: excluded
+  decision_content_spec_ids: forbidden
