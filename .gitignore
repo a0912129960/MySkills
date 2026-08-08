@@ -3,3 +3,8 @@ __pycache__/
 .tmp/
 .scratch/
 /node_modules
+
+# Local specification handoff and superseded proposal inputs
+/spec-skill-handoff.md
+/spec-skill-improvement-proposal-codex.md
+/spec-skill-review-proposal.md
