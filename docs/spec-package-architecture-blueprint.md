@@ -772,6 +772,15 @@ never decrement, fill gaps, or wrap. `999` fails closed pending an ID Schema
 migration. The file is Controller-only context, not history, and stores no old
 ID instance.
 
+The initial Controller proposal interface represents a fresh ID as
+`@new/<CLASS>/<label>`, for example `@new/REQ/replacement-rule`. `CLASS` is one
+of the five Specification counter names and `label` is a lowercase diagnostic
+name (`[a-z][a-z0-9-]{0,63}`); the label is not persisted as identity. The same
+handle may occur in a target and any number of after-payload references, and the
+Controller substitutes all occurrences with the single reserved numeric ID.
+Numeric suffixes in fresh-ID proposal targets are never an alternative input
+form.
+
 At seal, absent-to-present Record IDs for each class must equal the exact
 contiguous range above that Plan's baseline through the current reserved
 high-water. This is the persisted proof that a low deleted suffix was not
