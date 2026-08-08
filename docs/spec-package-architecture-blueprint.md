@@ -1692,6 +1692,8 @@ At minimum, physical validation needs stable finding codes for:
 | `PKG_ORPHAN_DIRECTORY` | Directory is not required by any present/allowed role |
 | `PKG_WRONG_FORMAT` | File does not parse using its role format |
 | `PKG_WRITER_CONFLICT` | Persisted ownership metadata conflicts with the role writer, when such metadata is applicable |
+| `PKG_ROOT_UNREADABLE` | Feature root is missing, unreadable, or not a directory; classified as `ERROR` |
+| `VALIDATOR_DEFINITION_ERROR` | Bundled executable catalogs fail meta-validation; classified as `ERROR` |
 
 The executable contract also reserves these cross-file codes:
 
@@ -1699,9 +1701,15 @@ The executable contract also reserves these cross-file codes:
 |---|---|
 | `ID_ALLOCATION_MISSING` | An initialized Feature lacks the Controller allocation state |
 | `ID_ALLOCATION_INVALID` | Allocation keys/ranges are invalid or an ID exceeds its reserved high-water |
+| `ID_INVALID_FORMAT` | A definition or managed ID token does not match any declared ID class format |
+| `ID_WRONG_OWNER` | A valid ID definition appears outside its class's declared definition-owner role |
+| `ID_INVALID_CONTENT` | A definition violates the common `id`/`content` envelope or its class content schema |
+| `ID_DUPLICATE_DEFINITION` | The same ID is defined more than once |
 | `ID_LEGACY_PATTERN` | Final managed content contains a scope-rejected legacy ID shape |
 | `ID_ACTIVE_SET_MISMATCH` | Active Index and discovered Current definitions differ |
 | `ID_UNDEFINED_REFERENCE` | A managed Current reference has no active definition |
+| `ID_INVALID_REFERENCE_TARGET` | A structured relationship points to an ID class not allowed by that field |
+| `ID_DEPENDENCY_CYCLE` | The acyclic Task dependency relationship contains a cycle |
 | `ID_REMOVED_RESIDUE` | A Plan-removed ID remains in authoritative Current |
 | `ID_UNDECLARED_REFERENCE_POSITION` | A Current-format token occurs outside a schema-declared ID-valued field |
 | `PLAN_INVALID_SHAPE` | Plan fields, state objects, target identity, or no-op invariants fail |

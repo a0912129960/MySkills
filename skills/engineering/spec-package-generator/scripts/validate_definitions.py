@@ -58,6 +58,18 @@ EXPECTED_ID_CLASSES = {
     "DECISION",
 }
 EXPECTED_CURRENT_CLASSES = {"REQUIREMENT", "BDD", "DESIGN", "TEST", "TASK"}
+EXPECTED_TASK_LIFECYCLES = {
+    "not-started",
+    "awaiting-preflight-approval",
+    "in-progress",
+    "ready-for-review",
+    "changes-requested",
+    "accepted",
+    "re-slice-required",
+    "spec-revision-required",
+    "blocked",
+    "deferred",
+}
 ROLE_KEYS = {
     "scope",
     "area",
@@ -326,6 +338,9 @@ def validate_definition_plane(definition_root: Path) -> list[str]:
     unused_contracts = sorted(set(contracts) - used_contracts)
     if unused_contracts:
         errors.append(f"unused File Contracts: {', '.join(unused_contracts)}")
+    task_state_contract = contracts.get("task_state_v1", {})
+    if set(task_state_contract.get("lifecycle_enum", [])) != EXPECTED_TASK_LIFECYCLES:
+        errors.append("Task lifecycle enum is not the confirmed closed set")
 
     disposition_enum = migration.get("disposition_enum")
     dispositions = migration.get("template_dispositions")

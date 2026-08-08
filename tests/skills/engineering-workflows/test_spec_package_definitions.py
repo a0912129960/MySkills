@@ -121,6 +121,19 @@ class SpecPackageDefinitionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown definition role", result.stderr)
 
+    def test_task_lifecycle_enum_is_a_closed_executable_contract(self) -> None:
+        temporary, references = self.copied_references()
+        self.addCleanup(temporary.cleanup)
+        contracts_path = references / "file-contracts.json"
+        contracts = json.loads(contracts_path.read_text(encoding="utf-8"))
+        contracts["contracts"]["task_state_v1"]["lifecycle_enum"].append("invented-by-agent")
+        contracts_path.write_text(json.dumps(contracts), encoding="utf-8")
+
+        result = self.run_validator(references)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Task lifecycle enum", result.stderr)
+
     def test_all_43_source_templates_have_one_disposition(self) -> None:
         schema = yaml.safe_load(
             (SKILL_ROOT / "references" / "package-schema.yaml").read_text(encoding="utf-8")

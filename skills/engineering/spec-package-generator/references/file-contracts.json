@@ -91,6 +91,7 @@
     "task_state_v1": {
       "format": "yaml",
       "closed_shape": {"required": ["tasks"]},
+      "lifecycle_enum": ["not-started", "awaiting-preflight-approval", "in-progress", "ready-for-review", "changes-requested", "accepted", "re-slice-required", "spec-revision-required", "blocked", "deferred"],
       "checks": ["task_key_matches_active_task", "closed_task_lifecycle"],
       "id_scan": "structured_fields_only"
     },

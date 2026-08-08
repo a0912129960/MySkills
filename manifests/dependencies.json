@@ -6,13 +6,14 @@
       "id": "python",
       "kind": "runtime-prerequisite",
       "ecosystem": "python",
-      "description": "User-provided Python runtime for the Wiki suite and skill evaluator.",
+      "description": "User-provided Python runtime for repository-owned Wiki tools, validators, and the skill evaluator.",
       "minimum_version": "3.10.0",
       "version_constraint": ">=3.10.0",
       "install_version": null,
       "prerequisites": [],
       "consumers": [
         {"kind": "category", "name": "wiki", "requirement": "required", "capability": "repository-owned Wiki tools", "fallback": null},
+        {"kind": "skill", "name": "spec-package-generator", "requirement": "required", "capability": "Specification Package Validator", "fallback": null},
         {"kind": "skill", "name": "skill-evaluator", "requirement": "required", "capability": "automated evaluation", "fallback": null}
       ],
       "probe": {
@@ -31,12 +32,13 @@
       "id": "pyyaml",
       "kind": "installable",
       "ecosystem": "python",
-      "description": "YAML parser isolated in the private skill-evaluator environment.",
+      "description": "Pinned YAML parser for repository validation and specification package validation.",
       "minimum_version": "6.0.3",
       "version_constraint": ">=6.0.3",
       "install_version": "6.0.3",
       "prerequisites": ["python"],
       "consumers": [
+        {"kind": "skill", "name": "spec-package-generator", "requirement": "required", "capability": "YAML package and definition parsing", "fallback": null},
         {"kind": "skill", "name": "skill-evaluator", "requirement": "required", "capability": "YAML metadata validation", "fallback": null}
       ],
       "probe": {

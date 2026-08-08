@@ -192,6 +192,11 @@ class InstallerCommandTests(unittest.TestCase):
                 'if "%1"=="--version" (echo v22.0.0) else (echo x64)\r\n',
                 encoding="ascii",
             )
+            (fake_bin / "python.cmd").write_text(
+                "@echo off\r\n"
+                'if "%1"=="--version" (echo Python 3.12.0) else (echo x64)\r\n',
+                encoding="ascii",
+            )
             (fake_bin / "mmdc.cmd").write_text(
                 "@echo off\r\n"
                 "echo Error: missing mermaid module 1>&2\r\n"
